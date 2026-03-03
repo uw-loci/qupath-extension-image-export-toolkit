@@ -217,6 +217,9 @@ public class ExportWizard {
                 if (currentDir == null) {
                     imageSelectionPane.setDefaultOutputDir(selectedCategory);
                 }
+                // Update publication advice based on current config
+                imageSelectionPane.updateAdvice(
+                        selectedCategory, buildCurrentConfigForAdvice());
                 centerContent = imageSelectionPane;
             }
             default -> centerContent = categoryPane;
@@ -720,6 +723,31 @@ public class ExportWizard {
             Dialogs.showErrorMessage(
                     resources.getString("error.title"),
                     "Failed to generate script: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Build the current config object for publication advice checking.
+     * Returns null if the config is incomplete (user hasn't filled required fields).
+     */
+    private Object buildCurrentConfigForAdvice() {
+        try {
+            // Use a temp directory so the config builder doesn't reject null outputDir
+            File tempDir = imageSelectionPane.getOutputDirectory();
+            if (tempDir == null) {
+                tempDir = new File(System.getProperty("java.io.tmpdir"));
+            }
+            return switch (selectedCategory) {
+                case RENDERED -> renderedConfigPane.buildConfig(tempDir);
+                case MASK -> maskConfigPane.buildConfig(tempDir);
+                case RAW -> rawConfigPane.buildConfig(tempDir);
+                case TILED -> tiledConfigPane.buildConfig(tempDir);
+                case OBJECT_CROPS -> objectCropConfigPane.buildConfig(tempDir);
+            };
+        } catch (IllegalArgumentException e) {
+            // Config is incomplete -- return null so advice runs with no config
+            logger.debug("Config incomplete for advice check: {}", e.getMessage());
             return null;
         }
     }

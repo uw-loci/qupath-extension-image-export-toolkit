@@ -31,9 +31,17 @@ import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import qupath.ext.quiet.advice.AdviceItem;
+import qupath.ext.quiet.advice.ImageContext;
+import qupath.ext.quiet.advice.PublicationAdviceChecker;
 import qupath.ext.quiet.export.ExportCategory;
 import qupath.ext.quiet.preferences.QuietPreferences;
+import qupath.lib.common.ColorTools;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.images.ImageData;
 import qupath.lib.projects.ProjectImageEntry;
 
 /**
@@ -43,8 +51,12 @@ import qupath.lib.projects.ProjectImageEntry;
  */
 public class ImageSelectionPane extends VBox {
 
+    private static final Logger logger = LoggerFactory.getLogger(ImageSelectionPane.class);
     private static final ResourceBundle resources =
             ResourceBundle.getBundle("qupath.ext.quiet.ui.strings");
+
+    /** Maximum number of images to scan for advice metadata. */
+    private static final int ADVICE_IMAGE_SCAN_LIMIT = 10;
 
     private final QuPathGUI qupath;
     private final Stage ownerStage;
@@ -61,6 +73,7 @@ public class ImageSelectionPane extends VBox {
     private Label filenamePreviewLabel;
     private CheckBox addToWorkflowCheck;
     private CheckBox exportGeoJsonCheck;
+    private PublicationAdvicePane advicePane;
     private ProgressBar progressBar;
     private Label statusLabel;
 
@@ -192,6 +205,9 @@ public class ImageSelectionPane extends VBox {
         exportGeoJsonCheck.setSelected(QuietPreferences.isExportGeoJson());
         exportGeoJsonCheck.setTooltip(createTooltip("tooltip.step3.exportGeoJson"));
 
+        // Publication advice
+        advicePane = new PublicationAdvicePane();
+
         // Progress
         progressBar = new ProgressBar(0);
         progressBar.setMaxWidth(Double.MAX_VALUE);
@@ -211,6 +227,7 @@ public class ImageSelectionPane extends VBox {
                 scriptBox,
                 addToWorkflowCheck,
                 exportGeoJsonCheck,
+                advicePane.asCollapsibleSection(),
                 progressBar,
                 statusLabel
         );
@@ -423,6 +440,62 @@ public class ImageSelectionPane extends VBox {
         tip.setMaxWidth(400);
         tip.setShowDuration(javafx.util.Duration.seconds(30));
         return tip;
+    }
+
+    /**
+     * Update the publication advice panel based on the current export category
+     * and configuration.
+     *
+     * @param category the selected export category
+     * @param config   the category-specific config object, or null
+     */
+    public void updateAdvice(ExportCategory category, Object config) {
+        List<ImageContext> imageContexts = buildImageContexts();
+        List<AdviceItem> items = PublicationAdviceChecker.check(category, config, imageContexts);
+        advicePane.update(items);
+    }
+
+    /**
+     * Build ImageContext metadata from the first N selected images.
+     * Only reads server metadata (no pixel data).
+     */
+    private List<ImageContext> buildImageContexts() {
+        var entries = getSelectedEntries();
+        int limit = Math.min(entries.size(), ADVICE_IMAGE_SCAN_LIMIT);
+        var contexts = new ArrayList<ImageContext>();
+
+        for (int i = 0; i < limit; i++) {
+            var entry = entries.get(i);
+            try {
+                var imageData = entry.readImageData();
+                var server = imageData.getServer();
+                var metadata = server.getMetadata();
+
+                boolean hasCalibration = metadata.getPixelCalibration().hasPixelSizeMicrons();
+                String imageType = imageData.getImageType() != null
+                        ? imageData.getImageType().name() : null;
+
+                var channelNames = new ArrayList<String>();
+                var channelColors = new ArrayList<Integer>();
+                for (var ch : metadata.getChannels()) {
+                    channelNames.add(ch.getName());
+                    channelColors.add(ch.getColor());
+                }
+
+                contexts.add(new ImageContext(
+                        hasCalibration,
+                        imageType,
+                        channelNames,
+                        channelColors,
+                        metadata.getSizeC()));
+
+                server.close();
+            } catch (Exception e) {
+                logger.debug("Failed to read metadata for advice from {}: {}",
+                        entry.getImageName(), e.getMessage());
+            }
+        }
+        return contexts;
     }
 
     // Script action handlers - set by ExportWizard

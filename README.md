@@ -7,6 +7,35 @@ A [QuPath](https://qupath.github.io/) extension for batch exporting images in mu
 
 QuIET provides a guided wizard UI for exporting rendered overlays, label/instance masks, raw pixel data, tiled image+label pairs, and per-object classification crops -- all with self-contained Groovy script generation so every export is reproducible and editable.
 
+## Publication-Quality Image Guidelines
+
+QuIET was developed in support of the community-developed checklists for publishing
+images and image analyses
+([Schmied et al., 2023, *Nature Methods*](https://doi.org/10.1038/s41592-023-01987-9)),
+created by the [QUAREP-LiMi](https://quarep.org/) initiative. These checklists provide
+consensus guidelines on image formatting, colors, annotation, and data availability
+for microscopy publications.
+
+Inspiration for QuIET's approach to automated image quality guidance also comes from
+Jan Brocher's [BioVoxxel Figure Tools](https://github.com/biovoxxel/BioVoxxel-Figure-Tools)
+plugin for Fiji/ImageJ, which provides interactive tools for creating
+publication-ready figure panels with colorblind-friendly LUT options and CDV
+(color deficient vision) simulation.
+
+QuIET includes a built-in **Publication Advice** panel (visible on Step 3 of the
+export wizard) that automatically checks your export configuration against key
+QUAREP-LiMi recommendations, including:
+
+- Missing scale bars on calibrated images
+- Lossy JPEG compression for quantitative data
+- Inconsistent display settings across compared images
+- Red-green channel combinations that are not colorblind-accessible
+- Multi-channel images without individual grayscale channel panels
+- Missing pixel calibration for spatial reference
+
+These checks are advisory -- QuIET will never block an export, but helps researchers
+produce clearer, more reproducible microscopy figures.
+
 ## Requirements
 
 - **QuPath 0.6.0** or later
