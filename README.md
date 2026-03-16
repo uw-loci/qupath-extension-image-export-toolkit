@@ -404,8 +404,12 @@ See `documentation/POTENTIAL_FEATURES.md` for detailed implementation plans.
 
 ## License
 
-This extension is distributed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+Apache License 2.0 - see [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
 
 Built on top of [QuPath](https://qupath.github.io/), an open-source platform for bioimage analysis. QuIET leverages QuPath's `LabeledImageServer`, `TileExporter`, `TransformedServerBuilder`, and `ImageWriterTools` APIs.
+
+## AI-Assisted Development
+
+This project was developed with assistance from [Claude](https://claude.ai) (Anthropic). Claude was used as a development tool for code generation, architecture design, debugging, and documentation throughout the project.
