@@ -6,7 +6,7 @@ plugins {
 qupathExtension {
     name = "qupath-extension-image-export-toolkit"
     group = "io.github.michaelsnelson"
-    version = "0.7.1"
+    version = "0.7.2"
     description = "QuIET - QuPath Image Export Toolkit. Comprehensive export of rendered overlays, label masks, raw pixel data, and ML training tiles with wizard UI, script generation, and batch processing."
     automaticModule = "io.github.michaelsnelson.extension.quiet"
 }

@@ -50,12 +50,15 @@ import qupath.ext.quiet.preferences.QuietPreferences;
 import qupath.fx.utils.FXUtils;
 import qupath.lib.analysis.heatmaps.DensityMaps;
 import qupath.lib.analysis.heatmaps.DensityMaps.DensityMapBuilder;
+import qupath.lib.classifiers.pixel.PixelClassificationImageServer;
 import qupath.lib.classifiers.pixel.PixelClassifier;
 import qupath.lib.color.ColorMaps;
 import qupath.lib.display.settings.DisplaySettingUtils;
 import qupath.lib.display.settings.ImageDisplaySettings;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.gui.viewer.overlays.PixelClassificationOverlay;
 import qupath.lib.images.ImageData;
+import qupath.lib.images.servers.ImageServer;
 import qupath.lib.objects.classes.PathClass;
 
 /**
@@ -66,6 +69,12 @@ public class RenderedConfigPane extends VBox {
     private static final Logger logger = LoggerFactory.getLogger(RenderedConfigPane.class);
     private static final ResourceBundle resources =
             ResourceBundle.getBundle("qupath.ext.quiet.ui.strings");
+
+    /** Sentinel value stored in config classifierName to indicate "use the active overlay". */
+    static final String ACTIVE_OVERLAY_SENTINEL = "\u0000__ACTIVE_OVERLAY__";
+
+    /** Display label shown in the classifier combo for the active overlay option. */
+    static final String ACTIVE_OVERLAY_DISPLAY_LABEL = "(Active Overlay)";
 
     private final QuPathGUI qupath;
 
@@ -1209,22 +1218,63 @@ public class RenderedConfigPane extends VBox {
 
     private void populateClassifiers() {
         classifierCombo.getItems().clear();
-        var project = qupath.getProject();
-        if (project == null) return;
-        try {
-            var names = project.getPixelClassifiers().getNames();
-            classifierCombo.getItems().addAll(names);
-            if (!names.isEmpty()) {
-                String saved = QuietPreferences.getRenderedClassifierName();
-                if (saved != null && names.contains(saved)) {
-                    classifierCombo.setValue(saved);
-                } else {
-                    classifierCombo.getSelectionModel().selectFirst();
-                }
-            }
-        } catch (IOException e) {
-            logger.error("Failed to load pixel classifier names", e);
+
+        // Check for active pixel classification overlay on the current viewer
+        if (hasActivePixelOverlay()) {
+            classifierCombo.getItems().add(ACTIVE_OVERLAY_DISPLAY_LABEL);
         }
+
+        // List project-saved classifiers
+        var project = qupath.getProject();
+        if (project != null) {
+            try {
+                var names = project.getPixelClassifiers().getNames();
+                classifierCombo.getItems().addAll(names);
+            } catch (IOException e) {
+                logger.error("Failed to load pixel classifier names", e);
+            }
+        }
+
+        // Selection: prefer active overlay if present, else saved preference, else first
+        if (classifierCombo.getItems().contains(ACTIVE_OVERLAY_DISPLAY_LABEL)) {
+            classifierCombo.setValue(ACTIVE_OVERLAY_DISPLAY_LABEL);
+        } else if (!classifierCombo.getItems().isEmpty()) {
+            String saved = QuietPreferences.getRenderedClassifierName();
+            if (saved != null && classifierCombo.getItems().contains(saved)) {
+                classifierCombo.setValue(saved);
+            } else {
+                classifierCombo.getSelectionModel().selectFirst();
+            }
+        }
+    }
+
+    /**
+     * Check whether the current viewer has an active pixel classification overlay.
+     */
+    private boolean hasActivePixelOverlay() {
+        var viewer = qupath.getViewer();
+        if (viewer == null) return false;
+        var overlay = viewer.getCustomPixelLayerOverlay();
+        return overlay instanceof PixelClassificationOverlay;
+    }
+
+    /**
+     * Extract the {@link PixelClassifier} from the viewer's active pixel classification overlay.
+     * Returns null if no suitable overlay is active.
+     */
+    @SuppressWarnings("unchecked")
+    static PixelClassifier getActiveOverlayClassifier(QuPathGUI qupath) {
+        var viewer = qupath.getViewer();
+        if (viewer == null) return null;
+        var overlay = viewer.getCustomPixelLayerOverlay();
+        if (!(overlay instanceof PixelClassificationOverlay pco)) return null;
+        var imageData = (ImageData<BufferedImage>) viewer.getImageData();
+        if (imageData == null) return null;
+        ImageServer<BufferedImage> server = pco.getPixelClassificationServer(imageData);
+        if (server instanceof PixelClassificationImageServer pcis) {
+            return pcis.getClassifier();
+        }
+        return null;
     }
 
     private void populatePresets() {
@@ -1552,7 +1602,12 @@ public class RenderedConfigPane extends VBox {
         // Inset/zoom not exposed in UI (defaults to off)
 
         if (modeCombo.getValue() == RenderedExportConfig.RenderMode.CLASSIFIER_OVERLAY) {
-            builder.classifierName(classifierCombo.getValue());
+            String selected = classifierCombo.getValue();
+            if (ACTIVE_OVERLAY_DISPLAY_LABEL.equals(selected)) {
+                builder.classifierName(ACTIVE_OVERLAY_SENTINEL);
+            } else {
+                builder.classifierName(selected);
+            }
         }
 
         // Capture display settings based on selected mode
@@ -1619,18 +1674,25 @@ public class RenderedConfigPane extends VBox {
         DensityMapBuilder densityBuilder = null;
         if (config.getRenderMode() == RenderedExportConfig.RenderMode.CLASSIFIER_OVERLAY) {
             String classifierName = config.overlays().classifierName();
-            if (classifierName == null || classifierName.isBlank()) {
-                logger.warn("No classifier selected for preview");
-                return;
-            }
-            var project = qupath.getProject();
-            if (project != null) {
-                try {
-                    classifier = project.getPixelClassifiers().get(classifierName);
-                } catch (Exception e) {
-                    logger.error("Failed to load classifier for preview: {}", classifierName, e);
+            if (ACTIVE_OVERLAY_SENTINEL.equals(classifierName)) {
+                classifier = getActiveOverlayClassifier(qupath);
+                if (classifier == null) {
+                    logger.warn("No active pixel classification overlay found for preview");
                     return;
                 }
+            } else if (classifierName != null && !classifierName.isBlank()) {
+                var project = qupath.getProject();
+                if (project != null) {
+                    try {
+                        classifier = project.getPixelClassifiers().get(classifierName);
+                    } catch (Exception e) {
+                        logger.error("Failed to load classifier for preview: {}", classifierName, e);
+                        return;
+                    }
+                }
+            } else {
+                logger.warn("No classifier selected for preview");
+                return;
             }
         } else if (config.getRenderMode() == RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY) {
             String dmName = config.overlays().densityMapName();

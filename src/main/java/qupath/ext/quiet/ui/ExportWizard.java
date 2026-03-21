@@ -360,14 +360,25 @@ public class ExportWizard {
                         resources.getString("error.noClassifier"));
                 return;
             }
-            try {
-                classifier = qupath.getProject().getPixelClassifiers().get(classifierName);
-            } catch (Exception e) {
-                logger.error("Failed to load classifier: {}", classifierName, e);
-                Dialogs.showErrorMessage(
-                        resources.getString("error.title"),
-                        String.format(resources.getString("error.classifierLoad"), classifierName));
-                return;
+
+            if (RenderedConfigPane.ACTIVE_OVERLAY_DISPLAY_LABEL.equals(classifierName)) {
+                classifier = RenderedConfigPane.getActiveOverlayClassifier(qupath);
+                if (classifier == null) {
+                    Dialogs.showWarningNotification(
+                            resources.getString("name"),
+                            "No active pixel classification overlay found on the current viewer.");
+                    return;
+                }
+            } else {
+                try {
+                    classifier = qupath.getProject().getPixelClassifiers().get(classifierName);
+                } catch (Exception e) {
+                    logger.error("Failed to load classifier: {}", classifierName, e);
+                    Dialogs.showErrorMessage(
+                            resources.getString("error.title"),
+                            String.format(resources.getString("error.classifierLoad"), classifierName));
+                    return;
+                }
             }
         } else if (config.getRenderMode() == RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY) {
             String dmName = renderedConfigPane.getDensityMapName();
@@ -390,7 +401,11 @@ public class ExportWizard {
             }
         }
 
-        String workflowScript = addToWorkflow
+        // Skip workflow script for active overlay -- the classifier is ephemeral
+        // and cannot be reproduced from a saved script
+        boolean isActiveOverlay = RenderedConfigPane.ACTIVE_OVERLAY_DISPLAY_LABEL
+                .equals(renderedConfigPane.getClassifierName());
+        String workflowScript = (addToWorkflow && !isActiveOverlay)
                 ? ScriptGenerator.generate(ExportCategory.RENDERED, config) : null;
 
         String prefix = imageSelectionPane.getFilenamePrefix();
