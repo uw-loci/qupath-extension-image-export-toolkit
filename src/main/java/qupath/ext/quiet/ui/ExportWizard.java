@@ -94,7 +94,7 @@ public class ExportWizard {
         stage.initModality(Modality.WINDOW_MODAL);
         stage.initOwner(qupath.getStage());
         stage.setTitle(resources.getString("wizard.title"));
-        stage.setMinWidth(650);
+        stage.setMinWidth(1150);
         stage.setMinHeight(550);
 
         root = new BorderPane();

@@ -1,25 +1,34 @@
 package qupath.ext.quiet.ui;
 
+import java.util.Map;
 import java.util.ResourceBundle;
 
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import qupath.ext.quiet.export.ExportCategory;
 
 /**
  * Step 1 of the export wizard: Select an export category.
  * <p>
- * Presents three clickable cards, each representing an export category
- * (Rendered, Mask, Raw). The selected card is highlighted.
+ * Presents five clickable cards, each representing an export category
+ * (Rendered, Mask, Raw, Tiled, Object Crops). The selected card is highlighted.
+ * Each card includes a schematic illustration showing what the export produces.
  */
 public class CategorySelectionPane extends VBox {
+
+    private static final Logger logger = LoggerFactory.getLogger(CategorySelectionPane.class);
 
     private static final ResourceBundle resources =
             ResourceBundle.getBundle("qupath.ext.quiet.ui.strings");
@@ -31,6 +40,19 @@ public class CategorySelectionPane extends VBox {
     private static final String CARD_STYLE_SELECTED =
             "-fx-border-color: #0078d7; -fx-border-width: 2; -fx-border-radius: 8; " +
             "-fx-background-radius: 8; -fx-background-color: #e8f0fe; -fx-padding: 14; -fx-cursor: hand;";
+
+    private static final double CARD_MIN_WIDTH = 200;
+    private static final double ILLUSTRATION_HEIGHT = 140;
+
+    private static final String IMAGE_BASE_PATH = "/qupath/ext/quiet/ui/images/";
+
+    private static final Map<ExportCategory, String> ILLUSTRATION_FILES = Map.of(
+            ExportCategory.RENDERED, "category_rendered.png",
+            ExportCategory.MASK, "category_mask.png",
+            ExportCategory.RAW, "category_raw.png",
+            ExportCategory.TILED, "category_tiled.png",
+            ExportCategory.OBJECT_CROPS, "category_objectcrops.png"
+    );
 
     private ExportCategory selectedCategory = ExportCategory.RENDERED;
     private Runnable onAdvance;
@@ -96,9 +118,16 @@ public class CategorySelectionPane extends VBox {
         descLabel.setMaxWidth(Double.MAX_VALUE);
 
         var card = new VBox(8, titleLabel, descLabel);
-        card.setPrefWidth(200);
+        card.setPrefWidth(CARD_MIN_WIDTH);
+        card.setMinWidth(CARD_MIN_WIDTH);
         card.setMinHeight(120);
         card.setAlignment(Pos.TOP_LEFT);
+
+        // Add illustration image
+        var illustration = loadIllustration(category);
+        if (illustration != null) {
+            card.getChildren().add(illustration);
+        }
 
         card.setOnMouseClicked(e -> {
             selectedCategory = category;
@@ -109,6 +138,34 @@ public class CategorySelectionPane extends VBox {
         });
 
         return card;
+    }
+
+    private ImageView loadIllustration(ExportCategory category) {
+        var filename = ILLUSTRATION_FILES.get(category);
+        if (filename == null)
+            return null;
+
+        var resourcePath = IMAGE_BASE_PATH + filename;
+        var stream = getClass().getResourceAsStream(resourcePath);
+        if (stream == null) {
+            logger.warn("Category illustration not found: {}", resourcePath);
+            return null;
+        }
+
+        var image = new Image(stream);
+        var imageView = new ImageView(image);
+        imageView.setPreserveRatio(true);
+        imageView.setSmooth(true);
+        imageView.setFitHeight(ILLUSTRATION_HEIGHT);
+        // Bind width to card width so it scales with the card
+        imageView.fitWidthProperty().bind(
+                javafx.beans.binding.Bindings.createDoubleBinding(
+                        () -> Math.max(0, getWidth() / 5.0 - 50),
+                        widthProperty()
+                )
+        );
+
+        return imageView;
     }
 
     private void updateCardStyles() {
