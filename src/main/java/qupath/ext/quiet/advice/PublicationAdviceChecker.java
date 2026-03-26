@@ -26,6 +26,13 @@ public class PublicationAdviceChecker {
     private static final ResourceBundle resources =
             ResourceBundle.getBundle("qupath.ext.quiet.ui.strings");
 
+    /** Config section identifiers used by UI to highlight relevant controls. */
+    public static final String SECTION_SCALE_BAR = "scaleBar";
+    public static final String SECTION_FORMAT = "format";
+    public static final String SECTION_DISPLAY_SETTINGS = "displaySettings";
+    public static final String SECTION_SPLIT_CHANNEL = "splitChannel";
+    public static final String SECTION_TILED_LABELS = "tiledLabels";
+
     private PublicationAdviceChecker() {
         // Utility class
     }
@@ -72,7 +79,8 @@ public class PublicationAdviceChecker {
                     resources.getString("advice.scaleBar.title"),
                     resources.getString("advice.scaleBar.description"),
                     "IA-1",
-                    resources.getString("advice.scaleBar.action")));
+                    resources.getString("advice.scaleBar.action"),
+                    SECTION_SCALE_BAR));
         }
 
         // Check 2: No pixel calibration (scale bar impossible)
@@ -82,7 +90,8 @@ public class PublicationAdviceChecker {
                     resources.getString("advice.noCalibration.title"),
                     resources.getString("advice.noCalibration.description"),
                     "IA-1",
-                    resources.getString("advice.noCalibration.action")));
+                    resources.getString("advice.noCalibration.action"),
+                    SECTION_SCALE_BAR));
         }
 
         // Check 3 & 4: Scale bar color contrast
@@ -97,7 +106,8 @@ public class PublicationAdviceChecker {
                     resources.getString("advice.rawDisplay.title"),
                     resources.getString("advice.rawDisplay.description"),
                     "IC-2",
-                    resources.getString("advice.rawDisplay.action")));
+                    resources.getString("advice.rawDisplay.action"),
+                    SECTION_DISPLAY_SETTINGS));
         }
 
         // Check 6: PER_IMAGE_SAVED with multiple images
@@ -109,7 +119,8 @@ public class PublicationAdviceChecker {
                     resources.getString("advice.perImageDisplay.title"),
                     resources.getString("advice.perImageDisplay.description"),
                     "IC-3",
-                    resources.getString("advice.perImageDisplay.action")));
+                    resources.getString("advice.perImageDisplay.action"),
+                    SECTION_DISPLAY_SETTINGS));
         }
 
         // Check 7: JPEG format
@@ -119,7 +130,8 @@ public class PublicationAdviceChecker {
                     resources.getString("advice.jpegRendered.title"),
                     resources.getString("advice.jpegRendered.description"),
                     "ID-1",
-                    resources.getString("advice.jpegRendered.action")));
+                    resources.getString("advice.jpegRendered.action"),
+                    SECTION_FORMAT));
         }
 
         // Check 8: Red-green channel combination
@@ -134,7 +146,8 @@ public class PublicationAdviceChecker {
                     resources.getString("advice.noSplitChannel.title"),
                     resources.getString("advice.noSplitChannel.description"),
                     "IC-5",
-                    resources.getString("advice.noSplitChannel.action")));
+                    resources.getString("advice.noSplitChannel.action"),
+                    SECTION_SPLIT_CHANNEL));
         }
 
         // Check 10: Split channels in pseudocolor (not grayscale)
@@ -144,7 +157,8 @@ public class PublicationAdviceChecker {
                     resources.getString("advice.splitPseudocolor.title"),
                     resources.getString("advice.splitPseudocolor.description"),
                     "IC-4",
-                    resources.getString("advice.splitPseudocolor.action")));
+                    resources.getString("advice.splitPseudocolor.action"),
+                    SECTION_SPLIT_CHANNEL));
         }
     }
 
@@ -158,7 +172,8 @@ public class PublicationAdviceChecker {
                     resources.getString("advice.jpegMask.title"),
                     resources.getString("advice.jpegMask.description"),
                     null,
-                    resources.getString("advice.jpegMask.action")));
+                    resources.getString("advice.jpegMask.action"),
+                    SECTION_FORMAT));
         }
     }
 
@@ -172,7 +187,8 @@ public class PublicationAdviceChecker {
                     resources.getString("advice.noTiledLabels.title"),
                     resources.getString("advice.noTiledLabels.description"),
                     null,
-                    resources.getString("advice.noTiledLabels.action")));
+                    resources.getString("advice.noTiledLabels.action"),
+                    SECTION_TILED_LABELS));
         }
     }
 
@@ -187,7 +203,8 @@ public class PublicationAdviceChecker {
                     resources.getString("advice.allUncalibrated.title"),
                     resources.getString("advice.allUncalibrated.description"),
                     "IA-1",
-                    resources.getString("advice.allUncalibrated.action")));
+                    resources.getString("advice.allUncalibrated.action"),
+                    null));
         }
     }
 
@@ -213,7 +230,8 @@ public class PublicationAdviceChecker {
                     resources.getString("advice.scaleBarLightOnBF.title"),
                     resources.getString("advice.scaleBarLightOnBF.description"),
                     "IA-1",
-                    resources.getString("advice.scaleBarLightOnBF.action")));
+                    resources.getString("advice.scaleBarLightOnBF.action"),
+                    SECTION_SCALE_BAR));
         }
 
         // Check 4: Dark scale bar color on fluorescence (black background)
@@ -223,7 +241,8 @@ public class PublicationAdviceChecker {
                     resources.getString("advice.scaleBarDarkOnFL.title"),
                     resources.getString("advice.scaleBarDarkOnFL.description"),
                     "IA-1",
-                    resources.getString("advice.scaleBarDarkOnFL.action")));
+                    resources.getString("advice.scaleBarDarkOnFL.action"),
+                    SECTION_SCALE_BAR));
         }
     }
 
@@ -255,7 +274,8 @@ public class PublicationAdviceChecker {
                         resources.getString("advice.redGreen.title"),
                         resources.getString("advice.redGreen.description"),
                         "IC-6",
-                        resources.getString("advice.redGreen.action")));
+                        resources.getString("advice.redGreen.action"),
+                        null));
                 return; // Only warn once
             }
         }

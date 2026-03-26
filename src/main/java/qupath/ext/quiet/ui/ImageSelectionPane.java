@@ -35,6 +35,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import qupath.ext.quiet.advice.AdviceItem;
+import qupath.ext.quiet.advice.AdviceSeverity;
 import qupath.ext.quiet.advice.ImageContext;
 import qupath.ext.quiet.advice.PublicationAdviceChecker;
 import qupath.ext.quiet.export.ExportCategory;
@@ -74,6 +75,7 @@ public class ImageSelectionPane extends VBox {
     private CheckBox addToWorkflowCheck;
     private CheckBox exportGeoJsonCheck;
     private PublicationAdvicePane advicePane;
+    private javafx.scene.control.Button adviceButton;
     private ProgressBar progressBar;
     private Label statusLabel;
 
@@ -208,6 +210,12 @@ public class ImageSelectionPane extends VBox {
         // Publication advice
         advicePane = new PublicationAdvicePane();
 
+        adviceButton = new javafx.scene.control.Button(resources.getString("advice.button.show"));
+        adviceButton.setMaxWidth(Double.MAX_VALUE);
+        adviceButton.setOnAction(e -> advicePane.showAsDialog(ownerStage));
+        adviceButton.setStyle("-fx-font-weight: bold;");
+        updateAdviceButtonStyle();
+
         // Progress
         progressBar = new ProgressBar(0);
         progressBar.setMaxWidth(Double.MAX_VALUE);
@@ -227,7 +235,7 @@ public class ImageSelectionPane extends VBox {
                 scriptBox,
                 addToWorkflowCheck,
                 exportGeoJsonCheck,
-                advicePane.asCollapsibleSection(),
+                adviceButton,
                 progressBar,
                 statusLabel
         );
@@ -453,6 +461,38 @@ public class ImageSelectionPane extends VBox {
         List<ImageContext> imageContexts = buildImageContexts();
         List<AdviceItem> items = PublicationAdviceChecker.check(category, config, imageContexts);
         advicePane.update(items);
+        updateAdviceButtonStyle();
+    }
+
+    /** Get the current advice items for use by other wizard steps. */
+    public List<AdviceItem> getAdviceItems() {
+        return advicePane.getItems();
+    }
+
+    /** Close the advice dialog when the wizard closes. */
+    public void closeAdviceDialog() {
+        advicePane.closeDialog();
+    }
+
+    private void updateAdviceButtonStyle() {
+        var items = advicePane.getItems();
+        boolean hasErrors = items.stream()
+                .anyMatch(i -> i.severity() == AdviceSeverity.ERROR);
+        boolean hasWarnings = items.stream()
+                .anyMatch(i -> i.severity() == AdviceSeverity.WARNING);
+        if (hasErrors) {
+            adviceButton.setStyle("-fx-font-weight: bold; -fx-base: #ffcccc;");
+            adviceButton.setText(resources.getString("advice.button.show") + " [!]");
+        } else if (hasWarnings) {
+            adviceButton.setStyle("-fx-font-weight: bold; -fx-base: #fff3cd;");
+            adviceButton.setText(resources.getString("advice.button.show") + " [*]");
+        } else if (!items.isEmpty()) {
+            adviceButton.setStyle("-fx-font-weight: bold; -fx-base: #d1ecf1;");
+            adviceButton.setText(resources.getString("advice.button.show") + " [i]");
+        } else {
+            adviceButton.setStyle("-fx-font-weight: bold;");
+            adviceButton.setText(resources.getString("advice.button.show"));
+        }
     }
 
     /**

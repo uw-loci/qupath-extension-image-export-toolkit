@@ -108,6 +108,7 @@ public class ExportWizard {
         stage.setOnCloseRequest(e -> {
             saveAllPreferences();
             saveWizardSize();
+            imageSelectionPane.closeAdviceDialog();
         });
 
         buildNavigation();
@@ -213,6 +214,12 @@ public class ExportWizard {
 
                 // Show context-sensitive QUAREP guidelines on the right
                 root.setRight(new GuidelinesPane(qupath, selectedCategory));
+
+                // Highlight config sections that have advice issues (when navigating back)
+                var adviceItems = imageSelectionPane.getAdviceItems();
+                if (selectedCategory == ExportCategory.RENDERED) {
+                    renderedConfigPane.highlightAdviceSections(adviceItems);
+                }
             }
             case 3 -> {
                 // Set default output dir if empty

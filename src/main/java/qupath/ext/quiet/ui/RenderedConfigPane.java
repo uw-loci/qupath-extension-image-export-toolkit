@@ -154,6 +154,8 @@ public class RenderedConfigPane extends VBox {
     private CheckBox showInfoLabelCheck;
     private TextField infoLabelTemplateField;
     private Label infoLabelTemplateLabel;
+    private Label infoLabelPlaceholderRef;
+    private Label infoLabelPreviewLabel;
     private ComboBox<ScaleBarRenderer.Position> infoLabelPositionCombo;
     private Label infoLabelPositionLabel;
     private Spinner<Integer> infoLabelFontSizeSpinner;
@@ -173,8 +175,12 @@ public class RenderedConfigPane extends VBox {
     private Label scaleBarFontSizeLabel;
 
     // Section TitledPanes needing visibility toggling
+    private TitledPane imageSettingsSection;
     private TitledPane overlaySourceSection;
+    private TitledPane splitChannelSection;
+    private TitledPane scaleBarSection;
     private TitledPane colorScaleBarSection;
+    private TitledPane infoLabelSection;
 
     public RenderedConfigPane(QuPathGUI qupath) {
         this.qupath = qupath;
@@ -191,13 +197,13 @@ public class RenderedConfigPane extends VBox {
         var header = new Label(resources.getString("wizard.step2.title") + " - Rendered Image");
         header.setFont(Font.font(null, FontWeight.BOLD, 14));
 
-        var imageSettingsSection = buildImageSettingsSection();
+        imageSettingsSection = buildImageSettingsSection();
         overlaySourceSection = buildOverlaySourceSection();
         var objectOverlaysSection = buildObjectOverlaysSection();
-        var splitChannelSection = buildSplitChannelSection();
-        var scaleBarSection = buildScaleBarSection();
+        splitChannelSection = buildSplitChannelSection();
+        scaleBarSection = buildScaleBarSection();
         colorScaleBarSection = buildColorScaleBarSection();
-        var infoLabelSection = buildInfoLabelSection();
+        infoLabelSection = buildInfoLabelSection();
 
         previewButton = new Button(resources.getString("rendered.label.previewImage"));
         previewButton.setOnAction(e -> handlePreview());
@@ -757,7 +763,24 @@ public class RenderedConfigPane extends VBox {
         grid.add(infoLabelTemplateLabel, 0, row);
         infoLabelTemplateField = new TextField();
         infoLabelTemplateField.setPromptText("{imageName} - {pixelSize}");
+        infoLabelTemplateField.textProperty().addListener((obs, oldVal, newVal) ->
+                updateInfoLabelPreview());
         grid.add(infoLabelTemplateField, 1, row);
+        row++;
+
+        // Inline placeholder reference
+        infoLabelPlaceholderRef = new Label(resources.getString("rendered.infoLabel.placeholderRef"));
+        infoLabelPlaceholderRef.setWrapText(true);
+        infoLabelPlaceholderRef.setStyle("-fx-font-size: 0.85em; -fx-text-fill: #555555; -fx-font-family: monospace;");
+        grid.add(infoLabelPlaceholderRef, 0, row, 2, 1);
+        row++;
+
+        // Live preview
+        infoLabelPreviewLabel = new Label();
+        infoLabelPreviewLabel.setWrapText(true);
+        infoLabelPreviewLabel.setStyle("-fx-font-size: 0.9em; -fx-background-color: #e8eef4; "
+                + "-fx-padding: 6; -fx-background-radius: 4;");
+        grid.add(infoLabelPreviewLabel, 0, row, 2, 1);
         row++;
 
         infoLabelPositionLabel = new Label(resources.getString("rendered.label.infoLabelPosition"));
@@ -1051,6 +1074,10 @@ public class RenderedConfigPane extends VBox {
         infoLabelTemplateLabel.setManaged(show);
         infoLabelTemplateField.setVisible(show);
         infoLabelTemplateField.setManaged(show);
+        infoLabelPlaceholderRef.setVisible(show);
+        infoLabelPlaceholderRef.setManaged(show);
+        infoLabelPreviewLabel.setVisible(show);
+        infoLabelPreviewLabel.setManaged(show);
         infoLabelPositionLabel.setVisible(show);
         infoLabelPositionLabel.setManaged(show);
         infoLabelPositionCombo.setVisible(show);
@@ -1061,6 +1088,90 @@ public class RenderedConfigPane extends VBox {
         infoLabelFontSizeSpinner.setManaged(show);
         infoLabelBoldCheck.setVisible(show);
         infoLabelBoldCheck.setManaged(show);
+        if (show) updateInfoLabelPreview();
+    }
+
+    /**
+     * Resolve the info label template against the current viewer image (if any)
+     * and display a live preview. Highlights empty placeholders so the user
+     * knows which variables have no value.
+     */
+    private void updateInfoLabelPreview() {
+        String template = infoLabelTemplateField.getText();
+        if (template == null || template.isBlank()) {
+            infoLabelPreviewLabel.setText(resources.getString("rendered.infoLabel.preview.empty"));
+            infoLabelPreviewLabel.setStyle("-fx-font-size: 0.9em; -fx-background-color: #e8eef4; "
+                    + "-fx-padding: 6; -fx-background-radius: 4; -fx-text-fill: #888888;");
+            return;
+        }
+
+        // Resolve against current image if available
+        var imageData = qupath.getImageData();
+        String resolved = template;
+        var warnings = new java.util.ArrayList<String>();
+
+        if (imageData != null) {
+            var entry = qupath.getProject() != null ? qupath.getProject().getEntry(imageData) : null;
+            String entryName = entry != null ? entry.getImageName() : "(current image)";
+            resolved = resolved.replace("{imageName}", entryName);
+
+            var server = imageData.getServer();
+            var cal = server.getPixelCalibration();
+            if (cal.hasPixelSizeMicrons()) {
+                resolved = resolved.replace("{pixelSize}",
+                        String.format("%.3f um/px", cal.getAveragedPixelSizeMicrons()));
+            } else {
+                resolved = resolved.replace("{pixelSize}", "uncalibrated");
+                warnings.add("{pixelSize} -> uncalibrated");
+            }
+            resolved = resolved.replace("{width}", String.valueOf(server.getWidth()));
+            resolved = resolved.replace("{height}", String.valueOf(server.getHeight()));
+        } else {
+            // No image open -- show example values
+            resolved = resolved.replace("{imageName}", "(no image open)");
+            resolved = resolved.replace("{pixelSize}", "0.500 um/px");
+            resolved = resolved.replace("{width}", "1920");
+            resolved = resolved.replace("{height}", "1080");
+            warnings.add("No image open -- showing example values");
+        }
+
+        resolved = resolved.replace("{date}",
+                java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE));
+        resolved = resolved.replace("{time}",
+                java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")));
+
+        // Classifier: check if one is actually set
+        if (template.contains("{classifier}")) {
+            // No easy way to get classifier name at config time; warn user
+            resolved = resolved.replace("{classifier}", "");
+            String trimmed = resolved.trim();
+            if (!trimmed.equals(resolved.replace("{classifier}", "").trim())) {
+                // placeholder was there but resolved to empty
+            }
+            warnings.add("{classifier} resolves at export time (empty if no classifier overlay selected)");
+        }
+
+        // Check for any unresolved placeholders
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\{\\w+\\}").matcher(resolved);
+        while (m.find()) {
+            warnings.add(m.group() + " is not a recognized placeholder");
+        }
+
+        var sb = new StringBuilder();
+        sb.append(resources.getString("rendered.infoLabel.preview.prefix")).append(" ");
+        sb.append(resolved.trim().isEmpty() ? "(empty -- all placeholders resolved to blank)" : resolved);
+        if (!warnings.isEmpty()) {
+            sb.append("\n");
+            for (String w : warnings) {
+                sb.append("  * ").append(w).append("\n");
+            }
+        }
+
+        infoLabelPreviewLabel.setText(sb.toString().trim());
+        boolean hasWarnings = !warnings.isEmpty();
+        infoLabelPreviewLabel.setStyle("-fx-font-size: 0.9em; -fx-background-color: "
+                + (hasWarnings ? "#fff3cd" : "#e8eef4")
+                + "; -fx-padding: 6; -fx-background-radius: 4;");
     }
 
     private void updateResolutionModeVisibility(String mode) {
@@ -1852,6 +1963,60 @@ public class RenderedConfigPane extends VBox {
      * Convert a hex string to a JavaFX Color.
      * Handles legacy enum names ("WHITE", "BLACK") gracefully.
      */
+    /**
+     * Highlight config sections that have associated publication advice items.
+     * Call this when navigating back to Step 2 from Step 3.
+     *
+     * @param items the current advice items (from ImageSelectionPane)
+     */
+    void highlightAdviceSections(List<qupath.ext.quiet.advice.AdviceItem> items) {
+        // Clear all highlights first
+        clearSectionHighlight(imageSettingsSection);
+        clearSectionHighlight(scaleBarSection);
+        clearSectionHighlight(splitChannelSection);
+        clearSectionHighlight(colorScaleBarSection);
+        clearSectionHighlight(infoLabelSection);
+
+        if (items == null || items.isEmpty()) return;
+
+        // Map config sections to TitledPanes
+        var sectionMap = java.util.Map.of(
+                "scaleBar", scaleBarSection,
+                "format", imageSettingsSection,
+                "displaySettings", imageSettingsSection,
+                "splitChannel", splitChannelSection
+        );
+
+        // Find the worst severity per section
+        var worstSeverity = new java.util.HashMap<TitledPane, qupath.ext.quiet.advice.AdviceSeverity>();
+        for (var item : items) {
+            if (item.configSection() == null) continue;
+            var pane = sectionMap.get(item.configSection());
+            if (pane == null) continue;
+
+            var current = worstSeverity.get(pane);
+            if (current == null || item.severity().ordinal() < current.ordinal()) {
+                worstSeverity.put(pane, item.severity());
+            }
+        }
+
+        // Apply colored left border to flagged sections
+        for (var entry : worstSeverity.entrySet()) {
+            String color = switch (entry.getValue()) {
+                case ERROR -> "#e74c3c";
+                case WARNING -> "#e67e22";
+                case INFO -> "#3498db";
+            };
+            entry.getKey().setStyle(
+                    "-fx-border-color: " + color + " transparent transparent transparent; "
+                    + "-fx-border-width: 3 0 0 0;");
+        }
+    }
+
+    private static void clearSectionHighlight(TitledPane pane) {
+        if (pane != null) pane.setStyle("");
+    }
+
     private static javafx.scene.paint.Color hexToFxColor(String hex) {
         if (hex == null || hex.isBlank()) return javafx.scene.paint.Color.WHITE;
         // Handle legacy enum names from old preferences
