@@ -104,6 +104,7 @@ public class RenderedConfigPane extends VBox {
     private CheckBox scaleBarBoldCheck;
     private CheckBox scaleBarBackgroundBoxCheck;
     private Label scaleBarColorHintLabel;
+    private CheckBox showChannelLegendCheck;
     private Button previewButton;
 
     // Density map controls
@@ -494,6 +495,11 @@ public class RenderedConfigPane extends VBox {
         dpiNoteLabel.setMaxWidth(400);
         dpiNoteLabel.setStyle("-fx-font-size: 11; -fx-text-fill: #666666; -fx-font-style: italic;");
         grid.add(dpiNoteLabel, 1, row);
+        row++;
+
+        // Channel/stain legend
+        showChannelLegendCheck = new CheckBox(resources.getString("rendered.label.showChannelLegend"));
+        grid.add(showChannelLegendCheck, 0, row, 2, 1);
         row++;
 
         // Format combo
@@ -1310,6 +1316,7 @@ public class RenderedConfigPane extends VBox {
         scaleBarFontSizeSpinner.setTooltip(createTooltip("tooltip.rendered.scaleBarFontSize"));
         scaleBarBoldCheck.setTooltip(createTooltip("tooltip.rendered.scaleBarBold"));
         scaleBarBackgroundBoxCheck.setTooltip(createTooltip("tooltip.rendered.scaleBarBackgroundBox"));
+        showChannelLegendCheck.setTooltip(createTooltip("tooltip.rendered.showChannelLegend"));
         previewButton.setTooltip(createTooltip("tooltip.rendered.previewImage"));
         densityMapCombo.setTooltip(createTooltip("tooltip.rendered.densityMap"));
         colormapCombo.setTooltip(createTooltip("tooltip.rendered.colormap"));
@@ -1496,6 +1503,7 @@ public class RenderedConfigPane extends VBox {
         scaleBarFontSizeSpinner.getValueFactory().setValue(QuietPreferences.getRenderedScaleBarFontSize());
         scaleBarBoldCheck.setSelected(QuietPreferences.isRenderedScaleBarBold());
         scaleBarBackgroundBoxCheck.setSelected(QuietPreferences.isRenderedScaleBarBackgroundBox());
+        showChannelLegendCheck.setSelected(QuietPreferences.isRenderedShowChannelLegend());
 
         // Smart default: auto-detect scale bar color from project image types
         // Only applies when the color is still the default white (#FFFFFF)
@@ -1601,6 +1609,7 @@ public class RenderedConfigPane extends VBox {
                 scaleBarFontSizeSpinner.getValue() != null ? scaleBarFontSizeSpinner.getValue() : 0);
         QuietPreferences.setRenderedScaleBarBold(scaleBarBoldCheck.isSelected());
         QuietPreferences.setRenderedScaleBarBackgroundBox(scaleBarBackgroundBoxCheck.isSelected());
+        QuietPreferences.setRenderedShowChannelLegend(showChannelLegendCheck.isSelected());
         var densityMap = densityMapCombo.getValue();
         if (densityMap != null) QuietPreferences.setRenderedDensityMapName(densityMap);
         var colormap = colormapCombo.getValue();
@@ -1674,6 +1683,7 @@ public class RenderedConfigPane extends VBox {
                 .overlayOpacity(opacitySlider.getValue())
                 .downsample(downsampleCombo.getValue() != null ? downsampleCombo.getValue() : 4.0)
                 .format(formatCombo.getValue())
+                .showChannelLegend(showChannelLegendCheck.isSelected())
                 .outputDirectory(outputDir)
                 .includeAnnotations(includeAnnotationsCheck.isSelected())
                 .includeDetections(includeDetectionsCheck.isSelected())

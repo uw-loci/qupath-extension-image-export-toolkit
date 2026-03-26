@@ -540,6 +540,7 @@ public class RenderedImageExporter {
             infoText = resolveInfoLabelTemplate(
                     config.infoLabel().text(), entryName, imageData, config);
         }
+        maybeDrawChannelLegend(g2d, imageData, config, imageWidth, imageHeight);
         maybeDrawInfoLabel(g2d, config, infoText, imageWidth, imageHeight);
     }
 
@@ -1086,6 +1087,8 @@ public class RenderedImageExporter {
         String infoText = entryName != null && config.infoLabel().show()
                 ? resolveInfoLabelTemplate(config.infoLabel().text(), entryName, imageData, config)
                 : null;
+        maybeDrawChannelLegend(g2d, imageData, config,
+                baseImage.getWidth(), baseImage.getHeight());
         maybeDrawInfoLabel(g2d, config, infoText,
                 baseImage.getWidth(), baseImage.getHeight());
 
@@ -1157,6 +1160,8 @@ public class RenderedImageExporter {
         String infoText = entryName != null && config.infoLabel().show()
                 ? resolveInfoLabelTemplate(config.infoLabel().text(), entryName, imageData, config)
                 : null;
+        maybeDrawChannelLegend(g2d, imageData, config,
+                baseImage.getWidth(), baseImage.getHeight());
         maybeDrawInfoLabel(g2d, config, infoText,
                 baseImage.getWidth(), baseImage.getHeight());
 
@@ -1367,6 +1372,8 @@ public class RenderedImageExporter {
         String infoText = entryName != null && config.infoLabel().show()
                 ? resolveInfoLabelTemplate(config.infoLabel().text(), entryName, imageData, config)
                 : null;
+        maybeDrawChannelLegend(g2d, imageData, config,
+                baseImage.getWidth(), baseImage.getHeight());
         maybeDrawInfoLabel(g2d, config, infoText,
                 baseImage.getWidth(), baseImage.getHeight());
 
@@ -1770,6 +1777,82 @@ public class RenderedImageExporter {
                 classifierName != null ? classifierName : "");
 
         return result;
+    }
+
+    /**
+     * Draw a channel/stain legend if enabled in the config.
+     * For fluorescence: channel names + colors.
+     * For brightfield: stain names + colors from color deconvolution.
+     */
+    private static void maybeDrawChannelLegend(Graphics2D g2d,
+                                                ImageData<BufferedImage> imageData,
+                                                RenderedExportConfig config,
+                                                int w, int h) {
+        if (!config.isShowChannelLegend()) return;
+
+        var server = imageData.getServer();
+        var entries = new java.util.ArrayList<int[]>();
+        var names = new java.util.ArrayList<String>();
+
+        // Try color deconvolution stains first (brightfield)
+        var stains = imageData.getColorDeconvolutionStains();
+        if (stains != null) {
+            for (int i = 1; i <= 3; i++) {
+                var stain = stains.getStain(i);
+                if (stain != null && !stain.isResidual()) {
+                    int packed = stain.getColor();
+                    entries.add(new int[]{
+                            (packed >> 16) & 0xFF,
+                            (packed >> 8) & 0xFF,
+                            packed & 0xFF});
+                    names.add(stain.getName());
+                }
+            }
+        }
+
+        // If no stains, use channel colors (fluorescence)
+        if (entries.isEmpty()) {
+            var channels = server.getMetadata().getChannels();
+            for (var ch : channels) {
+                int packed = ch.getColor();
+                entries.add(new int[]{
+                        (packed >> 16) & 0xFF,
+                        (packed >> 8) & 0xFF,
+                        packed & 0xFF});
+                names.add(ch.getName());
+            }
+        }
+
+        if (entries.isEmpty()) return;
+
+        int minDim = Math.min(w, h);
+        int swatchSize = Math.max(8, minDim / 30);
+        int margin = Math.max(6, minDim / 50);
+        int fontSize = Math.max(10, minDim / 45);
+        int lineSpacing = Math.max(2, swatchSize / 4);
+
+        g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
+        g2d.setFont(new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD, fontSize));
+
+        int y = margin;
+        for (int i = 0; i < entries.size(); i++) {
+            int[] rgb = entries.get(i);
+            Color chColor = new Color(rgb[0], rgb[1], rgb[2]);
+
+            // Swatch
+            g2d.setColor(chColor);
+            g2d.fillRect(margin, y, swatchSize, swatchSize);
+            g2d.setColor(Color.WHITE);
+            g2d.drawRect(margin, y, swatchSize, swatchSize);
+
+            // Label
+            int textX = margin + swatchSize + margin;
+            int textY = y + swatchSize - 2;
+            TextRenderUtils.drawOutlinedText(g2d, names.get(i),
+                    textX, textY, Color.WHITE, Color.BLACK);
+
+            y += swatchSize + lineSpacing;
+        }
     }
 
     /**

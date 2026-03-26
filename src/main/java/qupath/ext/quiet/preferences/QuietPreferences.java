@@ -92,6 +92,9 @@ public class QuietPreferences {
     private static final BooleanProperty renderedScaleBarBackgroundBox =
             PathPrefs.createPersistentPreference(PREFIX + "rendered.scaleBarBackgroundBox", false);
 
+    private static final BooleanProperty renderedShowChannelLegend =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.showChannelLegend", false);
+
     // --- Rendered region type preferences ---
 
     private static final StringProperty renderedRegionType =
@@ -415,6 +418,10 @@ public class QuietPreferences {
     public static BooleanProperty renderedScaleBarBackgroundBoxProperty() { return renderedScaleBarBackgroundBox; }
     public static boolean isRenderedScaleBarBackgroundBox() { return renderedScaleBarBackgroundBox.get(); }
     public static void setRenderedScaleBarBackgroundBox(boolean value) { renderedScaleBarBackgroundBox.set(value); }
+
+    public static BooleanProperty renderedShowChannelLegendProperty() { return renderedShowChannelLegend; }
+    public static boolean isRenderedShowChannelLegend() { return renderedShowChannelLegend.get(); }
+    public static void setRenderedShowChannelLegend(boolean value) { renderedShowChannelLegend.set(value); }
 
     // --- Region type ---
 

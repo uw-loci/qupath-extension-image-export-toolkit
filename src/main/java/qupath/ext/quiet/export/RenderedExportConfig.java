@@ -168,6 +168,7 @@ public class RenderedExportConfig {
     private final File outputDirectory;
     private final boolean addToWorkflow;
     private final double matchedDisplayPercentile;
+    private final boolean showChannelLegend;
 
     // -----------------------------------------------------------------------
     //  Sub-config record instances
@@ -202,6 +203,7 @@ public class RenderedExportConfig {
         this.outputDirectory = builder.outputDirectory;
         this.addToWorkflow = builder.addToWorkflow;
         this.matchedDisplayPercentile = builder.matchedDisplayPercentile;
+        this.showChannelLegend = builder.showChannelLegend;
 
         // Sub-configs assembled from individual builder fields
         this.overlays = new ObjectOverlayConfig(
@@ -336,6 +338,15 @@ public class RenderedExportConfig {
      */
     public double getMatchedDisplayPercentile() {
         return matchedDisplayPercentile;
+    }
+
+    /**
+     * Whether to draw a channel/stain legend on the exported image.
+     * For fluorescence images, shows channel names and colors.
+     * For brightfield images, shows stain names and colors from color deconvolution.
+     */
+    public boolean isShowChannelLegend() {
+        return showChannelLegend;
     }
 
     // -----------------------------------------------------------------------
@@ -478,6 +489,7 @@ public class RenderedExportConfig {
         private File outputDirectory;
         private boolean addToWorkflow = true;
         private double matchedDisplayPercentile = 0.1;
+        private boolean showChannelLegend = false;
 
         // -- Object overlay fields --
         private String classifierName;
@@ -605,6 +617,11 @@ public class RenderedExportConfig {
 
         public Builder matchedDisplayPercentile(double percentile) {
             this.matchedDisplayPercentile = GeneralTools.clipValue(percentile, 0.0, 5.0);
+            return this;
+        }
+
+        public Builder showChannelLegend(boolean show) {
+            this.showChannelLegend = show;
             return this;
         }
 
