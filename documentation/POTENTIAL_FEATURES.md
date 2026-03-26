@@ -8,18 +8,22 @@ This document catalogs features found in two Fiji figure-creation plugins --
 that QuIET does not currently offer. Each entry includes a description, an
 implementation sketch against the current QuIET codebase, and known challenges.
 
-**Current QuIET capabilities** (v0.6.0): Rendered exports (classifier overlay,
+**Current QuIET capabilities** (v0.7.3): Rendered exports (classifier overlay,
 object overlay, density map overlay), mask exports (binary, grayscale, colored,
-instance, multi-channel), raw pixel exports, tiled ML training exports,
-per-object classification crop exports, SVG vector export,
-per-annotation region export, panel labels (A, B, C), visual LUT selector,
-scale bars (full color picker), color scale bars, display settings control,
-script generation, batch processing, metadata sidecars, GeoJSON export,
+instance, multi-channel -- JPEG blocked for label integrity), raw pixel exports,
+tiled ML training exports, per-object classification crop exports, SVG vector export,
+per-annotation region export, panel labels (A, B, C), info labels (per-image metadata
+templates with live preview), visual LUT selector, scale bars (smart color defaults
+from project images, background box option), color scale bars, display settings control
+(per-image, current viewer, saved preset, global matched, raw), split-channel export,
+DPI/resolution control, script generation, batch processing, metadata sidecars,
+GeoJSON export, QUAREP-LiMi context-sensitive guidelines panel (Step 2),
+floating Publication Advice dialog with config section highlighting (Step 3),
 and a three-step wizard UI with collapsible section-based config panes.
 
-**Codebase metrics** (v0.6.0):
-- ~40 Java source files across `export/` (25 files), `ui/` (9 files), `scripting/` (6 files), `preferences/` (1 file), root (1 file)
-- `RenderedExportConfig` has 31 fields, 31 builder methods
+**Codebase metrics** (v0.7.3):
+- ~45 Java source files across `export/` (25 files), `ui/` (11 files), `advice/` (4 files), `scripting/` (6 files), `preferences/` (1 file), root (1 file)
+- `RenderedExportConfig` has sub-config records (ScaleBarConfig, TextLabelConfig, etc.) with ~35 total fields
 - `RenderedConfigPane` uses collapsible TitledPane sections (6 sections: Image Settings, Overlay Source, Object Overlays, Scale Bar, Color Scale Bar, Panel Label)
 - `RenderedScriptGenerator` is ~1050 lines generating 3 script variants with panel label support
 - One external dependency beyond QuPath: JFreeSVG 5.0.6 for SVG export (Gson comes from QuPath)
@@ -521,7 +525,7 @@ range across all selected images.
 
 ---
 
-### F8. DPI / Resolution Control
+### F8. DPI / Resolution Control -- COMPLETED (v0.7.0)
 
 **Priority:** P2
 **Source:** QuickFigures (Re-Set Pixel Density), journal requirements
@@ -712,7 +716,7 @@ Helps researchers verify their color scheme is accessible before publication.
 
 ---
 
-### F11. Dimension / Timestamp Labels
+### F11. Dimension / Timestamp Labels -- COMPLETED (v0.7.0, as Info Label)
 
 **Priority:** P2
 **Source:** BioVoxxel (Dimension Labeler)
@@ -834,7 +838,7 @@ tissue sections or focusing on a specific tissue region.
 
 ---
 
-### F13. Custom Text / Label Overlays
+### F13. Custom Text / Label Overlays -- PARTIALLY COMPLETED (v0.7.0, as Info Label)
 
 **Priority:** P2
 **Source:** QuickFigures (complex text items, rich formatting)

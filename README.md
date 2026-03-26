@@ -1,7 +1,7 @@
 # QuIET - QuPath Image Export Toolkit
 
-[![Release](https://img.shields.io/github/v/release/MichaelSNelson/qupath-extension-image-export-toolkit?include_prereleases)](https://github.com/MichaelSNelson/qupath-extension-image-export-toolkit/releases)
-[![License](https://img.shields.io/github/license/MichaelSNelson/qupath-extension-image-export-toolkit)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/uw-loci/qupath-extension-image-export-toolkit?include_prereleases)](https://github.com/uw-loci/qupath-extension-image-export-toolkit/releases)
+[![License](https://img.shields.io/github/license/uw-loci/qupath-extension-image-export-toolkit)](LICENSE)
 
 A [QuPath](https://qupath.github.io/) extension for batch exporting images in multiple formats for machine learning training and analysis.
 
@@ -22,9 +22,21 @@ plugin for Fiji/ImageJ, which provides interactive tools for creating
 publication-ready figure panels with colorblind-friendly LUT options and CDV
 (color deficient vision) simulation.
 
-QuIET includes a built-in **Publication Advice** panel (visible on Step 3 of the
-export wizard) that automatically checks your export configuration against key
-QUAREP-LiMi recommendations, including:
+QuIET integrates QUAREP-LiMi guidance at two levels:
+
+**QUAREP Guidelines Panel (Step 2)** -- A context-sensitive panel shown alongside
+the export configuration that scans your project images and provides proactive
+recommendations based on the detected image types (brightfield, fluorescence,
+multiplex). The panel displays relevant advice for each export category, including:
+
+- Channel color analysis with colorblind-accessibility warnings
+- Annotation/overlay color contrast recommendations
+- Split-channel and display settings guidance for fluorescence
+- Scale bar color and format recommendations
+- Category-specific best practices (masks, tiled ML, raw, object crops)
+
+**Publication Advice Dialog (Step 3)** -- A floating modeless dialog that checks
+your specific export configuration against key QUAREP-LiMi recommendations:
 
 - Missing scale bars on calibrated images
 - Lossy JPEG compression for quantitative data
@@ -33,7 +45,12 @@ QUAREP-LiMi recommendations, including:
 - Multi-channel images without individual grayscale channel panels
 - Missing pixel calibration for spatial reference
 
-These checks are advisory -- QuIET will never block an export, but helps researchers
+Each advice item identifies the specific config section to fix (e.g., "-> Scale Bar
+section"). When you navigate back to Step 2, those sections are highlighted with
+colored borders matching the advice severity, so you can find and fix the issue
+without memorizing the advice.
+
+All checks are advisory -- QuIET will never block an export, but helps researchers
 produce clearer, more reproducible microscopy figures.
 
 ## Requirements
@@ -43,7 +60,7 @@ produce clearer, more reproducible microscopy figures.
 
 ## Installation
 
-1. Download the latest `qupath-extension-image-export-toolkit-*-all.jar` from [Releases](https://github.com/MichaelSNelson/qupath-extension-image-export-toolkit/releases)
+1. Download the latest `qupath-extension-image-export-toolkit-*-all.jar` from [Releases](https://github.com/uw-loci/qupath-extension-image-export-toolkit/releases)
 2. Drag the JAR onto the running QuPath window, **or** copy it into your QuPath `extensions/` directory
 3. Restart QuPath
 
@@ -56,8 +73,8 @@ The extension appears under **Extensions > QuIET > Export Images...**
 1. Open a QuPath project containing annotated images
 2. Go to **Extensions > QuIET > Export Images...**
 3. **Step 1** -- Choose an export category (Rendered, Mask, Raw, Tiled, or Object Crops)
-4. **Step 2** -- Configure export settings (grouped into collapsible sections)
-5. **Step 3** -- Select images, choose output directory, and click **Export**
+4. **Step 2** -- Configure export settings (grouped into collapsible sections). A QUAREP-LiMi guidelines panel on the right provides context-sensitive recommendations based on your project's images.
+5. **Step 3** -- Select images, choose output directory, review Publication Advice, and click **Export**
 
 Every export also generates a **Groovy script** that you can copy, save, and re-run from QuPath's built-in script editor -- no extension required.
 
@@ -79,6 +96,7 @@ Export images with visual overlays composited onto the base image.
 | **Scale Bar** | Optionally burn a scale bar into the exported image with configurable position and color (see below) |
 | **Color Scale Bar** | For density map mode, optionally burn a color-mapped legend with min/max labels (see below) |
 | **Panel Label** | Optionally add a letter label (A, B, C...) for multi-panel publication figures (see below) |
+| **Info Label** | Optionally add a per-image metadata text stamp with template placeholders (see below) |
 | **Downsample** | Resolution factor (1x = full resolution, 4x = quarter, etc.) |
 | **Format** | PNG, TIFF, JPEG, OME-TIFF, SVG |
 
@@ -112,9 +130,12 @@ Rendered exports can optionally include a burned-in scale bar with text label. T
 |--------|--------|
 | **Show scale bar** | Enable/disable (default: off) |
 | **Position** | Lower Right (default), Lower Left, Upper Right, Upper Left |
-| **Color** | Any hex color via color picker (default: white) -- drawn with a luminance-based contrast outline for visibility on any background |
+| **Color** | Any hex color via color picker -- **smart default** auto-detected from project images (black for brightfield, white for fluorescence). Drawn with a luminance-based contrast outline for visibility on any background. |
 | **Font size** | Auto (computed from image dimensions) or explicit size in points |
 | **Bold text** | Enable/disable (default: on) |
+| **Background box** | Draw a semi-transparent contrasting box behind the scale bar and label (default: off). Recommended for highly multiplexed fluorescence images where the scale bar may overlap bright signal regions. |
+
+The scale bar color is auto-detected from your project's images when the wizard opens for the first time: brightfield-dominant projects default to black (for contrast against white tissue backgrounds), and fluorescence projects default to white (for contrast against dark backgrounds). A hint label below the color picker reminds you to choose high contrast with the image background.
 
 The scale bar requires pixel calibration in the image metadata. If an image has no calibration, the scale bar is skipped with a warning.
 
@@ -147,6 +168,32 @@ Add automatic letter labels (A, B, C, ...) to exported images for multi-panel pu
 
 Panel labels are drawn with a luminance-based contrast outline for visibility on any background. In batch export with auto-increment, the first image receives "A", the second "B", and so on (extending to "AA", "AB"... after "Z").
 
+#### Info Label
+
+Add a per-image metadata text stamp to exported images. The template is resolved per-image at export time, so each image gets its own metadata values.
+
+| Option | Values |
+|--------|--------|
+| **Show info label** | Enable/disable (default: off) |
+| **Template** | Text with `{placeholder}` tokens (see below) |
+| **Position** | Lower Left (default), Lower Right, Upper Left, Upper Right |
+| **Font size** | Auto (computed from image dimensions) or explicit size in points |
+| **Bold text** | Enable/disable (default: off) |
+
+**Available placeholders:**
+
+| Placeholder | Resolves to |
+|-------------|-------------|
+| `{imageName}` | The project image entry name |
+| `{pixelSize}` | Pixel calibration (e.g., "0.500 um/px") or "uncalibrated" |
+| `{date}` | Current date (YYYY-MM-DD) |
+| `{time}` | Current time (HH:MM) |
+| `{classifier}` | Classifier name (empty if no classifier overlay selected) |
+| `{width}` | Image width in pixels |
+| `{height}` | Image height in pixels |
+
+A **live preview** below the template field resolves the template against the currently open image and warns about empty or unrecognized placeholders. An inline placeholder reference is always visible (not hidden behind a tooltip).
+
 ### Label / Mask
 
 Export segmentation masks from QuPath's object hierarchy using `LabeledImageServer`.
@@ -165,6 +212,9 @@ Additional mask options:
 - **Background label** -- Configurable background value (default 0)
 - **Boundary labels** -- Enable boundary erosion with configurable label value and line thickness
 - **Classification filter** -- Select/deselect which classifications to include
+- **Format** -- PNG, TIFF, OME-TIFF (no JPEG -- lossy compression destroys label values)
+
+> **Note:** JPEG is intentionally excluded from mask format options because lossy compression alters pixel values, which would corrupt the integer label encoding. Masks are rendered from vector geometries at the requested downsample, so label values are always exact regardless of resolution.
 
 ### Raw Pixel Data
 
@@ -297,7 +347,7 @@ Preferences are stored in QuPath's standard preference system under the `quiet.*
 
 ```bash
 # Clone the repository
-git clone https://github.com/MichaelSNelson/qupath-extension-image-export-toolkit.git
+git clone https://github.com/uw-loci/qupath-extension-image-export-toolkit.git
 cd qupath-extension-image-export-toolkit
 
 # Build the extension JAR (includes all dependencies)
@@ -324,12 +374,17 @@ cd qupath-extension-image-export-toolkit
 ```
 src/main/java/qupath/ext/quiet/
   QuietExtension.java              # Extension entry point
+  advice/
+    AdviceItem.java                # Single advice result (severity, title, config section ref)
+    AdviceSeverity.java            # ERROR, WARNING, INFO
+    ImageContext.java              # Per-image metadata for advice checks
+    PublicationAdviceChecker.java  # QUAREP-LiMi guideline checks
   export/
     ExportCategory.java            # RENDERED, MASK, RAW, TILED, OBJECT_CROPS
     OutputFormat.java              # PNG, TIFF, JPEG, OME_TIFF, OME_TIFF_PYRAMID, SVG
-    RenderedExportConfig.java      # Rendered export configuration (31 fields)
+    RenderedExportConfig.java      # Rendered export configuration with sub-config records
     RenderedImageExporter.java     # Rendered export logic
-    MaskExportConfig.java          # Mask/label export configuration
+    MaskExportConfig.java          # Mask/label export configuration (rejects JPEG)
     MaskImageExporter.java         # LabeledImageServer-based mask export
     RawExportConfig.java           # Raw pixel export configuration
     RawImageExporter.java          # Raw pixel export logic
@@ -340,12 +395,14 @@ src/main/java/qupath/ext/quiet/
     GeoJsonExporter.java           # GeoJSON annotation export
     BatchExportTask.java           # JavaFX Task for background batch processing
     ExportResult.java              # Export outcome tracking
-    ScaleBarRenderer.java          # Java2D scale bar drawing utility
+    ScaleBarRenderer.java          # Java2D scale bar with background box support
     ColorScaleBarRenderer.java     # Color-mapped legend for density maps
     PanelLabelRenderer.java        # Panel letter label renderer (A, B, C...)
+    InfoLabelRenderer.java         # Per-image metadata text stamp renderer
     TextRenderUtils.java           # Shared text rendering (outlined text, font sizing)
     ExportMetadataWriter.java      # Metadata sidecar file writer
-  scripting/
+    GlobalDisplayRangeScanner.java # Global min/max display range computation
+  export/                          # (ScriptGenerator classes)
     ScriptGenerator.java           # Script generation dispatcher
     RenderedScriptGenerator.java   # Groovy script for rendered export
     MaskScriptGenerator.java       # Groovy script for mask export
@@ -356,12 +413,14 @@ src/main/java/qupath/ext/quiet/
     ExportWizard.java              # Main wizard window
     CategorySelectionPane.java     # Step 1: category cards
     SectionBuilder.java            # Collapsible TitledPane section factory
-    RenderedConfigPane.java        # Step 2a: rendered options
-    MaskConfigPane.java            # Step 2b: mask options
+    RenderedConfigPane.java        # Step 2a: rendered options (smart defaults, live preview)
+    MaskConfigPane.java            # Step 2b: mask options (no JPEG)
     RawConfigPane.java             # Step 2c: raw options
     TiledConfigPane.java           # Step 2d: tiled options
     ObjectCropConfigPane.java      # Step 2e: object crop options
-    ImageSelectionPane.java        # Step 3: image list + run
+    ImageSelectionPane.java        # Step 3: image list + run + advice button
+    GuidelinesPane.java            # QUAREP-LiMi context-sensitive guidelines (Step 2 right panel)
+    PublicationAdvicePane.java     # Floating advice dialog with section references
   preferences/
     QuietPreferences.java          # Persistent preference storage
 
@@ -389,14 +448,20 @@ src/main/resources/
 Future releases may include:
 
 - Inset / zoom panels (magnified detail inset in a corner)
-- Split-channel export (individual fluorescence channels + merge)
 - Multi-panel grid / figure layout composition
-- Display range matching across batch images
-- DPI / resolution control for journal requirements
-- Dimension / timestamp labels
 - Contour/outline mask export
 - Stain deconvolution channel export
 - COCO/YOLO annotation format export
+
+**Recently implemented** (now available):
+
+- ~~Split-channel export~~ -- individual fluorescence channels + merge (v0.6.0)
+- ~~Display range matching~~ -- global matched display settings across batch images (v0.6.0)
+- ~~DPI / resolution control~~ -- target DPI mode for journal requirements (v0.7.0)
+- ~~Dimension / timestamp labels~~ -- info label with template placeholders (v0.7.0)
+- ~~Scale bar smart defaults~~ -- auto-detect color from project images (v0.7.3)
+- ~~QUAREP guidelines panel~~ -- context-sensitive publication advice on Step 2 (v0.7.3)
+- ~~Publication Advice floating dialog~~ -- with section highlighting on Step 2 (v0.7.3)
 
 See `documentation/POTENTIAL_FEATURES.md` for detailed implementation plans.
 
