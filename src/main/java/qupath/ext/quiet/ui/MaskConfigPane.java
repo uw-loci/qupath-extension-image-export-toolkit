@@ -54,6 +54,7 @@ public class MaskConfigPane extends VBox {
     private ComboBox<OutputFormat> formatCombo;
     private CheckBox grayscaleLutCheck;
     private CheckBox shuffleInstanceLabelsCheck;
+    private CheckBox skipEmptyImagesCheck;
 
     // Controls needing visibility toggling
     private Label classificationsLabel;
@@ -212,6 +213,11 @@ public class MaskConfigPane extends VBox {
         // Shuffle instance labels
         shuffleInstanceLabelsCheck = new CheckBox(resources.getString("mask.label.shuffleInstance"));
         labelGrid.add(shuffleInstanceLabelsCheck, 1, lRow);
+        lRow++;
+
+        // Skip images without selected classes
+        skipEmptyImagesCheck = new CheckBox(resources.getString("mask.label.skipEmpty"));
+        labelGrid.add(skipEmptyImagesCheck, 1, lRow);
 
         var labelOptionsSection = SectionBuilder.createSection(
                 resources.getString("mask.section.labelOptions"), true, labelGrid);
@@ -256,6 +262,9 @@ public class MaskConfigPane extends VBox {
         boolean showShuffle = (type == MaskExportConfig.MaskType.INSTANCE);
         shuffleInstanceLabelsCheck.setVisible(showShuffle);
         shuffleInstanceLabelsCheck.setManaged(showShuffle);
+
+        skipEmptyImagesCheck.setVisible(needsClassifications);
+        skipEmptyImagesCheck.setManaged(needsClassifications);
     }
 
     private void wireTooltips() {
@@ -269,6 +278,7 @@ public class MaskConfigPane extends VBox {
         formatCombo.setTooltip(createTooltip("tooltip.mask.format"));
         grayscaleLutCheck.setTooltip(createTooltip("tooltip.mask.grayscaleLut"));
         shuffleInstanceLabelsCheck.setTooltip(createTooltip("tooltip.mask.shuffleInstance"));
+        skipEmptyImagesCheck.setTooltip(createTooltip("tooltip.mask.skipEmpty"));
         classificationList.setTooltip(createTooltip("tooltip.mask.classifications"));
     }
 
@@ -319,6 +329,7 @@ public class MaskConfigPane extends VBox {
         grayscaleLutCheck.setSelected(QuietPreferences.isMaskGrayscaleLut());
         shuffleInstanceLabelsCheck.setSelected(QuietPreferences.isMaskShuffleInstanceLabels());
         boundaryThicknessSpinner.getValueFactory().setValue(QuietPreferences.getMaskBoundaryThickness());
+        skipEmptyImagesCheck.setSelected(QuietPreferences.isMaskSkipEmptyImages());
     }
 
     /**
@@ -339,6 +350,7 @@ public class MaskConfigPane extends VBox {
         QuietPreferences.setMaskGrayscaleLut(grayscaleLutCheck.isSelected());
         QuietPreferences.setMaskShuffleInstanceLabels(shuffleInstanceLabelsCheck.isSelected());
         QuietPreferences.setMaskBoundaryThickness(boundaryThicknessSpinner.getValue());
+        QuietPreferences.setMaskSkipEmptyImages(skipEmptyImagesCheck.isSelected());
     }
 
     /**
@@ -364,6 +376,7 @@ public class MaskConfigPane extends VBox {
                 .format(formatCombo.getValue())
                 .grayscaleLut(grayscaleLutCheck.isSelected())
                 .shuffleInstanceLabels(shuffleInstanceLabelsCheck.isSelected())
+                .skipEmptyImages(skipEmptyImagesCheck.isSelected())
                 .outputDirectory(outputDir)
                 .build();
     }

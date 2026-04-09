@@ -49,6 +49,7 @@ public class MaskExportConfig {
     private final boolean addToWorkflow;
     private final boolean shuffleInstanceLabels;
     private final int boundaryThickness;
+    private final boolean skipEmptyImages;
 
     private MaskExportConfig(Builder builder) {
         this.maskType = builder.maskType;
@@ -66,6 +67,7 @@ public class MaskExportConfig {
         this.addToWorkflow = builder.addToWorkflow;
         this.shuffleInstanceLabels = builder.shuffleInstanceLabels;
         this.boundaryThickness = builder.boundaryThickness;
+        this.skipEmptyImages = builder.skipEmptyImages;
     }
 
     public MaskType getMaskType() {
@@ -130,6 +132,15 @@ public class MaskExportConfig {
     }
 
     /**
+     * Whether to skip images that contain no objects matching any of the
+     * selected classifications. When true, images without relevant objects
+     * are skipped entirely rather than producing blank mask files.
+     */
+    public boolean isSkipEmptyImages() {
+        return skipEmptyImages;
+    }
+
+    /**
      * Generates a sanitized output filename for a given image entry name.
      *
      * @param entryName the project image entry name
@@ -161,6 +172,7 @@ public class MaskExportConfig {
         private boolean addToWorkflow = true;
         private boolean shuffleInstanceLabels = false;
         private int boundaryThickness = 1;
+        private boolean skipEmptyImages = false;
 
         public Builder maskType(MaskType type) {
             this.maskType = type;
@@ -224,6 +236,11 @@ public class MaskExportConfig {
 
         public Builder boundaryThickness(int thickness) {
             this.boundaryThickness = thickness;
+            return this;
+        }
+
+        public Builder skipEmptyImages(boolean skip) {
+            this.skipEmptyImages = skip;
             return this;
         }
 

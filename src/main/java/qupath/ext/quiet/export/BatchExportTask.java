@@ -3,9 +3,12 @@ package qupath.ext.quiet.export;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +20,7 @@ import qupath.lib.display.settings.ImageDisplaySettings;
 import qupath.lib.images.ImageData;
 import qupath.lib.images.servers.ImageServer;
 import qupath.lib.images.servers.PixelCalibration;
+import qupath.lib.objects.PathObject;
 import qupath.lib.plugins.workflow.DefaultScriptableWorkflowStep;
 import qupath.lib.projects.ProjectImageEntry;
 
@@ -212,6 +216,17 @@ public class BatchExportTask extends Task<ExportResult> {
             ImageData<BufferedImage> imageData = null;
             try {
                 imageData = entry.readImageData();
+
+                // Skip images without matching classifications (mask export)
+                if (category == ExportCategory.MASK && maskConfig != null
+                        && maskConfig.isSkipEmptyImages()
+                        && !maskConfig.getSelectedClassifications().isEmpty()) {
+                    if (!hasMatchingClassifications(imageData, maskConfig)) {
+                        skipped++;
+                        logger.info("Skipping {}: no objects with selected classifications", entryName);
+                        continue;
+                    }
+                }
 
                 switch (category) {
                     case RENDERED -> exportRendered(imageData, entryName, i);
@@ -465,5 +480,22 @@ public class BatchExportTask extends Task<ExportResult> {
         } catch (Exception e) {
             logger.warn("Failed to add workflow step for: {}", entry.getImageName(), e);
         }
+    }
+
+    /**
+     * Check whether an image contains any objects matching the mask config's
+     * selected classifications, using the configured object source.
+     */
+    private static boolean hasMatchingClassifications(ImageData<BufferedImage> imageData,
+                                                       MaskExportConfig config) {
+        var hierarchy = imageData.getHierarchy();
+        Collection<? extends PathObject> objects = switch (config.getObjectSource()) {
+            case ANNOTATIONS -> hierarchy.getAnnotationObjects();
+            case DETECTIONS -> hierarchy.getDetectionObjects();
+            case CELLS -> hierarchy.getCellObjects();
+        };
+        Set<String> classSet = new HashSet<>(config.getSelectedClassifications());
+        return objects.stream().anyMatch(obj ->
+                obj.getPathClass() != null && classSet.contains(obj.getPathClass().toString()));
     }
 }

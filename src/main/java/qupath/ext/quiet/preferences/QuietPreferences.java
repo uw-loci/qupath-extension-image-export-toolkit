@@ -246,6 +246,9 @@ public class QuietPreferences {
     private static final IntegerProperty maskBoundaryThickness =
             PathPrefs.createPersistentPreference(PREFIX + "mask.boundaryThickness", 1);
 
+    private static final BooleanProperty maskSkipEmptyImages =
+            PathPrefs.createPersistentPreference(PREFIX + "mask.skipEmptyImages", false);
+
     // --- Raw export preferences ---
 
     private static final StringProperty rawRegionType =
@@ -618,6 +621,10 @@ public class QuietPreferences {
     public static IntegerProperty maskBoundaryThicknessProperty() { return maskBoundaryThickness; }
     public static int getMaskBoundaryThickness() { return maskBoundaryThickness.get(); }
     public static void setMaskBoundaryThickness(int value) { maskBoundaryThickness.set(value); }
+
+    public static BooleanProperty maskSkipEmptyImagesProperty() { return maskSkipEmptyImages; }
+    public static boolean isMaskSkipEmptyImages() { return maskSkipEmptyImages.get(); }
+    public static void setMaskSkipEmptyImages(boolean value) { maskSkipEmptyImages.set(value); }
 
     // ==================== Raw ====================
 

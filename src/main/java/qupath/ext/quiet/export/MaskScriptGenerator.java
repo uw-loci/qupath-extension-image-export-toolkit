@@ -67,6 +67,9 @@ class MaskScriptGenerator {
         if (config.getMaskType() == MaskExportConfig.MaskType.INSTANCE && config.isShuffleInstanceLabels()) {
             appendLine(sb, "def shuffleLabels = true");
         }
+        if (config.isSkipEmptyImages()) {
+            appendLine(sb, "def skipEmpty = true");
+        }
         appendLine(sb, "// =======================================================");
         appendLine(sb, "");
 
@@ -89,6 +92,9 @@ class MaskScriptGenerator {
         appendLine(sb, "");
         appendLine(sb, "int succeeded = 0");
         appendLine(sb, "int failed = 0");
+        if (config.isSkipEmptyImages()) {
+            appendLine(sb, "int skipped = 0");
+        }
         appendLine(sb, "");
         appendLine(sb, "for (int i = 0; i < entries.size(); i++) {");
         appendLine(sb, "    def entry = entries[i]");
@@ -98,6 +104,29 @@ class MaskScriptGenerator {
         appendLine(sb, "    def labelServer = null");
         appendLine(sb, "    try {");
         appendLine(sb, "        def imageData = entry.readImageData()");
+        if (config.isSkipEmptyImages() && !config.getSelectedClassifications().isEmpty()) {
+            appendLine(sb, "");
+            appendLine(sb, "        // Skip images without any matching classifications");
+            appendLine(sb, "        if (skipEmpty && !classifications.isEmpty()) {");
+            appendLine(sb, "            def hierarchy = imageData.getHierarchy()");
+            appendLine(sb, "            def allObjects");
+            appendLine(sb, "            switch (objectSource) {");
+            appendLine(sb, "                case 'ANNOTATIONS': allObjects = hierarchy.getAnnotationObjects(); break");
+            appendLine(sb, "                case 'DETECTIONS': allObjects = hierarchy.getDetectionObjects(); break");
+            appendLine(sb, "                case 'CELLS': allObjects = hierarchy.getCellObjects(); break");
+            appendLine(sb, "                default: allObjects = hierarchy.getAnnotationObjects()");
+            appendLine(sb, "            }");
+            appendLine(sb, "            def classSet = classifications.toSet()");
+            appendLine(sb, "            def hasMatch = allObjects.any { it.getPathClass() != null && classSet.contains(it.getPathClass().toString()) }");
+            appendLine(sb, "            if (!hasMatch) {");
+            appendLine(sb, "                println \"  SKIP: no objects with selected classifications\"");
+            appendLine(sb, "                skipped++");
+            appendLine(sb, "                imageData.getServer().close()");
+            appendLine(sb, "                continue");
+            appendLine(sb, "            }");
+            appendLine(sb, "        }");
+        }
+        appendLine(sb, "");
         appendLine(sb, "        def builder = new LabeledImageServer.Builder(imageData)");
         appendLine(sb, "");
         appendLine(sb, "        builder.backgroundLabel(backgroundLabel)");
@@ -177,7 +206,11 @@ class MaskScriptGenerator {
         appendLine(sb, "}");
         appendLine(sb, "");
         appendLine(sb, "println ''");
-        appendLine(sb, "println \"Export complete: ${succeeded} succeeded, ${failed} failed\"");
+        if (config.isSkipEmptyImages()) {
+            appendLine(sb, "println \"Export complete: ${succeeded} succeeded, ${failed} failed, ${skipped} skipped\"");
+        } else {
+            appendLine(sb, "println \"Export complete: ${succeeded} succeeded, ${failed} failed\"");
+        }
 
         return sb.toString();
     }
