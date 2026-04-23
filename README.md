@@ -92,6 +92,10 @@ The extension appears under **Extensions > QuIET > Export Images...**
 
 Every export also generates a **Groovy script** that you can copy, save, and re-run from QuPath's built-in script editor -- no extension required.
 
+### Simple vs Advanced mode
+
+The navigation bar has a **Simple / Advanced** toggle. Simple mode (the default on first run) hides rarely-used controls to reduce clutter; Advanced mode exposes every option. The toggle persists across QuPath sessions and applies to every step of the wizard. If a section seems to be missing settings that the docs below describe, flip to Advanced.
+
 ---
 
 ## Export Categories
@@ -111,8 +115,9 @@ Export images with visual overlays composited onto the base image.
 | **Color Scale Bar** | For density map mode, optionally burn a color-mapped legend with min/max labels (see below) |
 | **Panel Label** | Optionally add a letter label (A, B, C...) for multi-panel publication figures (see below) |
 | **Info Label** | Optionally add a per-image metadata text stamp with template placeholders (see below) |
+| **Split Channels** | Export multi-channel images as individual channel panels plus a merged panel, with optional grayscale/pseudocolor rendering, channel border colors, and a channel/stain legend swatch (see below) |
 | **Downsample** | Resolution factor (1x = full resolution, 4x = quarter, etc.) |
-| **Format** | PNG, TIFF, JPEG, OME-TIFF, SVG |
+| **Format** | PNG, TIFF, JPEG, OME-TIFF, OME-TIFF Pyramid, SVG |
 
 #### Display Settings
 
@@ -208,6 +213,19 @@ Add a per-image metadata text stamp to exported images. The template is resolved
 
 A **live preview** below the template field resolves the template against the currently open image and warns about empty or unrecognized placeholders. An inline placeholder reference is always visible (not hidden behind a tooltip).
 
+#### Split Channels & Channel Legend
+
+For multi-channel fluorescence images, the rendered export can emit one panel per channel plus a merged panel, which is the standard publication layout for multiplex data.
+
+| Option | Values |
+|--------|--------|
+| **Split channels (individual + merge)** | Enable/disable. When on, each exported image produces one file per visible channel plus a merged file. |
+| **Individual channels as grayscale** | Render each channel panel as grayscale (best intensity contrast for quantitative comparison). |
+| **Individual channels in pseudocolor** | Render each channel panel in its LUT color (helps readers identify channels across multi-panel figures). |
+| **Color border on channel panels** | Draw a colored border around each channel panel matching that channel's LUT color. |
+| **Channel color legend swatch** | Draw a small colored rectangle with the channel name on each individual channel panel, so the channel is identifiable even in grayscale. |
+| **Show channel/stain legend** | Draw a full channel/stain legend on the exported image (available for all rendered exports, not only split-channel). |
+
 ### Label / Mask
 
 Export segmentation masks from QuPath's object hierarchy using `LabeledImageServer`.
@@ -226,7 +244,8 @@ Additional mask options:
 - **Background label** -- Configurable background value (default 0)
 - **Boundary labels** -- Enable boundary erosion with configurable label value and line thickness
 - **Classification filter** -- Select/deselect which classifications to include
-- **Format** -- PNG, TIFF, OME-TIFF (no JPEG -- lossy compression destroys label values)
+- **Skip images without selected classes** -- Skip exporting images that contain no objects matching any of the selected classifications. Avoids a pile of empty masks when only some images in the project have the relevant classes.
+- **Format** -- PNG, TIFF, OME-TIFF, OME-TIFF Pyramid (no JPEG -- lossy compression destroys label values)
 
 > **Note:** JPEG is intentionally excluded from mask format options because lossy compression alters pixel values, which would corrupt the integer label encoding. Masks are rendered from vector geometries at the requested downsample, so label values are always exact regardless of resolution.
 
@@ -393,7 +412,7 @@ src/main/java/qupath/ext/quiet/
     AdviceSeverity.java            # ERROR, WARNING, INFO
     ImageContext.java              # Per-image metadata for advice checks
     PublicationAdviceChecker.java  # QUAREP-LiMi guideline checks
-  export/
+  export/                          # Export logic + script generation
     ExportCategory.java            # RENDERED, MASK, RAW, TILED, OBJECT_CROPS
     OutputFormat.java              # PNG, TIFF, JPEG, OME_TIFF, OME_TIFF_PYRAMID, SVG
     RenderedExportConfig.java      # Rendered export configuration with sub-config records
@@ -413,10 +432,10 @@ src/main/java/qupath/ext/quiet/
     ColorScaleBarRenderer.java     # Color-mapped legend for density maps
     PanelLabelRenderer.java        # Panel letter label renderer (A, B, C...)
     InfoLabelRenderer.java         # Per-image metadata text stamp renderer
+    InsetRenderer.java             # Magnified-inset / detail-panel renderer (Java2D utility)
     TextRenderUtils.java           # Shared text rendering (outlined text, font sizing)
     ExportMetadataWriter.java      # Metadata sidecar file writer
     GlobalDisplayRangeScanner.java # Global min/max display range computation
-  export/                          # (ScriptGenerator classes)
     ScriptGenerator.java           # Script generation dispatcher
     RenderedScriptGenerator.java   # Groovy script for rendered export
     MaskScriptGenerator.java       # Groovy script for mask export
@@ -424,7 +443,7 @@ src/main/java/qupath/ext/quiet/
     TiledScriptGenerator.java      # Groovy script for tiled export
     ObjectCropScriptGenerator.java # Groovy script for object crop export
   ui/
-    ExportWizard.java              # Main wizard window
+    ExportWizard.java              # Main wizard window (Simple/Advanced mode toggle)
     CategorySelectionPane.java     # Step 1: category cards
     SectionBuilder.java            # Collapsible TitledPane section factory
     RenderedConfigPane.java        # Step 2a: rendered options (smart defaults, live preview)
@@ -433,6 +452,7 @@ src/main/java/qupath/ext/quiet/
     TiledConfigPane.java           # Step 2d: tiled options
     ObjectCropConfigPane.java      # Step 2e: object crop options
     ImageSelectionPane.java        # Step 3: image list + run + advice button
+    ImageEntryItem.java            # Wrapper for ProjectImageEntry in the image selection list
     GuidelinesPane.java            # QUAREP-LiMi context-sensitive guidelines (Step 2 right panel)
     PublicationAdvicePane.java     # Floating advice dialog with section references
   preferences/
@@ -461,7 +481,7 @@ src/main/resources/
 
 Future releases may include:
 
-- Inset / zoom panels (magnified detail inset in a corner)
+- Inset / zoom panels exposed in the UI (the `InsetRenderer` primitive exists in code but is not yet wired into any config pane)
 - Multi-panel grid / figure layout composition
 - Contour/outline mask export
 - Stain deconvolution channel export
@@ -476,6 +496,9 @@ Future releases may include:
 - ~~Scale bar smart defaults~~ -- auto-detect color from project images (v0.7.3)
 - ~~QUAREP guidelines panel~~ -- context-sensitive publication advice on Step 2 (v0.7.3)
 - ~~Publication Advice floating dialog~~ -- with section highlighting on Step 2 (v0.7.3)
+- ~~Channel / stain legend overlay~~ -- optional color legend on rendered exports, plus per-panel color swatches for split-channel
+- ~~Skip empty mask images~~ -- omit mask output for images that have no objects in the selected classes
+- ~~Simple / Advanced UI mode~~ -- single-click toggle to hide or reveal rarely-used controls across every step
 
 See `documentation/POTENTIAL_FEATURES.md` for detailed implementation plans.
 
