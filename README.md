@@ -9,6 +9,14 @@ QuIET provides a guided wizard UI for exporting rendered overlays, label/instanc
 
 ![QuIET interface](documentation/images/QUIET-interface.png)
 
+<div align="center">
+
+↓ &nbsp; *e.g.* &nbsp; ↓
+
+</div>
+
+![Rendered export example with QUAREP guidelines panel](documentation/images/RenderedImageExport.png)
+
 ## Requirements
 
 - **QuPath 0.6.0** or later
