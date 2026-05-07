@@ -1269,7 +1269,50 @@ public class RenderedConfigPane extends VBox {
      */
     public void setSimpleMode(boolean simple) {
         this.simpleMode = simple;
-        applySimpleModeOverrides();
+        if (simple) {
+            applySimpleModeOverrides();
+        } else {
+            restoreAdvancedVisibility();
+        }
+    }
+
+    /**
+     * Restore visibility for controls hidden by {@link #applySimpleModeOverrides()}.
+     * Always-visible controls are set visible directly; conditional controls
+     * (preset, padding, scale bar styling, etc.) are re-evaluated by their
+     * existing update*Visibility methods, which read the current state.
+     */
+    private void restoreAdvancedVisibility() {
+        // Unconditionally visible advanced controls
+        setVisibleManaged(opacitySlider, true);
+        setVisibleManaged(opacityValueLabel, true);
+        setVisibleManaged(opacityLabel, true);
+        setVisibleManaged(displaySettingsCombo, true);
+        setVisibleManaged(displaySettingsLabel, true);
+        setVisibleManaged(resolutionModeCombo, true);
+        setVisibleManaged(resolutionModeLabel, true);
+        setVisibleManaged(fillAnnotationsCheck, true);
+        setVisibleManaged(showNamesCheck, true);
+        setVisibleManaged(showChannelLegendCheck, true);
+        setVisibleManaged(formatInfoLabel, true);
+        setVisibleManaged(infoLabelSection, true);
+
+        // Conditional sections / controls -- delegate to existing update fns
+        updateModeVisibility(modeCombo.getValue());
+        updateRegionTypeVisibility(regionTypeCombo.getValue());
+        updateDisplaySettingsVisibility(displaySettingsCombo.getValue());
+        updateResolutionModeVisibility(resolutionModeCombo.getValue());
+        updateScaleBarVisibility(showScaleBarCheck.isSelected());
+        updateColorScaleBarVisibility(showColorScaleBarCheck.isSelected());
+        updateSplitChannelVisibility(splitChannelsCheck.isSelected());
+        updatePanelLabelVisibility(showPanelLabelCheck.isSelected());
+        updateInfoLabelVisibility(showInfoLabelCheck.isSelected());
+    }
+
+    private static void setVisibleManaged(javafx.scene.Node node, boolean visible) {
+        if (node == null) return;
+        node.setVisible(visible);
+        node.setManaged(visible);
     }
 
     /**
@@ -1283,9 +1326,13 @@ public class RenderedConfigPane extends VBox {
         opacitySlider.setManaged(false);
         opacityValueLabel.setVisible(false);
         opacityValueLabel.setManaged(false);
+        opacityLabel.setVisible(false);
+        opacityLabel.setManaged(false);
         // Display settings (preset/matched percentile)
         displaySettingsCombo.setVisible(false);
         displaySettingsCombo.setManaged(false);
+        displaySettingsLabel.setVisible(false);
+        displaySettingsLabel.setManaged(false);
         presetLabel.setVisible(false);
         presetLabel.setManaged(false);
         presetBox.setVisible(false);

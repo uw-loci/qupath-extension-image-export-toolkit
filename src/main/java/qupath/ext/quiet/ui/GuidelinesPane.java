@@ -466,11 +466,16 @@ class GuidelinesPane extends ScrollPane {
         if (project == null) return contexts;
 
         var entries = project.getImageList();
-        int limit = Math.min(entries.size(), MAX_IMAGES_TO_SCAN);
+        int total = entries.size();
+        int limit = Math.min(total, MAX_IMAGES_TO_SCAN);
 
+        // Sample evenly across the project so a heterogeneous (e.g. brightfield
+        // + fluorescence) project surfaces both types even when the same type
+        // is contiguous in the project's natural order.
         for (int i = 0; i < limit; i++) {
+            int idx = (limit > 0) ? (int) ((long) i * total / limit) : i;
             try {
-                var imageData = entries.get(i).readImageData();
+                var imageData = entries.get(idx).readImageData();
                 var server = imageData.getServer();
                 var metadata = server.getMetadata();
 
