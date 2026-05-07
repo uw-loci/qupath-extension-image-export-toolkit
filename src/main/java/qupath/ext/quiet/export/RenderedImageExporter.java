@@ -877,11 +877,23 @@ public class RenderedImageExporter {
 
             if (config.getRenderMode() == RenderedExportConfig.RenderMode.CLASSIFIER_OVERLAY
                     && classifier != null) {
+                if (!classifier.supportsImage(imageData)) {
+                    throw new IOException(
+                            "Classifier is not compatible with this image "
+                            + "(channel count or pixel type mismatch). "
+                            + "Choose a different classifier or open a compatible image.");
+                }
                 classificationServer = new PixelClassificationImageServer(imageData, classifier);
                 try {
                     return renderClassifierComposite(
                             imageData, baseServer, classificationServer, displayServer,
                             previewConfig, previewLabel);
+                } catch (ArrayIndexOutOfBoundsException e) {
+                    throw new IOException(
+                            "Classifier failed on this image -- likely a channel mismatch "
+                            + "(e.g. classifier expects RGB stains but image has "
+                            + baseServer.nChannels() + " channel(s)). "
+                            + "Pick a different classifier or open a compatible image.", e);
                 } catch (Exception e) {
                     throw new IOException("Failed to render classifier preview", e);
                 }

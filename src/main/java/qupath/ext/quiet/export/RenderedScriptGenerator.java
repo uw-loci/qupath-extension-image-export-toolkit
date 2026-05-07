@@ -35,7 +35,7 @@ class RenderedScriptGenerator {
 
     static String generate(RenderedExportConfig config) {
         return switch (config.getRenderMode()) {
-            case OBJECT_OVERLAY -> generateObjectOverlayScript(config);
+            case OBJECT_OVERLAY, NONE -> generateObjectOverlayScript(config);
             case DENSITY_MAP_OVERLAY -> generateDensityMapScript(config);
             case CLASSIFIER_OVERLAY -> generateClassifierScript(config);
         };

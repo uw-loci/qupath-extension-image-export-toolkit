@@ -308,6 +308,7 @@ public class RenderedConfigPane extends VBox {
                     case CLASSIFIER_OVERLAY -> resources.getString("rendered.mode.classifier");
                     case OBJECT_OVERLAY -> resources.getString("rendered.mode.object");
                     case DENSITY_MAP_OVERLAY -> resources.getString("rendered.mode.densityMap");
+                    case NONE -> resources.getString("rendered.mode.none");
                 };
             }
             @Override
@@ -989,7 +990,7 @@ public class RenderedConfigPane extends VBox {
     private void updateModeVisibility(RenderedExportConfig.RenderMode mode) {
         boolean isClassifier = (mode == RenderedExportConfig.RenderMode.CLASSIFIER_OVERLAY);
         boolean isDensityMap = (mode == RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY);
-        boolean isObjectOverlay = (mode == RenderedExportConfig.RenderMode.OBJECT_OVERLAY);
+        boolean hasOverlaySource = isClassifier || isDensityMap;
 
         // Individual controls within overlay source section
         classifierLabel.setVisible(isClassifier);
@@ -1006,13 +1007,13 @@ public class RenderedConfigPane extends VBox {
         colormapCombo.setVisible(isDensityMap);
         colormapCombo.setManaged(isDensityMap);
 
-        // Toggle entire overlay source section
-        overlaySourceSection.setVisible(!isObjectOverlay);
-        overlaySourceSection.setManaged(!isObjectOverlay);
+        // Toggle entire overlay source section -- only relevant when an overlay source is selected
+        overlaySourceSection.setVisible(hasOverlaySource);
+        overlaySourceSection.setManaged(hasOverlaySource);
 
         // Deselect object overlays when switching to classifier/density map modes
         // (the overlay is the classifier/density map itself, not objects)
-        if (isClassifier || isDensityMap) {
+        if (hasOverlaySource) {
             includeAnnotationsCheck.setSelected(false);
             includeDetectionsCheck.setSelected(false);
         }

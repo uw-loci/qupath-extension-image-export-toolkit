@@ -35,7 +35,9 @@ public class RenderedExportConfig {
         /** Export with object overlays (annotations/detections) only. */
         OBJECT_OVERLAY,
         /** Export with a density map overlay colorized by a LUT. */
-        DENSITY_MAP_OVERLAY
+        DENSITY_MAP_OVERLAY,
+        /** Export the base image with no overlay source -- scale bar and/or objects optional. */
+        NONE
     }
 
     /**

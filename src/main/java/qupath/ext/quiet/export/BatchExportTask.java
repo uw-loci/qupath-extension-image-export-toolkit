@@ -307,7 +307,7 @@ public class BatchExportTask extends Task<ExportResult> {
                     imageData, classifier, densityBuilder, config, entryName, panelIndex);
         } else {
             switch (config.getRenderMode()) {
-                case OBJECT_OVERLAY ->
+                case OBJECT_OVERLAY, NONE ->
                     RenderedImageExporter.exportWithObjectOverlay(
                             imageData, config, entryName, panelIndex);
                 case DENSITY_MAP_OVERLAY ->
@@ -467,6 +467,7 @@ public class BatchExportTask extends Task<ExportResult> {
                     case OBJECT_OVERLAY -> "Object Overlay Export";
                     case DENSITY_MAP_OVERLAY -> "Density Map Export";
                     case CLASSIFIER_OVERLAY -> "Classifier Export";
+                    case NONE -> "Rendered Image Export";
                 };
                 case MASK -> "Mask Export";
                 case RAW -> "Raw Image Export";
