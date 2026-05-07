@@ -92,7 +92,7 @@ public class MaskConfigPane extends VBox {
         int row = 0;
 
         // Mask type
-        Label maskTypeLabel = new Label(resources.getString("mask.label.type"));
+        maskTypeLabel = new Label(resources.getString("mask.label.type"));
         settingsGrid.add(maskTypeLabel, 0, row);
         maskTypeCombo = new ComboBox<>(FXCollections.observableArrayList(
                 MaskExportConfig.MaskType.values()));
@@ -118,7 +118,7 @@ public class MaskConfigPane extends VBox {
         row++;
 
         // Object source
-        Label objectSourceLabel = new Label(resources.getString("mask.label.objectSource"));
+        objectSourceLabel = new Label(resources.getString("mask.label.objectSource"));
         settingsGrid.add(objectSourceLabel, 0, row);
         objectSourceCombo = new ComboBox<>(FXCollections.observableArrayList(
                 MaskExportConfig.ObjectSource.values()));
@@ -142,7 +142,7 @@ public class MaskConfigPane extends VBox {
         row++;
 
         // Downsample
-        Label downsampleLabel = new Label(resources.getString("mask.label.downsample"));
+        downsampleLabel = new Label(resources.getString("mask.label.downsample"));
         settingsGrid.add(downsampleLabel, 0, row);
         downsampleCombo = new ComboBox<>(FXCollections.observableArrayList(
                 1.0, 2.0, 4.0, 8.0, 16.0, 32.0));
@@ -165,7 +165,7 @@ public class MaskConfigPane extends VBox {
         row++;
 
         // Format
-        Label formatLabel = new Label(resources.getString("mask.label.format"));
+        formatLabel = new Label(resources.getString("mask.label.format"));
         settingsGrid.add(formatLabel, 0, row);
         // Exclude SVG (not applicable) and JPEG (lossy compression destroys label values)
         formatCombo = new ComboBox<>(FXCollections.observableArrayList(
@@ -186,7 +186,7 @@ public class MaskConfigPane extends VBox {
         int lRow = 0;
 
         // Background label
-        Label backgroundLabelLabel = new Label(resources.getString("mask.label.backgroundLabel"));
+        backgroundLabelLabel = new Label(resources.getString("mask.label.backgroundLabel"));
         labelGrid.add(backgroundLabelLabel, 0, lRow);
         backgroundLabelSpinner = new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(
                 -1, 255, 0));

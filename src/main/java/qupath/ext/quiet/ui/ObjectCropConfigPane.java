@@ -93,7 +93,7 @@ public class ObjectCropConfigPane extends VBox {
         int row = 0;
 
         // Object type
-        Label objectTypeLabel = new Label(resources.getString("objectCrops.label.objectType"));
+        objectTypeLabel = new Label(resources.getString("objectCrops.label.objectType"));
         grid.add(objectTypeLabel, 0, row);
         objectTypeCombo = new ComboBox<>(FXCollections.observableArrayList(
                 ObjectCropConfig.ObjectType.values()));
@@ -118,7 +118,7 @@ public class ObjectCropConfigPane extends VBox {
         row++;
 
         // Crop size
-        Label cropSizeLabel = new Label(resources.getString("objectCrops.label.cropSize"));
+        cropSizeLabel = new Label(resources.getString("objectCrops.label.cropSize"));
         grid.add(cropSizeLabel, 0, row);
         cropSizeSpinner = new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(
                 16, 512, 64, 16));
@@ -184,7 +184,7 @@ public class ObjectCropConfigPane extends VBox {
         row++;
 
         // Output format
-        Label formatLabel = new Label(resources.getString("objectCrops.label.format"));
+        formatLabel = new Label(resources.getString("objectCrops.label.format"));
         grid.add(formatLabel, 0, row);
         formatCombo = new ComboBox<>(FXCollections.observableArrayList(
                 OutputFormat.PNG, OutputFormat.TIFF, OutputFormat.JPEG));

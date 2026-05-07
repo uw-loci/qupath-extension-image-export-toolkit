@@ -88,7 +88,7 @@ public class RawConfigPane extends VBox {
         int row = 0;
 
         // Region type
-        Label regionTypeLabel = new Label(resources.getString("raw.label.regionType"));
+        regionTypeLabel = new Label(resources.getString("raw.label.regionType"));
         grid.add(regionTypeLabel, 0, row);
         regionTypeCombo = new ComboBox<>(FXCollections.observableArrayList(
                 RawExportConfig.RegionType.values()));
@@ -112,7 +112,7 @@ public class RawConfigPane extends VBox {
         row++;
 
         // Downsample
-        Label downsampleLabel = new Label(resources.getString("raw.label.downsample"));
+        downsampleLabel = new Label(resources.getString("raw.label.downsample"));
         grid.add(downsampleLabel, 0, row);
         downsampleCombo = new ComboBox<>(FXCollections.observableArrayList(
                 1.0, 2.0, 4.0, 8.0, 16.0, 32.0));
@@ -135,7 +135,7 @@ public class RawConfigPane extends VBox {
         row++;
 
         // Format
-        Label formatLabel = new Label(resources.getString("raw.label.format"));
+        formatLabel = new Label(resources.getString("raw.label.format"));
         grid.add(formatLabel, 0, row);
         formatCombo = new ComboBox<>(FXCollections.observableArrayList(
                 java.util.Arrays.stream(OutputFormat.values())
@@ -163,7 +163,7 @@ public class RawConfigPane extends VBox {
 
         int pRow = 0;
 
-        Label pyramidLevelsLabel = new Label(resources.getString("raw.label.pyramidLevels"));
+        pyramidLevelsLabel = new Label(resources.getString("raw.label.pyramidLevels"));
         pyramidGrid.add(pyramidLevelsLabel, 0, pRow);
         pyramidLevelsSpinner = new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 10, 4));
         pyramidLevelsSpinner.setEditable(true);
@@ -171,7 +171,7 @@ public class RawConfigPane extends VBox {
         pyramidGrid.add(pyramidLevelsSpinner, 1, pRow);
         pRow++;
 
-        Label compressionLabel = new Label(resources.getString("raw.label.compression"));
+        compressionLabel = new Label(resources.getString("raw.label.compression"));
         pyramidGrid.add(compressionLabel, 0, pRow);
         compressionCombo = new ComboBox<>(FXCollections.observableArrayList(
                 "DEFAULT", "LZW", "JPEG", "J2K", "ZLIB", "UNCOMPRESSED"));
@@ -179,7 +179,7 @@ public class RawConfigPane extends VBox {
         pyramidGrid.add(compressionCombo, 1, pRow);
         pRow++;
 
-        Label tileSizeLabel = new Label(resources.getString("raw.label.tileSize"));
+        tileSizeLabel = new Label(resources.getString("raw.label.tileSize"));
         pyramidGrid.add(tileSizeLabel, 0, pRow);
         tileSizeSpinner = new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(64, 2048, 512, 64));
         tileSizeSpinner.setEditable(true);

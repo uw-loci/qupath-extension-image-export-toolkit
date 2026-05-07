@@ -98,7 +98,7 @@ public class TiledConfigPane extends VBox {
         int row = 0;
 
         // Tile size
-        Label tileSizeLabel = new Label(resources.getString("tiled.label.tileSize"));
+        tileSizeLabel = new Label(resources.getString("tiled.label.tileSize"));
         tileGrid.add(tileSizeLabel, 0, row);
         tileSizeSpinner = new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(
                 32, 4096, 512, 64));
@@ -108,7 +108,7 @@ public class TiledConfigPane extends VBox {
         row++;
 
         // Overlap
-        Label overlapLabel = new Label(resources.getString("tiled.label.overlap"));
+        overlapLabel = new Label(resources.getString("tiled.label.overlap"));
         tileGrid.add(overlapLabel, 0, row);
         overlapSpinner = new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(
                 0, 512, 0, 16));
@@ -118,7 +118,7 @@ public class TiledConfigPane extends VBox {
         row++;
 
         // Downsample
-        Label downsampleLabel = new Label(resources.getString("tiled.label.downsample"));
+        downsampleLabel = new Label(resources.getString("tiled.label.downsample"));
         tileGrid.add(downsampleLabel, 0, row);
         downsampleCombo = new ComboBox<>(FXCollections.observableArrayList(
                 1.0, 2.0, 4.0, 8.0));
@@ -141,7 +141,7 @@ public class TiledConfigPane extends VBox {
         row++;
 
         // Image format
-        Label imageFormatLabel = new Label(resources.getString("tiled.label.imageFormat"));
+        imageFormatLabel = new Label(resources.getString("tiled.label.imageFormat"));
         tileGrid.add(imageFormatLabel, 0, row);
         imageFormatCombo = new ComboBox<>(FXCollections.observableArrayList(
                 OutputFormat.PNG, OutputFormat.TIFF, OutputFormat.JPEG));
@@ -197,7 +197,7 @@ public class TiledConfigPane extends VBox {
         int lRow = 0;
 
         // Label format
-        Label labelFormatLabel = new Label(resources.getString("tiled.label.labelFormat"));
+        labelFormatLabel = new Label(resources.getString("tiled.label.labelFormat"));
         labelGrid.add(labelFormatLabel, 0, lRow);
         labelFormatCombo = new ComboBox<>(FXCollections.observableArrayList(
                 OutputFormat.PNG, OutputFormat.TIFF));
