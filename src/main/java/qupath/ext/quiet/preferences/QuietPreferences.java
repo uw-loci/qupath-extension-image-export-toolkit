@@ -4,6 +4,7 @@ import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.StringProperty;
+import qupath.ext.quiet.export.ExportCategory;
 import qupath.lib.gui.prefs.PathPrefs;
 
 /**
@@ -320,6 +321,58 @@ public class QuietPreferences {
 
     private static final StringProperty objectCropFormat =
             PathPrefs.createPersistentPreference(PREFIX + "objectCrops.format", "PNG");
+
+    // --- Panel / Montage export preferences ---
+
+    private static final StringProperty panelRecipeCategory =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.recipeCategory", "RENDERED");
+
+    private static final IntegerProperty panelRows =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.rows", 2);
+
+    private static final IntegerProperty panelCols =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.cols", 2);
+
+    /** Image count the persisted rows/cols were last seeded for (0 = unseeded). */
+    private static final IntegerProperty panelSeededCount =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.seededCount", 0);
+
+    private static final IntegerProperty panelGutterX =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.gutterX", 10);
+
+    private static final IntegerProperty panelGutterY =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.gutterY", 10);
+
+    private static final StringProperty panelBackgroundColor =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.backgroundColor", "#FFFFFF");
+
+    private static final StringProperty panelCellFitMode =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.cellFitMode", "FIT_LETTERBOX");
+
+    private static final StringProperty panelFormat =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.format", "PNG");
+
+    private static final BooleanProperty panelShowFilenameCaption =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.showFilenameCaption", false);
+
+    private static final StringProperty panelCaptionPosition =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.captionPosition", "BELOW");
+
+    private static final StringProperty panelMetadataFields =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.metadataFields", "");
+
+    private static final IntegerProperty panelCaptionFontSize =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.captionFontSize", 14);
+
+    private static final StringProperty panelCaptionColor =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.captionColor", "#000000");
+
+    private static final StringProperty panelFilename =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.filename", "panel_figure");
+
+    /** Whether the one-time panel-mode intro dialog is still shown. */
+    private static final BooleanProperty panelShowIntroDialog =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.showIntroDialog", true);
 
     private QuietPreferences() {
         // Utility class
@@ -722,4 +775,239 @@ public class QuietPreferences {
     public static StringProperty objectCropFormatProperty() { return objectCropFormat; }
     public static String getObjectCropFormat() { return objectCropFormat.get(); }
     public static void setObjectCropFormat(String value) { objectCropFormat.set(value != null ? value : "PNG"); }
+
+    // ==================== Panel / Montage ====================
+
+    public static StringProperty panelRecipeCategoryProperty() { return panelRecipeCategory; }
+    public static String getPanelRecipeCategory() { return panelRecipeCategory.get(); }
+    public static void setPanelRecipeCategory(String value) { panelRecipeCategory.set(value != null ? value : "RENDERED"); }
+
+    public static IntegerProperty panelRowsProperty() { return panelRows; }
+    public static int getPanelRows() { return panelRows.get(); }
+    public static void setPanelRows(int value) { panelRows.set(value); }
+
+    public static IntegerProperty panelColsProperty() { return panelCols; }
+    public static int getPanelCols() { return panelCols.get(); }
+    public static void setPanelCols(int value) { panelCols.set(value); }
+
+    public static IntegerProperty panelSeededCountProperty() { return panelSeededCount; }
+    public static int getPanelSeededCount() { return panelSeededCount.get(); }
+    public static void setPanelSeededCount(int value) { panelSeededCount.set(value); }
+
+    public static IntegerProperty panelGutterXProperty() { return panelGutterX; }
+    public static int getPanelGutterX() { return panelGutterX.get(); }
+    public static void setPanelGutterX(int value) { panelGutterX.set(value); }
+
+    public static IntegerProperty panelGutterYProperty() { return panelGutterY; }
+    public static int getPanelGutterY() { return panelGutterY.get(); }
+    public static void setPanelGutterY(int value) { panelGutterY.set(value); }
+
+    public static StringProperty panelBackgroundColorProperty() { return panelBackgroundColor; }
+    public static String getPanelBackgroundColor() { return panelBackgroundColor.get(); }
+    public static void setPanelBackgroundColor(String value) { panelBackgroundColor.set(value != null ? value : "#FFFFFF"); }
+
+    public static StringProperty panelCellFitModeProperty() { return panelCellFitMode; }
+    public static String getPanelCellFitMode() { return panelCellFitMode.get(); }
+    public static void setPanelCellFitMode(String value) { panelCellFitMode.set(value != null ? value : "FIT_LETTERBOX"); }
+
+    public static StringProperty panelFormatProperty() { return panelFormat; }
+    public static String getPanelFormat() { return panelFormat.get(); }
+    public static void setPanelFormat(String value) { panelFormat.set(value != null ? value : "PNG"); }
+
+    public static BooleanProperty panelShowFilenameCaptionProperty() { return panelShowFilenameCaption; }
+    public static boolean isPanelShowFilenameCaption() { return panelShowFilenameCaption.get(); }
+    public static void setPanelShowFilenameCaption(boolean value) { panelShowFilenameCaption.set(value); }
+
+    public static StringProperty panelCaptionPositionProperty() { return panelCaptionPosition; }
+    public static String getPanelCaptionPosition() { return panelCaptionPosition.get(); }
+    public static void setPanelCaptionPosition(String value) { panelCaptionPosition.set(value != null ? value : "BELOW"); }
+
+    public static StringProperty panelMetadataFieldsProperty() { return panelMetadataFields; }
+    public static String getPanelMetadataFields() { return panelMetadataFields.get(); }
+    public static void setPanelMetadataFields(String value) { panelMetadataFields.set(value != null ? value : ""); }
+
+    public static IntegerProperty panelCaptionFontSizeProperty() { return panelCaptionFontSize; }
+    public static int getPanelCaptionFontSize() { return panelCaptionFontSize.get(); }
+    public static void setPanelCaptionFontSize(int value) { panelCaptionFontSize.set(value); }
+
+    public static StringProperty panelCaptionColorProperty() { return panelCaptionColor; }
+    public static String getPanelCaptionColor() { return panelCaptionColor.get(); }
+    public static void setPanelCaptionColor(String value) { panelCaptionColor.set(value != null ? value : "#000000"); }
+
+    public static StringProperty panelFilenameProperty() { return panelFilename; }
+    public static String getPanelFilename() { return panelFilename.get(); }
+    public static void setPanelFilename(String value) { panelFilename.set(value != null ? value : "panel_figure"); }
+
+    public static BooleanProperty panelShowIntroDialogProperty() { return panelShowIntroDialog; }
+    public static boolean isPanelShowIntroDialog() { return panelShowIntroDialog.get(); }
+    public static void setPanelShowIntroDialog(boolean value) { panelShowIntroDialog.set(value); }
+
+    // ==================== Recipe snapshot / restore ====================
+
+    /**
+     * Mapping of every {@code quiet.<category>.*} preference key to its live
+     * typed property, used to snapshot and restore single-image recipe
+     * settings. Only the four single-image categories are represented.
+     */
+    private static java.util.Map<String, javafx.beans.property.Property<?>>
+            recipeKeysFor(ExportCategory category) {
+        var map = new java.util.LinkedHashMap<String, javafx.beans.property.Property<?>>();
+        switch (category) {
+            case RENDERED -> {
+                map.put(PREFIX + "rendered.mode", renderedMode);
+                map.put(PREFIX + "rendered.classifierName", renderedClassifierName);
+                map.put(PREFIX + "rendered.opacity", renderedOpacity);
+                map.put(PREFIX + "rendered.downsample", renderedDownsample);
+                map.put(PREFIX + "rendered.format", renderedFormat);
+                map.put(PREFIX + "rendered.includeAnnotations", renderedIncludeAnnotations);
+                map.put(PREFIX + "rendered.includeDetections", renderedIncludeDetections);
+                map.put(PREFIX + "rendered.fillAnnotations", renderedFillAnnotations);
+                map.put(PREFIX + "rendered.showNames", renderedShowNames);
+                map.put(PREFIX + "rendered.displayMode", renderedDisplayMode);
+                map.put(PREFIX + "rendered.displayPresetName", renderedDisplayPresetName);
+                map.put(PREFIX + "rendered.showScaleBar", renderedShowScaleBar);
+                map.put(PREFIX + "rendered.scaleBarPosition", renderedScaleBarPosition);
+                map.put(PREFIX + "rendered.scaleBarColor", renderedScaleBarColor);
+                map.put(PREFIX + "rendered.scaleBarFontSize", renderedScaleBarFontSize);
+                map.put(PREFIX + "rendered.scaleBarBold", renderedScaleBarBold);
+                map.put(PREFIX + "rendered.scaleBarBackgroundBox", renderedScaleBarBackgroundBox);
+                map.put(PREFIX + "rendered.showChannelLegend", renderedShowChannelLegend);
+                map.put(PREFIX + "rendered.regionType", renderedRegionType);
+                map.put(PREFIX + "rendered.padding", renderedPadding);
+                map.put(PREFIX + "rendered.densityMapName", renderedDensityMapName);
+                map.put(PREFIX + "rendered.colormapName", renderedColormapName);
+                map.put(PREFIX + "rendered.showColorScaleBar", renderedShowColorScaleBar);
+                map.put(PREFIX + "rendered.colorScaleBarPosition", renderedColorScaleBarPosition);
+                map.put(PREFIX + "rendered.colorScaleBarFontSize", renderedColorScaleBarFontSize);
+                map.put(PREFIX + "rendered.colorScaleBarBold", renderedColorScaleBarBold);
+                map.put(PREFIX + "rendered.showPanelLabel", renderedShowPanelLabel);
+                map.put(PREFIX + "rendered.panelLabelText", renderedPanelLabelText);
+                map.put(PREFIX + "rendered.panelLabelPosition", renderedPanelLabelPosition);
+                map.put(PREFIX + "rendered.panelLabelFontSize", renderedPanelLabelFontSize);
+                map.put(PREFIX + "rendered.panelLabelBold", renderedPanelLabelBold);
+                map.put(PREFIX + "rendered.splitChannels", renderedSplitChannels);
+                map.put(PREFIX + "rendered.splitChannelsGrayscale", renderedSplitChannelsGrayscale);
+                map.put(PREFIX + "rendered.splitChannelColorBorder", renderedSplitChannelColorBorder);
+                map.put(PREFIX + "rendered.channelColorLegend", renderedChannelColorLegend);
+                map.put(PREFIX + "rendered.matchedDisplayPercentile", renderedMatchedDisplayPercentile);
+                map.put(PREFIX + "rendered.showInfoLabel", renderedShowInfoLabel);
+                map.put(PREFIX + "rendered.infoLabelTemplate", renderedInfoLabelTemplate);
+                map.put(PREFIX + "rendered.infoLabelPosition", renderedInfoLabelPosition);
+                map.put(PREFIX + "rendered.infoLabelFontSize", renderedInfoLabelFontSize);
+                map.put(PREFIX + "rendered.infoLabelBold", renderedInfoLabelBold);
+                map.put(PREFIX + "rendered.targetDpi", renderedTargetDpi);
+                map.put(PREFIX + "rendered.resolutionMode", renderedResolutionMode);
+                map.put(PREFIX + "rendered.showInset", renderedShowInset);
+                map.put(PREFIX + "rendered.insetSourceX", renderedInsetSourceX);
+                map.put(PREFIX + "rendered.insetSourceY", renderedInsetSourceY);
+                map.put(PREFIX + "rendered.insetSourceW", renderedInsetSourceW);
+                map.put(PREFIX + "rendered.insetSourceH", renderedInsetSourceH);
+                map.put(PREFIX + "rendered.insetMagnification", renderedInsetMagnification);
+                map.put(PREFIX + "rendered.insetPosition", renderedInsetPosition);
+                map.put(PREFIX + "rendered.insetFrameColor", renderedInsetFrameColor);
+                map.put(PREFIX + "rendered.insetFrameWidth", renderedInsetFrameWidth);
+                map.put(PREFIX + "rendered.insetConnectingLines", renderedInsetConnectingLines);
+            }
+            case MASK -> {
+                map.put(PREFIX + "mask.maskType", maskType);
+                map.put(PREFIX + "mask.backgroundLabel", maskBackgroundLabel);
+                map.put(PREFIX + "mask.boundaryLabel", maskBoundaryLabel);
+                map.put(PREFIX + "mask.enableBoundary", maskEnableBoundary);
+                map.put(PREFIX + "mask.objectSource", maskObjectSource);
+                map.put(PREFIX + "mask.downsample", maskDownsample);
+                map.put(PREFIX + "mask.format", maskFormat);
+                map.put(PREFIX + "mask.grayscaleLut", maskGrayscaleLut);
+                map.put(PREFIX + "mask.shuffleInstanceLabels", maskShuffleInstanceLabels);
+                map.put(PREFIX + "mask.boundaryThickness", maskBoundaryThickness);
+                map.put(PREFIX + "mask.skipEmptyImages", maskSkipEmptyImages);
+            }
+            case RAW -> {
+                map.put(PREFIX + "raw.regionType", rawRegionType);
+                map.put(PREFIX + "raw.downsample", rawDownsample);
+                map.put(PREFIX + "raw.format", rawFormat);
+                map.put(PREFIX + "raw.padding", rawPadding);
+                map.put(PREFIX + "raw.pyramidLevels", rawPyramidLevels);
+                map.put(PREFIX + "raw.tileSize", rawTileSize);
+                map.put(PREFIX + "raw.compression", rawCompression);
+            }
+            case OBJECT_CROPS -> {
+                map.put(PREFIX + "objectCrops.objectType", objectCropType);
+                map.put(PREFIX + "objectCrops.cropSize", objectCropSize);
+                map.put(PREFIX + "objectCrops.padding", objectCropPadding);
+                map.put(PREFIX + "objectCrops.downsample", objectCropDownsample);
+                map.put(PREFIX + "objectCrops.labelFormat", objectCropLabelFormat);
+                map.put(PREFIX + "objectCrops.format", objectCropFormat);
+            }
+            case TILED, PANEL -> {
+                // No recipe snapshot for these categories.
+            }
+        }
+        return map;
+    }
+
+    /**
+     * The set of {@code quiet.<category>.*} preference keys that make up a
+     * complete recipe for a category. Used to validate that a loaded recipe
+     * is not missing keys before it is applied.
+     *
+     * @param category one of the four single-image categories
+     * @return the ordered key set (empty for TILED/PANEL)
+     */
+    public static java.util.Set<String> recipeKeyNames(ExportCategory category) {
+        return recipeKeysFor(category).keySet();
+    }
+
+    /**
+     * Capture the current single-image preference values for a category as a
+     * flat string map suitable for {@link qupath.ext.quiet.export.ExportRecipe}.
+     *
+     * @param category one of the four single-image categories
+     * @return an ordered key/value snapshot (empty for TILED/PANEL)
+     */
+    public static java.util.Map<String, String> snapshotCategoryPreferences(
+            ExportCategory category) {
+        var snapshot = new java.util.LinkedHashMap<String, String>();
+        for (var entry : recipeKeysFor(category).entrySet()) {
+            Object value = entry.getValue().getValue();
+            snapshot.put(entry.getKey(), value != null ? value.toString() : "");
+        }
+        return snapshot;
+    }
+
+    /**
+     * Restore single-image preference values for a category from a recipe
+     * snapshot. Unknown keys are ignored; unparseable values keep the existing
+     * value. Each value is parsed according to the typed property and clamped
+     * by the receiving config pane on its next build.
+     *
+     * @param category one of the four single-image categories
+     * @param snapshot the recipe key/value snapshot (may contain extra keys)
+     */
+    @SuppressWarnings("unchecked")
+    public static void restoreCategoryPreferences(ExportCategory category,
+                                                  java.util.Map<String, String> snapshot) {
+        if (snapshot == null) {
+            return;
+        }
+        for (var entry : recipeKeysFor(category).entrySet()) {
+            String raw = snapshot.get(entry.getKey());
+            if (raw == null) {
+                continue;
+            }
+            javafx.beans.property.Property<?> prop = entry.getValue();
+            try {
+                if (prop instanceof IntegerProperty ip) {
+                    ip.set((int) Double.parseDouble(raw.trim()));
+                } else if (prop instanceof DoubleProperty dp) {
+                    dp.set(Double.parseDouble(raw.trim()));
+                } else if (prop instanceof BooleanProperty bp) {
+                    bp.set(Boolean.parseBoolean(raw.trim()));
+                } else if (prop instanceof StringProperty sp) {
+                    sp.set(raw);
+                }
+            } catch (NumberFormatException e) {
+                // Leave the existing value in place for an unparseable entry.
+            }
+        }
+    }
 }

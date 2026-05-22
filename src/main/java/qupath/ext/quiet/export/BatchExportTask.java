@@ -42,6 +42,7 @@ public class BatchExportTask extends Task<ExportResult> {
     private final RawExportConfig rawConfig;
     private final TiledExportConfig tiledConfig;
     private final ObjectCropConfig objectCropConfig;
+    private final PanelExportConfig panelConfig;
     private final PixelClassifier classifier;
     private final DensityMapBuilder densityBuilder;
     private final String workflowScript;
@@ -67,9 +68,29 @@ public class BatchExportTask extends Task<ExportResult> {
                                               String filenameSuffix,
                                               boolean channelsConsistent) {
         return new BatchExportTask(entries, ExportCategory.RENDERED,
-                config, null, null, null, null, classifier, densityBuilder, workflowScript,
-                exportGeoJson, config.getOutputDirectory(), filenamePrefix, filenameSuffix,
-                channelsConsistent);
+                config, null, null, null, null, null, classifier, densityBuilder,
+                workflowScript, exportGeoJson, config.getOutputDirectory(),
+                filenamePrefix, filenameSuffix, channelsConsistent);
+    }
+
+    /**
+     * Create a batch export task for a panel / montage export. Panel mode
+     * renders each selected image through a recipe and composes the results
+     * into a single figure (one output file).
+     *
+     * @param classifier     the pixel classifier for a CLASSIFIER_OVERLAY
+     *                       rendered recipe (null otherwise)
+     * @param densityBuilder the density-map builder for a DENSITY_MAP_OVERLAY
+     *                       rendered recipe (null otherwise)
+     */
+    public static BatchExportTask forPanel(List<ProjectImageEntry<BufferedImage>> entries,
+                                           PanelExportConfig config,
+                                           PixelClassifier classifier,
+                                           DensityMapBuilder densityBuilder,
+                                           String workflowScript) {
+        return new BatchExportTask(entries, ExportCategory.PANEL,
+                null, null, null, null, null, config, classifier, densityBuilder,
+                workflowScript, false, config.getOutputDirectory(), "", "", true);
     }
 
     /**
@@ -82,7 +103,7 @@ public class BatchExportTask extends Task<ExportResult> {
                                           String filenamePrefix,
                                           String filenameSuffix) {
         return new BatchExportTask(entries, ExportCategory.MASK,
-                null, config, null, null, null, null, null, workflowScript,
+                null, config, null, null, null, null, null, null, workflowScript,
                 exportGeoJson, config.getOutputDirectory(), filenamePrefix, filenameSuffix, true);
     }
 
@@ -97,7 +118,7 @@ public class BatchExportTask extends Task<ExportResult> {
                                          String filenameSuffix,
                                          boolean channelsConsistent) {
         return new BatchExportTask(entries, ExportCategory.RAW,
-                null, null, config, null, null, null, null, workflowScript,
+                null, null, config, null, null, null, null, null, workflowScript,
                 exportGeoJson, config.getOutputDirectory(), filenamePrefix, filenameSuffix,
                 channelsConsistent);
     }
@@ -112,7 +133,7 @@ public class BatchExportTask extends Task<ExportResult> {
                                            String filenamePrefix,
                                            String filenameSuffix) {
         return new BatchExportTask(entries, ExportCategory.TILED,
-                null, null, null, config, null, null, null, workflowScript,
+                null, null, null, config, null, null, null, null, workflowScript,
                 exportGeoJson, config.getOutputDirectory(), filenamePrefix, filenameSuffix, true);
     }
 
@@ -127,7 +148,7 @@ public class BatchExportTask extends Task<ExportResult> {
                                                   String filenameSuffix,
                                                   boolean channelsConsistent) {
         return new BatchExportTask(entries, ExportCategory.OBJECT_CROPS,
-                null, null, null, null, config, null, null, workflowScript,
+                null, null, null, null, config, null, null, null, workflowScript,
                 exportGeoJson, config.getOutputDirectory(), filenamePrefix, filenameSuffix,
                 channelsConsistent);
     }
@@ -139,6 +160,7 @@ public class BatchExportTask extends Task<ExportResult> {
                             RawExportConfig rawConfig,
                             TiledExportConfig tiledConfig,
                             ObjectCropConfig objectCropConfig,
+                            PanelExportConfig panelConfig,
                             PixelClassifier classifier,
                             DensityMapBuilder densityBuilder,
                             String workflowScript,
@@ -154,6 +176,7 @@ public class BatchExportTask extends Task<ExportResult> {
         this.rawConfig = rawConfig;
         this.tiledConfig = tiledConfig;
         this.objectCropConfig = objectCropConfig;
+        this.panelConfig = panelConfig;
         this.classifier = classifier;
         this.densityBuilder = densityBuilder;
         this.workflowScript = workflowScript;
@@ -166,6 +189,12 @@ public class BatchExportTask extends Task<ExportResult> {
 
     @Override
     protected ExportResult call() throws Exception {
+        // Panel / Montage mode: render every image through a recipe, compose
+        // once, write once. Structurally distinct from the per-image loop.
+        if (category == ExportCategory.PANEL) {
+            return runPanelExport();
+        }
+
         int total = entries.size();
         int succeeded = 0;
         int failed = 0;
@@ -235,6 +264,8 @@ public class BatchExportTask extends Task<ExportResult> {
                     case TILED -> TiledImageExporter.exportTiled(imageData, tiledConfig, entryName);
                     case OBJECT_CROPS -> ObjectCropExporter.exportObjectCrops(
                             imageData, objectCropConfig, entryName);
+                    case PANEL -> throw new IllegalStateException(
+                            "Panel export does not use the per-image loop");
                 }
 
                 // GeoJSON export (orthogonal to image export)
@@ -289,6 +320,75 @@ public class BatchExportTask extends Task<ExportResult> {
         updateMessage("Export complete");
 
         return new ExportResult(succeeded, failed, skipped, errors);
+    }
+
+    /**
+     * Run the panel / montage export: a two-phase render-then-compose flow.
+     * Progress is reported as "Rendering panel k of N" then "Composing figure".
+     */
+    private ExportResult runPanelExport() throws Exception {
+        var listener = new PanelImageExporter.ProgressListener() {
+            @Override
+            public void onProgress(int current, int total, String message) {
+                updateMessage(message);
+                if (total > 0) {
+                    updateProgress(current, total);
+                }
+            }
+        };
+        PanelImageExporter.CancelCheck cancel = this::isCancelled;
+        try {
+            var result = PanelImageExporter.exportPanel(entries, panelConfig,
+                    classifier, densityBuilder, listener, cancel);
+            updateProgress(1, 1);
+            updateMessage("Panel export complete");
+            // Write the provenance sidecar next to the composed figure so the
+            // figure can be traced back to its inputs and recipe.
+            ExportMetadataWriter.writePanelInfo(panelConfig, entries,
+                    result.getOutputFile(), result.getFigureWidth(),
+                    result.getFigureHeight(), result.getComposedCells(),
+                    result.getSkipped());
+            // Record the panel export as a workflow step on every source image.
+            if (workflowScript != null && !entries.isEmpty()) {
+                addPanelWorkflowStep();
+            }
+            return new ExportResult(result.getComposedCells(), 0,
+                    result.getSkipped(), result.getErrors(), result.getSummary());
+        } catch (java.io.IOException e) {
+            if ("cancelled".equals(e.getMessage())) {
+                logger.info("Panel export cancelled by user");
+                return new ExportResult(0, 0, 0, List.of(), "Export cancelled.");
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * Record the panel export as a workflow step on every source image, so a
+     * reviewer looking at any one slide sees it was used in a figure.
+     */
+    private void addPanelWorkflowStep() {
+        for (var entry : entries) {
+            ImageData<BufferedImage> imageData = null;
+            try {
+                imageData = entry.readImageData();
+                imageData.getHistoryWorkflow().addStep(
+                        new DefaultScriptableWorkflowStep("Panel / Montage Export",
+                                workflowScript));
+                entry.saveImageData(imageData);
+            } catch (Exception e) {
+                logger.warn("Failed to add panel workflow step for {}: {}",
+                        entry.getImageName(), e.getMessage());
+            } finally {
+                if (imageData != null) {
+                    try {
+                        imageData.getServer().close();
+                    } catch (Exception ignored) {
+                        // best effort
+                    }
+                }
+            }
+        }
     }
 
     private void exportRendered(ImageData<BufferedImage> imageData, String entryName,
@@ -361,6 +461,7 @@ public class BatchExportTask extends Task<ExportResult> {
                     case RAW -> rawConfig.buildOutputFilename(entryName);
                     case TILED -> tiledConfig.buildOutputFilename(entryName);
                     case OBJECT_CROPS -> objectCropConfig.buildOutputFilename(entryName);
+                    case PANEL -> entryName;
                 };
                 filenames.add(exportedName);
                 groups.put(sig, new ExportMetadataWriter.ChannelGroup(
@@ -372,6 +473,7 @@ public class BatchExportTask extends Task<ExportResult> {
                     case RAW -> rawConfig.buildOutputFilename(entryName);
                     case TILED -> tiledConfig.buildOutputFilename(entryName);
                     case OBJECT_CROPS -> objectCropConfig.buildOutputFilename(entryName);
+                    case PANEL -> entryName;
                 };
                 group.filenames().add(exportedName);
             }
@@ -410,6 +512,9 @@ public class BatchExportTask extends Task<ExportResult> {
                         objectCropConfig.getDownsample(), category,
                         null, null, outputDirectory,
                         channelsConsistent);
+                case PANEL -> {
+                    // Panel mode does not use the per-image sidecar path.
+                }
             }
         } catch (Exception e) {
             logger.warn("Failed to write metadata sidecar file: {}", e.getMessage());
@@ -423,6 +528,7 @@ public class BatchExportTask extends Task<ExportResult> {
             case RAW -> rawConfig != null && rawConfig.isAddToWorkflow();
             case TILED -> tiledConfig != null && tiledConfig.isAddToWorkflow();
             case OBJECT_CROPS -> objectCropConfig != null && objectCropConfig.isAddToWorkflow();
+            case PANEL -> false;
         };
     }
 
@@ -473,6 +579,7 @@ public class BatchExportTask extends Task<ExportResult> {
                 case RAW -> "Raw Image Export";
                 case TILED -> "Tiled Export";
                 case OBJECT_CROPS -> "Object Crop Export";
+                case PANEL -> "Panel / Montage Export";
             };
             imageData.getHistoryWorkflow().addStep(
                     new DefaultScriptableWorkflowStep(stepName, workflowScript));

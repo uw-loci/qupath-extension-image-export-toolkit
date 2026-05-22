@@ -40,6 +40,11 @@ public class RawConfigPane extends VBox {
     private ComboBox<RawExportConfig.RegionType> regionTypeCombo;
     private ComboBox<Double> downsampleCombo;
     private ComboBox<OutputFormat> formatCombo;
+    /**
+     * False when this pane is embedded as a panel recipe -- the panel owns the
+     * composed-figure output format, so this pane's own format control hides.
+     */
+    private boolean formatControlVisible = true;
 
     // Labels promoted for tooltip wiring
     private Label regionTypeLabel;
@@ -220,7 +225,8 @@ public class RawConfigPane extends VBox {
         paddingSpinner.setVisible(isAnnotation);
         paddingSpinner.setManaged(isAnnotation);
 
-        boolean isPyramid = formatCombo.getValue() == OutputFormat.OME_TIFF_PYRAMID;
+        boolean isPyramid = formatControlVisible
+                && formatCombo.getValue() == OutputFormat.OME_TIFF_PYRAMID;
         pyramidSection.setVisible(isPyramid);
         pyramidSection.setManaged(isPyramid);
     }
@@ -383,9 +389,23 @@ public class RawConfigPane extends VBox {
         paddingLabel.setManaged(!simple);
         paddingSpinner.setVisible(!simple);
         paddingSpinner.setManaged(!simple);
-        pyramidSection.setVisible(!simple);
-        pyramidSection.setManaged(!simple);
+        pyramidSection.setVisible(!simple && formatControlVisible);
+        pyramidSection.setManaged(!simple && formatControlVisible);
         channelSection.setVisible(!simple);
         channelSection.setManaged(!simple);
+    }
+
+    /**
+     * Show or hide this pane's output-format control. Hidden when the pane is
+     * embedded as a panel recipe -- the panel itself owns the composed-figure
+     * output format, so a second format control here would be redundant.
+     */
+    public void setFormatControlVisible(boolean visible) {
+        this.formatControlVisible = visible;
+        formatLabel.setVisible(visible);
+        formatLabel.setManaged(visible);
+        formatCombo.setVisible(visible);
+        formatCombo.setManaged(visible);
+        updateVisibility();
     }
 }

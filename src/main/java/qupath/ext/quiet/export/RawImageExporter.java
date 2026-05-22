@@ -51,6 +51,46 @@ public class RawImageExporter {
     }
 
     /**
+     * Render the whole image as raw pixel data to an in-memory
+     * {@link BufferedImage}, without writing any file. Used by the
+     * Panel / Montage export to obtain a single composed cell image.
+     * <p>
+     * Channel selection is applied; region type is ignored (panel cells are
+     * always whole-image). Pyramid output is not relevant for an in-memory
+     * render and is treated as a flat whole-image read.
+     *
+     * @param imageData the image data (caller is responsible for closing)
+     * @param config    raw export configuration
+     * @param entryName the image entry name (for error messages)
+     * @return the whole-image BufferedImage at the configured downsample
+     * @throws IOException if reading fails
+     */
+    public static BufferedImage renderToImage(ImageData<BufferedImage> imageData,
+                                              RawExportConfig config,
+                                              String entryName) throws IOException {
+        ImageServer<BufferedImage> server = imageData.getServer();
+        ImageServer<BufferedImage> exportServer = null;
+        try {
+            exportServer = maybeExtractChannels(server, config);
+            double downsample = config.getDownsample();
+            RegionRequest request = RegionRequest.createInstance(
+                    exportServer.getPath(), downsample,
+                    0, 0, exportServer.getWidth(), exportServer.getHeight());
+            BufferedImage image = exportServer.readRegion(request);
+            if (image == null) {
+                throw new IOException("Raw read returned no image for: " + entryName);
+            }
+            return image;
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("Failed to render raw image: " + entryName, e);
+        } finally {
+            closeIfDifferent(exportServer, server);
+        }
+    }
+
+    /**
      * Wraps the server with channel extraction if channels are selected.
      */
     private static ImageServer<BufferedImage> maybeExtractChannels(

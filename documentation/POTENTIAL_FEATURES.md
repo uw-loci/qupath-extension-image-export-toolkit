@@ -193,10 +193,21 @@ interpolation artifacts.
 
 ---
 
-### F3. Multi-Panel Grid / Figure Layout Composition
+### F3. Multi-Panel Grid / Figure Layout Composition -- COMPLETED (v1.0.0)
 
-**Priority:** P1
+**Priority:** P1 -- **IMPLEMENTED**
 **Source:** QuickFigures (one-click split-channel figure, flexible grid layout)
+
+> **Shipped in v1.0.0 as the Panel / Montage export category.** Implemented as a
+> 6th export category with a 4-step wizard flow (category, select images, recipe,
+> layout) rather than a checkbox on the image-selection step. New classes:
+> `PanelExportConfig`, `CellFitMode`, `ExportRecipe`, `PanelComposer`,
+> `CaptionRenderer`, `PanelImageExporter`, `PanelScriptGenerator`,
+> `PanelRecipePane`, `PanelLayoutPane`. The mixed-aspect-ratio challenge below is
+> resolved by the user-selectable `CellFitMode` (Fit-letterbox / Fill-crop /
+> Actual-size, aspect ratio always preserved). The two-pass / in-memory tradeoff
+> is resolved in `BatchExportTask.runPanelExport()` by holding rendered cells in
+> memory and composing once, with a 100-megapixel OME-TIFF gate to bound memory.
 
 **Description:**
 Compose multiple exported images into a single figure with a grid layout.

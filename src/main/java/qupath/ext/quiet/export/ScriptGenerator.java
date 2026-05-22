@@ -58,6 +58,12 @@ public class ScriptGenerator {
                 }
                 yield ObjectCropScriptGenerator.generate(occ);
             }
+            case PANEL -> {
+                if (!(config instanceof PanelExportConfig pc)) {
+                    throw new IllegalArgumentException("Expected PanelExportConfig");
+                }
+                yield PanelScriptGenerator.generate(pc);
+            }
         };
     }
 

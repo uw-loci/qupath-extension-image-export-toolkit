@@ -3,7 +3,7 @@ package qupath.ext.quiet.export;
 import java.io.File;
 
 /**
- * The three export categories supported by QuIET.
+ * The export categories supported by QuIET.
  */
 public enum ExportCategory {
 
@@ -11,7 +11,8 @@ public enum ExportCategory {
     MASK("Label / Mask", "masks"),
     RAW("Raw Image Data", "raw"),
     TILED("Tiled Export (ML)", "tiles"),
-    OBJECT_CROPS("Object Crops (Classification)", "crops");
+    OBJECT_CROPS("Object Crops (Classification)", "crops"),
+    PANEL("Panel / Montage", "panels");
 
     private final String displayName;
     private final String defaultSubdirectory;

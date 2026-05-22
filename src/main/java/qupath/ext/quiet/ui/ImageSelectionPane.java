@@ -6,6 +6,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.ResourceBundle;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.TreeSet;
+
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
@@ -13,10 +17,12 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextField;
+import javafx.scene.control.TitledPane;
 import javafx.scene.control.Tooltip;
 import javafx.scene.control.cell.CheckBoxListCell;
 import javafx.scene.input.Clipboard;
@@ -69,6 +75,19 @@ public class ImageSelectionPane extends VBox {
     private FilteredList<ImageEntryItem> filteredItems;
     private TextField filterField;
     private Label imageCountLabel;
+
+    // Panel / Montage mode extras (created lazily; null in standard mode)
+    private boolean panelMode;
+    private Label stepHeader;
+    private Label panelBanner;
+    private TitledPane filterFacetSection;
+    private ComboBox<String> imageTypeCombo;
+    private ComboBox<String> metadataKeyCombo;
+    private TextField metadataValueField;
+    private Label orderHintLabel;
+    private Label gateMessageLabel;
+    private boolean facetCacheBuilt;
+    private Runnable selectionChangeListener;
     private TextField prefixField;
     private TextField suffixField;
     private Label filenamePreviewLabel;
@@ -94,8 +113,9 @@ public class ImageSelectionPane extends VBox {
     }
 
     private void buildUI() {
-        var header = new Label(resources.getString("wizard.step3.title"));
-        header.setFont(Font.font(null, FontWeight.BOLD, 14));
+        stepHeader = new Label(resources.getString("wizard.step3.title"));
+        stepHeader.setFont(Font.font(null, FontWeight.BOLD, 14));
+        var header = stepHeader;
 
         // Output directory
         var dirLabel = new Label(resources.getString("step3.label.outputDir"));
@@ -229,14 +249,27 @@ public class ImageSelectionPane extends VBox {
         statusLabel = new Label();
         statusLabel.setMaxWidth(Double.MAX_VALUE);
 
+        // --- Panel / Montage mode controls (hidden in standard mode) ---
+        panelBanner = buildPanelBanner();
+        filterFacetSection = buildFilterFacetSection();
+        orderHintLabel = new Label(resources.getString("panel.step2.orderHint"));
+        orderHintLabel.setStyle("-fx-text-fill: #555555;");
+        gateMessageLabel = new Label(resources.getString("panel.step2.gateMessage"));
+        gateMessageLabel.setStyle("-fx-text-fill: #b36b00; -fx-font-weight: bold;");
+        setPanelControlsVisible(false);
+
         getChildren().addAll(
+                panelBanner,
                 header,
                 dirLabel, dirBox,
                 prefixSuffixRow,
                 previewRow,
                 imagesHeader,
+                filterFacetSection,
                 filterField,
                 imageListView,
+                orderHintLabel,
+                gateMessageLabel,
                 scriptBox,
                 addToWorkflowCheck,
                 exportGeoJsonCheck,
@@ -244,6 +277,63 @@ public class ImageSelectionPane extends VBox {
                 progressBar,
                 statusLabel
         );
+    }
+
+    /**
+     * Build the light-blue PANEL / MONTAGE MODE banner shown on the panel-mode
+     * image selection step.
+     */
+    private Label buildPanelBanner() {
+        var banner = new Label(resources.getString("panel.banner"));
+        banner.setMaxWidth(Double.MAX_VALUE);
+        banner.setStyle("-fx-background-color: #e8f0fe; -fx-padding: 6 10 6 10; "
+                + "-fx-font-weight: bold;");
+        return banner;
+    }
+
+    /**
+     * Build the collapsible filter-facet section: image type, metadata
+     * key/value, used only in panel mode on top of the existing name filter.
+     */
+    private TitledPane buildFilterFacetSection() {
+        imageTypeCombo = new ComboBox<>();
+        imageTypeCombo.setTooltip(createTooltip("tooltip.panel.imageType"));
+        imageTypeCombo.getItems().add(resources.getString("panel.filter.anyType"));
+        imageTypeCombo.getSelectionModel().selectFirst();
+        imageTypeCombo.valueProperty().addListener((o, a, b) -> applyCompoundFilter());
+
+        metadataKeyCombo = new ComboBox<>();
+        metadataKeyCombo.setTooltip(createTooltip("tooltip.panel.metadataKey"));
+        metadataKeyCombo.getItems().add(resources.getString("panel.filter.anyKey"));
+        metadataKeyCombo.getSelectionModel().selectFirst();
+        metadataKeyCombo.valueProperty().addListener((o, a, b) -> applyCompoundFilter());
+
+        metadataValueField = new TextField();
+        metadataValueField.setPromptText(resources.getString("panel.filter.valuePrompt"));
+        metadataValueField.setTooltip(createTooltip("tooltip.panel.metadataValue"));
+        metadataValueField.textProperty().addListener((o, a, b) -> applyCompoundFilter());
+
+        var clearButton = new Button(resources.getString("panel.filter.clearAll"));
+        clearButton.setTooltip(createTooltip("tooltip.panel.clearFilters"));
+        clearButton.setOnAction(e -> {
+            imageTypeCombo.getSelectionModel().selectFirst();
+            metadataKeyCombo.getSelectionModel().selectFirst();
+            metadataValueField.clear();
+            filterField.clear();
+        });
+
+        var typeRow = new HBox(5,
+                new Label(resources.getString("panel.filter.typeLabel")), imageTypeCombo,
+                new Label(resources.getString("panel.filter.metadataLabel")),
+                metadataKeyCombo, new Label(" = "), metadataValueField);
+        typeRow.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(metadataValueField, Priority.ALWAYS);
+
+        var content = new VBox(8, typeRow, clearButton);
+        content.setPadding(new Insets(5));
+        var section = SectionBuilder.createSection(
+                resources.getString("panel.filter.sectionTitle"), false, content);
+        return section;
     }
 
     private void populateImageList() {
@@ -265,11 +355,19 @@ public class ImageSelectionPane extends VBox {
             item.selectedProperty().addListener((obs, oldVal, newVal) -> {
                 updateImageCount();
                 updateFilenamePreview();
+                updateGateMessage();
+                if (selectionChangeListener != null) {
+                    selectionChangeListener.run();
+                }
             });
         }
 
         // Wire filter field to FilteredList predicate
         filterField.textProperty().addListener((obs, oldVal, newVal) -> {
+            if (panelMode) {
+                applyCompoundFilter();
+                return;
+            }
             String filterText = (newVal != null) ? newVal.toLowerCase() : "";
             if (filterText.isEmpty()) {
                 filteredItems.setPredicate(item -> true);
@@ -556,10 +654,192 @@ public class ImageSelectionPane extends VBox {
     }
 
     /**
+     * Enable or disable panel / montage mode for this image-selection pane.
+     * <p>
+     * In panel mode the prefix/suffix, filename preview, script buttons,
+     * workflow/GeoJSON checkboxes and advice button are hidden (they apply
+     * only to single-image exports); the panel banner, the type/metadata
+     * filter facets, a row-major order hint, and a 0-images gate message are
+     * shown. The first time panel mode is entered the per-image type and
+     * metadata caches are built so the facets can filter without re-opening
+     * images.
+     *
+     * @param enabled true for panel mode
+     */
+    public void setPanelMode(boolean enabled) {
+        this.panelMode = enabled;
+        setPanelControlsVisible(enabled);
+        // Keep the step header consistent with the wizard flow: panel mode
+        // shows this pane as Step 1 of 3, the standard flow as Step 3 of 3.
+        stepHeader.setText(resources.getString(
+                enabled ? "panel.step2.title" : "wizard.step3.title"));
+        if (enabled) {
+            // Hide single-image-only controls.
+            prefixSuffixRow.setVisible(false);
+            prefixSuffixRow.setManaged(false);
+            previewRow.setVisible(false);
+            previewRow.setManaged(false);
+            scriptBox.setVisible(false);
+            scriptBox.setManaged(false);
+            addToWorkflowCheck.setVisible(false);
+            addToWorkflowCheck.setManaged(false);
+            exportGeoJsonCheck.setVisible(false);
+            exportGeoJsonCheck.setManaged(false);
+            adviceButton.setVisible(false);
+            adviceButton.setManaged(false);
+            buildFacetCache();
+            updateGateMessage();
+        }
+    }
+
+    private void setPanelControlsVisible(boolean visible) {
+        for (var node : new javafx.scene.Node[]{
+                panelBanner, filterFacetSection, orderHintLabel, gateMessageLabel}) {
+            if (node != null) {
+                node.setVisible(visible);
+                node.setManaged(visible);
+            }
+        }
+        if (filterFacetSection != null && visible && masterItems != null
+                && masterItems.size() > 30) {
+            // Large project: open the facet section so the filter is found.
+            filterFacetSection.setExpanded(true);
+        }
+    }
+
+    /**
+     * Scan the project images once to cache image type and metadata, and
+     * populate the type / metadata-key filter combos.
+     */
+    private void buildFacetCache() {
+        if (facetCacheBuilt || masterItems == null) {
+            return;
+        }
+        var types = new TreeSet<String>();
+        var keys = new TreeSet<String>();
+        for (var item : masterItems) {
+            var entry = item.getEntry();
+            var metadata = new LinkedHashMap<String, String>();
+            try {
+                var entryMeta = entry.getMetadata();
+                if (entryMeta != null) {
+                    for (var e : entryMeta.entrySet()) {
+                        if (e.getKey() != null && e.getValue() != null) {
+                            metadata.put(e.getKey(), e.getValue());
+                            keys.add(e.getKey());
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                logger.debug("Failed to read metadata for {}: {}",
+                        entry.getImageName(), e.getMessage());
+            }
+            String typeName = null;
+            try {
+                var imageData = entry.readImageData();
+                if (imageData.getImageType() != null) {
+                    typeName = imageData.getImageType().name();
+                    types.add(typeName);
+                }
+                imageData.getServer().close();
+            } catch (Exception e) {
+                logger.debug("Failed to read image type for {}: {}",
+                        entry.getImageName(), e.getMessage());
+            }
+            item.setImageType(typeName);
+            item.setMetadata(metadata);
+        }
+        imageTypeCombo.getItems().setAll(resources.getString("panel.filter.anyType"));
+        imageTypeCombo.getItems().addAll(types);
+        imageTypeCombo.getSelectionModel().selectFirst();
+        metadataKeyCombo.getItems().setAll(resources.getString("panel.filter.anyKey"));
+        metadataKeyCombo.getItems().addAll(keys);
+        metadataKeyCombo.getSelectionModel().selectFirst();
+        facetCacheBuilt = true;
+    }
+
+    /**
+     * Apply the compound (type AND metadata AND name) filter predicate.
+     * Used in panel mode; the standard mode uses the name-only predicate.
+     */
+    private void applyCompoundFilter() {
+        if (filteredItems == null) {
+            return;
+        }
+        String anyType = resources.getString("panel.filter.anyType");
+        String anyKey = resources.getString("panel.filter.anyKey");
+        String typeSel = imageTypeCombo != null ? imageTypeCombo.getValue() : null;
+        String keySel = metadataKeyCombo != null ? metadataKeyCombo.getValue() : null;
+        String valueText = metadataValueField != null && metadataValueField.getText() != null
+                ? metadataValueField.getText().toLowerCase().trim() : "";
+        String nameText = filterField.getText() != null
+                ? filterField.getText().toLowerCase().trim() : "";
+
+        filteredItems.setPredicate(item -> {
+            if (!nameText.isEmpty()
+                    && !item.toString().toLowerCase().contains(nameText)) {
+                return false;
+            }
+            if (typeSel != null && !typeSel.equals(anyType)
+                    && !typeSel.equals(item.getImageType())) {
+                return false;
+            }
+            if (keySel != null && !keySel.equals(anyKey)) {
+                String value = item.getMetadata().get(keySel);
+                if (value == null) {
+                    return false;
+                }
+                if (!valueText.isEmpty()
+                        && !value.toLowerCase().contains(valueText)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+        updateImageCount();
+    }
+
+    private void updateGateMessage() {
+        if (gateMessageLabel == null || masterItems == null) {
+            return;
+        }
+        boolean none = masterItems.stream().noneMatch(ImageEntryItem::isSelected);
+        gateMessageLabel.setVisible(panelMode && none);
+        gateMessageLabel.setManaged(panelMode && none);
+    }
+
+    /**
+     * Register a callback fired whenever the image selection changes. Used by
+     * the wizard to enable/disable the panel-mode Next button.
+     *
+     * @param listener the callback (may be null to clear)
+     */
+    public void setSelectionChangeListener(Runnable listener) {
+        this.selectionChangeListener = listener;
+    }
+
+    /** Count of currently selected images. */
+    public int getSelectedCount() {
+        if (masterItems == null) {
+            return 0;
+        }
+        return (int) masterItems.stream().filter(ImageEntryItem::isSelected).count();
+    }
+
+    /**
      * Show or hide advanced controls for simple mode.
      * Hides prefix/suffix, filename preview, workflow/GeoJSON checkboxes, and script buttons.
+     * <p>
+     * In panel / montage mode these controls are single-image-only and stay
+     * hidden regardless of the simple/advanced toggle -- {@link #setPanelMode}
+     * owns their visibility there.
      */
     public void setSimpleMode(boolean simple) {
+        if (panelMode) {
+            // Panel mode hides these controls outright; do not let the
+            // advanced-mode toggle resurrect them.
+            return;
+        }
         boolean show = !simple;
         prefixSuffixRow.setVisible(show);
         prefixSuffixRow.setManaged(show);

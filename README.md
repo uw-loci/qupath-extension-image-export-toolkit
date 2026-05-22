@@ -5,9 +5,13 @@
 
 A [QuPath](https://qupath.github.io/) extension that turns annotated whole-slide images into **publication-ready figures**, **review images for collaborators**, and **training datasets for machine learning** -- in batch, without writing an export script.
 
-A guided wizard walks you from "I have an annotated project" to finished files: composite figures with scale bars and panel labels, segmentation masks for training or QC, raw pixel data at any resolution, image+label tile pairs for deep-learning frameworks, and per-object crops for cell-type classifiers. Every export also writes a self-contained Groovy script, so the same settings can be re-run, version-controlled, or shared with a collaborator who doesn't have QuIET installed.
+A guided wizard walks you from "I have an annotated project" to finished files: composite figures with scale bars and panel labels, segmentation masks for training or QC, raw pixel data at any resolution, image+label tile pairs for deep-learning frameworks, per-object crops for cell-type classifiers, and multi-image panel figures that arrange many project images into a single montage. Every export also writes a self-contained Groovy script, so the same settings can be re-run, version-controlled, or shared with a collaborator who doesn't have QuIET installed.
 
-![QuIET interface](documentation/images/QUIET-interface.png)
+<!-- TODO(v1.0.0 docs): regenerate QUIET-interface.png and RenderedImageExport.png on a
+     running QuPath with the v1.0.0 jar. The Step 1 category picker shows five cards
+     (Rendered, Mask, Raw, Tiled, Object Crops); Panel / Montage is a separate menu
+     item with its own wizard, not a card here. -->
+![QuIET interface (Step 1 category picker: Rendered, Mask, Raw, Tiled, Object Crops)](documentation/images/QUIET-interface.png)
 
 <div align="center">
 
@@ -28,21 +32,49 @@ A guided wizard walks you from "I have an annotated project" to finished files: 
 2. Drag the JAR onto the running QuPath window, **or** copy it into your QuPath `extensions/` directory
 3. Restart QuPath
 
-The extension appears under **Extensions > QuIET > Export Images...**
+The extension appears under **Extensions > QuIET**, with two menu items: **Image Export...** and **Panel / Montage Export...**
 
-> The menu item is disabled until a project with at least one image is open.
+> Both menu items are disabled until a project with at least one image is open.
 
 ## Quick Start
 
 1. Open a QuPath project containing annotated images
-2. Go to **Extensions > QuIET > Export Images...**
-3. **Step 1** -- Choose an export category (Rendered, Mask, Raw, Tiled, or Object Crops)
+2. Go to **Extensions > QuIET > Image Export...**
+3. **Step 1** -- Choose an export category. There are **five** categories: Rendered, Mask, Raw, Tiled, and Object Crops.
 4. **Step 2** -- Configure export settings (grouped into collapsible sections). A QUAREP-LiMi guidelines panel on the right provides context-sensitive recommendations based on your project's images.
 5. **Step 3** -- Select images, choose output directory, review Publication Advice, and click **Export**
+
+All five categories use this **3-step** flow. Composing a multi-image figure is a separate **Extensions > QuIET > Panel / Montage Export...** menu item with its own **3-step** flow -- see *Making a panel figure* below.
 
 Every export also generates a **Groovy script** that you can copy, save, and re-run from QuPath's built-in script editor -- no extension required.
 
 **Simple vs Advanced mode** -- the navigation bar has a Simple / Advanced toggle. Simple mode (the default on first run) hides rarely-used controls to reduce clutter; Advanced mode exposes every option. The toggle persists across QuPath sessions and applies to every step. If a section below seems to be missing settings, flip to Advanced.
+
+**Making a panel figure** -- The **Panel / Montage Export...** menu item builds one combined figure from several images in your project. It opens its own wizard with a **3-step** flow: (1) select the images you want in the figure, (2) choose a *recipe* -- a recipe is the saved settings for how one image is exported, and the same recipe is applied to every image you picked -- and (3) lay out the grid (rows and columns, spacing, background colour, optional captions). QuIET renders every image the same way and tiles them into one file. You do not need to export each image separately or assemble the figure by hand in another program. See the **Panel / Montage** section below.
+
+---
+
+## What's new in v1.0.0
+
+**Panel / Montage export** -- QuIET can now compose many images from your project into a single multi-panel figure. Choose your images, pick a single-image export recipe to apply to all of them, set the grid size, spacing, background colour, and optional per-image captions, and QuIET writes one montage file. See the **Panel / Montage** section below.
+
+**Export recipes** -- A recipe is the saved settings for how one image is exported. Any panel-mode recipe configuration can now be saved to a `.json` recipe file and reloaded later -- to repeat a panel export with identical settings, or to share the look of a figure with a collaborator. Look for the **Save recipe...** and **Load recipe...** buttons on the panel recipe step.
+
+This is QuIET's first 1.x release. It is a maturity milestone for a major new feature; **no existing settings, menus, or exports change** -- see *Migrating from v0.7.x to v1.0.0* below.
+
+<details>
+<summary><strong>Migrating from v0.7.x to v1.0.0</strong></summary>
+
+v1.0.0 is a **fully backward-compatible** release. The version jump marks the arrival of the Panel / Montage export feature, not a breaking change.
+
+- **Your preferences keep working.** All existing settings (export category, downsample, format, mask type, label templates, and so on) are preserved. Panel export adds new `quiet.panel.*` preferences; no existing preference key is renamed or removed.
+- **Your projects are unaffected.** Panel export only reads images and metadata; it never modifies the QuPath project.
+- **The existing flows are unchanged.** Rendered, Mask, Raw, Tiled, and Object Crops still run from the **Image Export...** menu item (renamed from "Export Images...") with the same 3-step wizard. Panel / Montage is added as a separate **Panel / Montage Export...** menu item with its own wizard.
+- **Existing Groovy scripts still run.** Scripts generated by earlier QuIET versions are unaffected.
+
+Simply install the v1.0.0 jar over the old one and restart QuPath.
+
+</details>
 
 ---
 
@@ -349,6 +381,119 @@ Output structure depends on the label format:
 </details>
 
 <details>
+<summary><h3>Panel / Montage</h3></summary>
+
+Compose **many project images into one multi-panel figure**. Instead of exporting each image to its own file, Panel / Montage renders a set of selected images with a single shared **export recipe**, then tiles them into one rows-by-columns montage with controllable spacing, an optional per-image caption, and a chosen background colour. This is the export for a figure that compares conditions, timepoints, or samples side by side -- replacing the manual "export each image, then assemble in Illustrator or ImageJ" step.
+
+> A **recipe** is the saved settings for how one image is exported. In panel mode you choose the recipe once, and QuIET applies it to every image in the figure so all panels are rendered the same way.
+
+Panel / Montage has its own menu item -- **Extensions > QuIET > Panel / Montage Export...** -- which opens a dedicated wizard with a **3-step** flow:
+
+1. **Step 1 -- Select images.** Choose which project images go into the figure. Image selection comes *before* the layout on purpose -- the grid size is suggested from how many images you pick.
+2. **Step 2 -- Recipe.** Choose how a single image should be exported. The recipe can be any of QuIET's single-image categories (Rendered, Raw, Mask); the same recipe is applied to every image. You can accept the pre-filled settings and continue, or adjust them. Optionally **Save recipe...** to a `.json` file, or **Load recipe...** to reuse one.
+3. **Step 3 -- Layout, captions and output.** Set the grid (rows x columns), the gutter spacing, the background colour, the cell-fit mode and optional captions, then choose the output format and export. Click **Open layout preview...** for a separate, resizable, always-on-top window that shows the montage with thumbnails -- drag any image onto another to swap their positions and rearrange the figure.
+
+The first time you open Panel / Montage Export, a short one-time introduction explains how recipes work; you can dismiss it permanently with "Do not show this message again."
+
+<details>
+<summary><strong>Getting started</strong> (read this first)</summary>
+
+**What panel export does** -- Panel / Montage produces *one* combined montage figure from *many* project images, instead of one file per image. It never modifies your QuPath project; it only reads images and metadata.
+
+**Prerequisites** -- an open QuPath project with at least two images, and the images you want in the figure already present in that project.
+
+**First run** -- open **Extensions > QuIET > Panel / Montage Export...** and follow the step order: pick images, then choose a recipe, then set the grid. The grid controls (rows and columns) only appear on Step 3, after images are selected -- this is deliberate, not a bug. QuIET seeds the grid to a near-square layout for your image count, which you can then adjust.
+
+QuIET's panel/montage layout follows conventions established by figure-assembly tools for microscopy: Jan Brocher's [BioVoxxel Figure Tools](https://github.com/biovoxxel/BioVoxxel-Figure-Tools), [QuickFigures](https://github.com/grishkam/QuickFigures), and ImageJ's built-in *Make Montage* command -- a rows-by-columns grid with spacing between cells, uniform cell sizing, and optional per-image labels. QuIET deliberately differs in two ways: it exposes independent horizontal and vertical gutters in pixels (finer control than a single fractional border), and it builds each panel from a live QuIET export recipe rather than from pre-exported static images.
+
+</details>
+
+<details>
+<summary><strong>Common tasks</strong></summary>
+
+**Compose a figure from project images** -- open Panel / Montage, filter and check the images you want, pick or load a recipe, set rows x columns, set the X/Y gutter and background colour, review the size estimate, choose an output format, and Export. The result is one montage file in `exports/panels/`.
+
+**Save and reuse an export recipe** -- a recipe is the saved settings for how one image is exported, stored as a `.json` file. Configure the recipe on Step 2, then click **Save recipe...** to write the `.json`; later, click **Load recipe...** in panel mode to apply it again. You do **not** need a recipe file to make a panel -- without one, the recipe step pre-fills from your last-used settings. Save/Load is the reuse and reproducibility path.
+
+**Add captions to each panel** -- turn on the filename caption, choose whether it sits **Above** or **Below** the image, optionally check metadata fields to print (each renders on its own line), and set the caption font size and colour. Captions are drawn in the gutter band against the panel background colour. These are a **Caption** -- distinct from the in-image **Info Label** and **Panel Label** features on the Rendered category.
+
+**Filter a large project down to the right images** -- on Step 1, use the **Filter images** section: filter by name, by image type, and by metadata field/value to narrow the list, then check the specific images you want. The live "X selected" count confirms how many will be used. Panels fill the grid in the order images appear in this list (row-major: left to right, top to bottom).
+
+</details>
+
+<details>
+<summary><strong>Advanced features</strong></summary>
+
+**Output format and the 100-megapixel rule** -- The composed figure can be written as PNG, TIFF, JPEG, OME-TIFF, OME-TIFF Pyramid, or SVG. Figures **at or above 100 megapixels** are restricted to **OME-TIFF** output -- it streams to disk and does not need the whole figure in memory at once. When the figure crosses 100 MP the format combo rebuilds live and an amber notice explains why. SVG keeps a soft warning above 16 megapixels (a confirmation prompt at export, not a hard cap).
+
+**Recipe categories** -- The Step 2 recipe can be Rendered, Raw, or Mask -- the single-image categories that produce exactly one image per source image. Object Crops is not offered (it produces many crops per image), Tiled is not offered (it produces many tiles per image), and Panel is not offered (no panels-of-panels). The recipe category's own format restrictions still apply: a recipe that forbids JPEG (a Mask, or real fluorescence Raw data) forbids JPEG for the panel output too.
+
+**Layout preview** -- The **Open layout preview...** button on Step 3 opens a separate, resizable, always-on-top window showing the composed grid with image thumbnails, the real gutters and background colour, and caption placeholders drawn as horizontal bars. It updates live as you change the grid, gutters, background, cell-fit mode or captions. **Drag any image cell onto another to swap them** -- the arrangement in the preview is the order the figure is composed in. The window stays open beside the wizard so you can adjust settings and watch the result; its always-on-top is lifted automatically while an export runs so progress and result dialogs stay visible.
+
+**Cell-fit mode** -- The **Cell fit** control on Step 3 decides how each image is fitted into its grid cell. All three modes **preserve the image aspect ratio** -- no mode distorts an image:
+
+| Cell fit mode | Behaviour |
+|---------------|-----------|
+| **Fit (letterbox)** (default) | Scale the image to fit fully inside the cell; fill the leftover space with the background colour. Nothing is cropped. |
+| **Fill (crop)** | Scale the image to completely cover the cell; crop the overflow. Nothing is padded. |
+| **Actual size** | Place the image at its native pixel size, centred in the cell; pad with background if smaller, crop if larger. |
+
+**Reading the size estimate** -- Step 3 shows the composed pixel dimensions (from grid x cell size x gutters) and a rough output file-size estimate. The file-size figure is an estimate and varies with image content.
+
+**The generated Groovy script** -- panel mode, like every QuIET category, emits a self-contained script. The panel script holds all cells in memory while composing.
+
+</details>
+
+<details>
+<summary><strong>Settings and preferences</strong></summary>
+
+All panel settings persist across QuPath sessions, like every other QuIET setting. The keys live under the `quiet.panel.*` namespace in QuPath's standard preference system.
+
+| Preference key | What it controls |
+|----------------|------------------|
+| `quiet.panel.rows` | Number of grid rows |
+| `quiet.panel.columns` | Number of grid columns |
+| `quiet.panel.gutterX` | Horizontal spacing between cells (and at the left/right edges), pixels |
+| `quiet.panel.gutterY` | Vertical spacing between cells (and at the top/bottom edges), pixels |
+| `quiet.panel.backgroundColor` | Panel background and gutter colour |
+| `quiet.panel.cellFitMode` | How images are fitted into cells (Fit / Fill / Actual size) |
+| `quiet.panel.showFilenameCaption` | Whether the per-image filename caption is drawn |
+| `quiet.panel.captionPosition` | Caption band above or below the image |
+| `quiet.panel.metadataFields` | Which metadata fields to print, one line each |
+| `quiet.panel.captionFontSize` | Caption font size |
+| `quiet.panel.captionColor` | Caption text colour |
+| `quiet.panel.format` | Output format for the composed figure |
+| `quiet.panel.recipeCategory` | Last-used single-image recipe category |
+
+</details>
+
+<details>
+<summary><strong>Troubleshooting</strong></summary>
+
+- **"This figure is 100 megapixels or larger"** -- the composed figure is at or above 100 MP, so standard PNG/TIFF/JPEG/SVG output is disabled. Fix: switch the output format to OME-TIFF, or reduce the grid size, the gutters, or the recipe resolution so the figure is under 100 MP.
+- **"The figure is too large to compose in memory"** -- the whole figure is built as one in-memory image and a very large figure can exhaust QuPath's memory. Fix: reduce the figure size (fewer cells, higher recipe downsample), use OME-TIFF, or raise QuPath's memory limit (`-Xmx` launch option).
+- **"This recipe file could not be read"** -- the selected `.json` is not a valid QuIET recipe, is from a newer QuIET version, or has been hand-edited into an invalid state. The panel recipe is left unchanged. Fix: re-create the recipe with **Save recipe...**; do not hand-edit recipe files.
+- **JPEG is not available for the panel** -- the recipe is a Mask, or the images are real fluorescence / raw multi-channel data; lossy JPEG would corrupt the values, so QuIET excludes it (the same rule as the single-image categories). Fix: choose PNG, TIFF, or OME-TIFF.
+- **Grid controls are missing** -- rows and columns appear only on Step 3, after at least one image is selected on Step 1. Fix: select images first, then advance.
+- **Some images are missing from the panel** -- they may be filtered out (check the name/type/metadata filters on Step 1) or unchecked in the list; the panel uses only checked images. The "X selected" count confirms how many will be used.
+
+</details>
+
+| Option | Description |
+|--------|-------------|
+| **Select images** (Step 1) | The project images included in the figure. Filter by name, type, and metadata; check the images you want. |
+| **Recipe** (Step 2) | A single-image export recipe (Rendered, Raw, or Mask) applied to every image. Load/Save as `.json`. |
+| **Layout preview** (Step 3) | Separate always-on-top window: visual grid with thumbnails; drag images to swap/rearrange. |
+| **Rows / Columns** | Grid dimensions; seeded near-square from the image count |
+| **Gutter X / Gutter Y** | Horizontal and vertical spacing between cells, in pixels |
+| **Background** | Background colour of the figure and the gutters / caption bands |
+| **Cell fit** | Fit (letterbox), Fill (crop), or Actual size -- aspect ratio always preserved |
+| **Captions** | Optional per-image filename caption plus metadata lines, drawn above or below each panel |
+| **Format** | PNG, TIFF, JPEG, OME-TIFF, OME-TIFF Pyramid, SVG -- restricted to OME-TIFF at or above 100 megapixels |
+
+</details>
+
+<details>
 <summary><h3>GeoJSON & Metadata Sidecars</h3></summary>
 
 **GeoJSON Export** -- An orthogonal option available alongside any export category. When enabled, QuIET exports all annotations and detections as a `.geojson` file per image -- useful for COCO/YOLO-style training pipelines that need geometry alongside image data. Enable via the **"Also export GeoJSON annotations"** checkbox on the image selection step.
@@ -412,6 +557,8 @@ Exports are written to a configurable output directory. The default structure un
     crops/                   # Object crop exports
       <ClassName>/
         <image_name>_obj001.png
+    panels/                  # Panel / Montage composed figures
+      panel_figure.png
 ```
 
 Filenames are sanitized using QuPath's `GeneralTools.stripInvalidFilenameChars()` for cross-platform compatibility.
@@ -465,7 +612,7 @@ src/main/java/qupath/ext/quiet/
     ImageContext.java              # Per-image metadata for advice checks
     PublicationAdviceChecker.java  # QUAREP-LiMi guideline checks
   export/                          # Export logic + script generation
-    ExportCategory.java            # RENDERED, MASK, RAW, TILED, OBJECT_CROPS
+    ExportCategory.java            # RENDERED, MASK, RAW, TILED, OBJECT_CROPS, PANEL
     OutputFormat.java              # PNG, TIFF, JPEG, OME_TIFF, OME_TIFF_PYRAMID, SVG
     RenderedExportConfig.java      # Rendered export configuration with sub-config records
     RenderedImageExporter.java     # Rendered export logic
@@ -477,6 +624,12 @@ src/main/java/qupath/ext/quiet/
     TiledImageExporter.java        # TileExporter-based tiled export
     ObjectCropConfig.java          # Object crop export configuration
     ObjectCropExporter.java        # Per-object crop export logic
+    PanelExportConfig.java         # Panel / Montage export configuration
+    CellFitMode.java               # FIT_LETTERBOX, FILL_CROP, ACTUAL_SIZE (aspect preserved)
+    ExportRecipe.java              # Gson-serialised .json single-image recipe (load/save)
+    PanelComposer.java             # Grid composition: background, gutters, cell-fit, captions
+    CaptionRenderer.java           # Multi-line gutter caption renderer (panel mode)
+    PanelImageExporter.java        # Renders each image via the recipe, composes once, writes once
     GeoJsonExporter.java           # GeoJSON annotation export
     BatchExportTask.java           # JavaFX Task for background batch processing
     ExportResult.java              # Export outcome tracking
@@ -494,16 +647,19 @@ src/main/java/qupath/ext/quiet/
     RawScriptGenerator.java        # Groovy script for raw export
     TiledScriptGenerator.java      # Groovy script for tiled export
     ObjectCropScriptGenerator.java # Groovy script for object crop export
+    PanelScriptGenerator.java      # Groovy script for panel / montage export
   ui/
     ExportWizard.java              # Main wizard window (Simple/Advanced mode toggle)
-    CategorySelectionPane.java     # Step 1: category cards
+    CategorySelectionPane.java     # Step 1: category cards (FlowPane, 6 cards)
     SectionBuilder.java            # Collapsible TitledPane section factory
     RenderedConfigPane.java        # Step 2a: rendered options (smart defaults, live preview)
     MaskConfigPane.java            # Step 2b: mask options (no JPEG)
     RawConfigPane.java             # Step 2c: raw options
     TiledConfigPane.java           # Step 2d: tiled options
     ObjectCropConfigPane.java      # Step 2e: object crop options
-    ImageSelectionPane.java        # Step 3: image list + run + advice button
+    PanelRecipePane.java           # Panel Step 3: recipe category + embedded config + load/save
+    PanelLayoutPane.java           # Panel layout step: grid, gutters, background, cell-fit, captions, output
+    ImageSelectionPane.java        # Step 3: image list + run + advice button (Step 2 in panel mode)
     ImageEntryItem.java            # Wrapper for ProjectImageEntry in the image selection list
     GuidelinesPane.java            # QUAREP-LiMi context-sensitive guidelines (Step 2 right panel)
     PublicationAdvicePane.java     # Floating advice dialog with section references
@@ -529,6 +685,9 @@ src/main/resources/
 - Rendered export with classifier overlay requires a pixel classifier saved in the QuPath project.
 - Density map overlay requires a density map saved in the QuPath project (created via **Analyze > Density maps**).
 - **Display Settings** "Current Viewer" mode requires an image to be open in the viewer at export time. "Saved Preset" mode requires presets saved via QuPath's Brightness & Contrast dialog.
+- **Panel / Montage** composes the whole figure as one in-memory image. Figures at or above 100 megapixels are restricted to OME-TIFF output; very large panels may still need a higher QuPath memory limit (`-Xmx`). See Troubleshooting in the Panel / Montage section.
+- **Panel / Montage** fills cells in the order images appear in the Step 2 selection list (row-major, left to right, top to bottom). Drag-to-reorder is planned for a future release.
+- A panel **export recipe** is a saved `.json` file. A recipe file that has been hand-edited into an invalid state is rejected with an error rather than silently corrected.
 
 </details>
 
@@ -538,13 +697,16 @@ src/main/resources/
 Future releases may include:
 
 - Inset / zoom panels exposed in the UI (the `InsetRenderer` primitive exists in code but is not yet wired into any config pane)
-- Multi-panel grid / figure layout composition
+- Drag-to-reorder panel cells (cells currently fill the grid in image-selection-list order)
+- Per-panel letter labels (A, B, C) on the composed figure
 - Contour/outline mask export
 - Stain deconvolution channel export
 - COCO/YOLO annotation format export
 
 **Recently implemented** (now available):
 
+- ~~Multi-panel grid / figure layout composition~~ -- compose many project images into one montage figure (v1.0.0)
+- ~~Export recipes~~ -- save and reload single-image export settings as a `.json` recipe (v1.0.0)
 - ~~Split-channel export~~ -- individual fluorescence channels + merge (v0.6.0)
 - ~~Display range matching~~ -- global matched display settings across batch images (v0.6.0)
 - ~~DPI / resolution control~~ -- target DPI mode for journal requirements (v0.7.0)

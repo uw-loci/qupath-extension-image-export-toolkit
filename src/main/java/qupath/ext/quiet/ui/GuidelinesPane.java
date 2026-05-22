@@ -108,6 +108,9 @@ class GuidelinesPane extends ScrollPane {
             case RAW -> addRawGuidelines();
             case TILED -> addTiledGuidelines();
             case OBJECT_CROPS -> addObjectCropGuidelines();
+            case PANEL -> {
+                // Panel / Montage mode does not show the guidelines panel.
+            }
         }
     }
 

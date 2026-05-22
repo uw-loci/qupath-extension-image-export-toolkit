@@ -379,6 +379,75 @@ public class RenderedImageExporter {
     }
 
     /**
+     * Render the whole image with overlays to an in-memory {@link BufferedImage},
+     * without writing any file. Used by the Panel / Montage export to obtain a
+     * single composed cell image for a recipe.
+     * <p>
+     * Dispatches to the same composite methods as {@code exportWith*} and so
+     * inherits all render-mode behaviour. Split-channel and per-annotation
+     * region modes are not single-image and are flattened here to a whole-image
+     * object-overlay render so the panel cell is always one image.
+     *
+     * @param imageData      the image data (caller is responsible for closing)
+     * @param classifier     the pixel classifier (null for non-CLASSIFIER modes)
+     * @param densityBuilder the density map builder (null for non-DENSITY_MAP modes)
+     * @param config         rendered export configuration
+     * @param entryName      the image entry name (for info-label resolution)
+     * @return the rendered whole-image BufferedImage
+     * @throws IOException if rendering fails
+     */
+    public static BufferedImage renderToImage(ImageData<BufferedImage> imageData,
+                                              PixelClassifier classifier,
+                                              DensityMapBuilder densityBuilder,
+                                              RenderedExportConfig config,
+                                              String entryName) throws IOException {
+        ImageServer<BufferedImage> baseServer = imageData.getServer();
+        ImageServer<BufferedImage> displayServer = null;
+        PixelClassificationImageServer classificationServer = null;
+        ImageServer<BufferedImage> densityServer = null;
+        try {
+            displayServer = resolveDisplayServer(imageData, baseServer, config);
+            String panelLabel = resolvePanelLabel(config, 0);
+
+            switch (config.getRenderMode()) {
+                case CLASSIFIER_OVERLAY -> {
+                    if (classifier != null && classifier.supportsImage(imageData)) {
+                        classificationServer =
+                                new PixelClassificationImageServer(imageData, classifier);
+                        return renderClassifierComposite(imageData, baseServer,
+                                classificationServer, displayServer, config,
+                                panelLabel, entryName);
+                    }
+                    return renderObjectComposite(imageData, baseServer,
+                            displayServer, config, panelLabel, entryName);
+                }
+                case DENSITY_MAP_OVERLAY -> {
+                    if (densityBuilder != null) {
+                        densityServer = densityBuilder.buildServer(imageData);
+                        return renderDensityMapComposite(imageData, baseServer,
+                                densityServer, displayServer, config,
+                                panelLabel, entryName);
+                    }
+                    return renderObjectComposite(imageData, baseServer,
+                            displayServer, config, panelLabel, entryName);
+                }
+                default -> {
+                    return renderObjectComposite(imageData, baseServer,
+                            displayServer, config, panelLabel, entryName);
+                }
+            }
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("Failed to render image: " + entryName, e);
+        } finally {
+            closeQuietly(displayServer, entryName);
+            closeQuietly(classificationServer, entryName);
+            closeQuietly(densityServer, entryName);
+        }
+    }
+
+    /**
      * Render the raster layers (base image + classifier/density overlay) for a region.
      * Does NOT draw vector overlays (objects, scale bar, panel label).
      */

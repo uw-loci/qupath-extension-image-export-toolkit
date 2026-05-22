@@ -429,4 +429,16 @@ public class MaskConfigPane extends VBox {
         labelOptionsSection.setVisible(!simple);
         labelOptionsSection.setManaged(!simple);
     }
+
+    /**
+     * Show or hide this pane's output-format control. Hidden when the pane is
+     * embedded as a panel recipe -- the panel itself owns the composed-figure
+     * output format, so a second format control here would be redundant.
+     */
+    public void setFormatControlVisible(boolean visible) {
+        formatLabel.setVisible(visible);
+        formatLabel.setManaged(visible);
+        formatCombo.setVisible(visible);
+        formatCombo.setManaged(visible);
+    }
 }

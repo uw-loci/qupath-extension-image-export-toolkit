@@ -79,6 +79,47 @@ public class MaskImageExporter {
     }
 
     /**
+     * Render the whole-image label mask to an in-memory {@link BufferedImage},
+     * without writing any file. Used by the Panel / Montage export to obtain a
+     * single composed cell image for a mask recipe.
+     *
+     * @param imageData the image data containing the object hierarchy
+     * @param config    mask export configuration
+     * @param entryName the image entry name (for error messages)
+     * @return the whole-image mask BufferedImage at the configured downsample
+     * @throws IOException if rendering fails
+     */
+    public static BufferedImage renderToImage(ImageData<BufferedImage> imageData,
+                                              MaskExportConfig config,
+                                              String entryName) throws IOException {
+        ImageServer<BufferedImage> labelServer = null;
+        try {
+            labelServer = buildLabelServer(imageData, config);
+            double downsample = config.getDownsample();
+            RegionRequest request = RegionRequest.createInstance(
+                    labelServer.getPath(), downsample,
+                    0, 0, labelServer.getWidth(), labelServer.getHeight());
+            BufferedImage maskImage = labelServer.readRegion(request);
+            if (maskImage == null) {
+                throw new IOException("Mask read returned no image for: " + entryName);
+            }
+            return maskImage;
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("Failed to render mask for: " + entryName, e);
+        } finally {
+            if (labelServer != null) {
+                try {
+                    labelServer.close();
+                } catch (Exception e) {
+                    logger.warn("Error closing label server for: {}", entryName, e);
+                }
+            }
+        }
+    }
+
+    /**
      * Build a LabeledImageServer based on the mask configuration.
      */
     private static ImageServer<BufferedImage> buildLabelServer(

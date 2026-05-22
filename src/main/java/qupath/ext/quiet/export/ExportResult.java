@@ -12,12 +12,30 @@ public class ExportResult {
     private final int failed;
     private final int skipped;
     private final List<String> errors;
+    private final String customSummary;
 
     public ExportResult(int succeeded, int failed, int skipped, List<String> errors) {
+        this(succeeded, failed, skipped, errors, null);
+    }
+
+    /**
+     * Create a result with a caller-supplied summary line. Used by export
+     * modes (e.g. Panel / Montage) whose output is not "N images" so the
+     * default summary text does not apply.
+     *
+     * @param succeeded     count of successful units
+     * @param failed        count of failed units
+     * @param skipped       count of skipped units
+     * @param errors        per-unit error messages
+     * @param customSummary an explicit summary line, or null for the default
+     */
+    public ExportResult(int succeeded, int failed, int skipped,
+                        List<String> errors, String customSummary) {
         this.succeeded = succeeded;
         this.failed = failed;
         this.skipped = skipped;
         this.errors = errors == null ? Collections.emptyList() : List.copyOf(errors);
+        this.customSummary = customSummary;
     }
 
     public int getSucceeded() {
@@ -46,6 +64,9 @@ public class ExportResult {
      * @return summary string
      */
     public String getSummary() {
+        if (customSummary != null) {
+            return customSummary;
+        }
         var sb = new StringBuilder();
         sb.append(String.format("Exported %d images.", succeeded));
         if (skipped > 0) {

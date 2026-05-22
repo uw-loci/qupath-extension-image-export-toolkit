@@ -7,7 +7,7 @@ plugins {
 qupathExtension {
     name = "qupath-extension-image-export-toolkit"
     group = "io.github.uw-loci"
-    version = "0.7.7"
+    version = "1.0.0"
     description = "QuIET - QuPath Image Export Toolkit. Comprehensive export of rendered overlays, label masks, raw pixel data, and ML training tiles with wizard UI, script generation, and batch processing."
     automaticModule = "io.github.uw-loci.extension.quiet"
 }
@@ -22,6 +22,8 @@ dependencies {
     shadow(libs.bundles.logging)
     shadow(libs.qupath.fxtras)
     shadow("org.jfree:org.jfree.svg:5.0.6")
+    // Gson for the JSON export-recipe (ExportRecipe save/load).
+    shadow("com.google.code.gson:gson:2.13.2")
 
     testImplementation(libs.bundles.qupath)
     testImplementation("org.junit.jupiter:junit-jupiter:5.9.1")
@@ -29,6 +31,7 @@ dependencies {
     testImplementation(libs.bundles.logging)
     testImplementation(libs.qupath.fxtras)
     testImplementation("org.jfree:org.jfree.svg:5.0.6")
+    testImplementation("com.google.code.gson:gson:2.13.2")
 }
 
 tasks.withType<JavaCompile> {

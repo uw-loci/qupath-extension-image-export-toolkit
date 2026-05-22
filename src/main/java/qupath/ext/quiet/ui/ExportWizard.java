@@ -51,11 +51,17 @@ import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.ProjectImageEntry;
 
 /**
- * Three-step wizard for configuring and running image exports.
+ * Wizard for configuring and running image exports.
  * <p>
- * Step 1: Select export category (Rendered, Mask, Raw)
- * Step 2: Configure export-specific options
- * Step 3: Select images, output directory, run export
+ * The standard flow is three steps:
+ * <ol>
+ *   <li>Select export category (Rendered, Mask, Raw, Tiled, Object Crops)</li>
+ *   <li>Configure export-specific options</li>
+ *   <li>Select images, output directory, run export</li>
+ * </ol>
+ * The Panel / Montage flow is launched directly from its own menu item via
+ * {@link #showPanelWizard(QuPathGUI)}; it skips the category picker and runs
+ * as three steps: Select Images, Recipe, Layout/Captions/Output.
  */
 public class ExportWizard {
 
@@ -77,6 +83,10 @@ public class ExportWizard {
     private ObjectCropConfigPane objectCropConfigPane;
     private ImageSelectionPane imageSelectionPane;
 
+    // Panel / Montage mode steps (created lazily on first PANEL navigation)
+    private PanelRecipePane panelRecipePane;
+    private PanelLayoutPane panelLayoutPane;
+
     // Navigation buttons
     private Button backButton;
     private Button nextButton;
@@ -88,11 +98,19 @@ public class ExportWizard {
     private ExportCategory selectedCategory;
     private BatchExportTask currentTask;
 
+    /**
+     * True when this wizard was launched directly into Panel / Montage mode
+     * (via {@link #showPanelWizard}). The category picker is then skipped and
+     * the wizard runs the 3-step panel sequence.
+     */
+    private final boolean panelLaunch;
+
     /** Tracks the output directory of the last successful export. */
     private File lastExportDirectory;
 
-    private ExportWizard(QuPathGUI qupath) {
+    private ExportWizard(QuPathGUI qupath, boolean panelLaunch) {
         this.qupath = qupath;
+        this.panelLaunch = panelLaunch;
         this.stage = new Stage();
         stage.initModality(Modality.WINDOW_MODAL);
         stage.initOwner(qupath.getStage());
@@ -116,6 +134,11 @@ public class ExportWizard {
 
         buildNavigation();
         initializeSteps();
+        if (panelLaunch) {
+            // Panel mode is entered directly: the category picker is skipped
+            // and the wizard opens on the (former) Select Images step.
+            selectedCategory = ExportCategory.PANEL;
+        }
         showStep(1);
 
         var scene = new Scene(root);
@@ -123,12 +146,24 @@ public class ExportWizard {
     }
 
     /**
-     * Show the export wizard.
+     * Show the standard export wizard, starting on the category picker.
      *
      * @param qupath the QuPath GUI instance
      */
     public static void showWizard(QuPathGUI qupath) {
-        var wizard = new ExportWizard(qupath);
+        var wizard = new ExportWizard(qupath, false);
+        wizard.stage.show();
+    }
+
+    /**
+     * Show the wizard directly in Panel / Montage mode, skipping the category
+     * picker. The wizard runs the 3-step panel sequence: Select Images,
+     * Recipe, Layout/Captions/Output.
+     *
+     * @param qupath the QuPath GUI instance
+     */
+    public static void showPanelWizard(QuPathGUI qupath) {
+        var wizard = new ExportWizard(qupath, true);
         wizard.stage.show();
     }
 
@@ -187,10 +222,14 @@ public class ExportWizard {
     private void initializeSteps() {
         categoryPane = new CategorySelectionPane();
 
-        // Restore last used category
+        // Restore last used category. PANEL is not a card in the picker, so
+        // an earlier panel export leaves the picker on its default category.
         String lastCat = QuietPreferences.getLastCategory();
         try {
-            categoryPane.setSelectedCategory(ExportCategory.valueOf(lastCat));
+            ExportCategory restored = ExportCategory.valueOf(lastCat);
+            if (restored != ExportCategory.PANEL) {
+                categoryPane.setSelectedCategory(restored);
+            }
         } catch (IllegalArgumentException e) {
             // Keep default
         }
@@ -207,65 +246,166 @@ public class ExportWizard {
         // Wire up script handlers
         imageSelectionPane.setScriptCopyHandler(this::copyScript);
         imageSelectionPane.setScriptSaveHandler(this::saveScript);
+
+        // Panel mode: keep the Next button in sync with the image selection.
+        imageSelectionPane.setSelectionChangeListener(() -> {
+            if (isPanelMode() && currentStep == 1) {
+                updateNavButtons();
+            }
+        });
+    }
+
+    /**
+     * True when this wizard is running the Panel / Montage flow. Panel mode is
+     * entered only via {@link #showPanelWizard} -- it is never reachable from
+     * the category picker.
+     */
+    private boolean isPanelMode() {
+        return panelLaunch;
+    }
+
+    /** The last step index for the current flow (3 for both panel and standard). */
+    private int lastStep() {
+        return 3;
     }
 
     private void showStep(int step) {
         currentStep = step;
-        Node centerContent;
+        if (isPanelMode()) {
+            // Panel mode skips the category picker -- the category is fixed.
+            showPanelStep(step);
+        } else {
+            // Resolve the selected category as soon as the user leaves Step 1.
+            if (step >= 2) {
+                selectedCategory = categoryPane.getSelectedCategory();
+            }
+            showStandardStep(step);
+        }
+        updateNavButtons();
+        // The Simple/Advanced toggle is hidden on the standard category picker
+        // (Step 1); in panel mode it is shown on every step.
+        boolean hideToggle = !isPanelMode() && step == 1;
+        simpleModeToggle.setVisible(!hideToggle);
+        simpleModeToggle.setManaged(!hideToggle);
+        applySimpleModeToCurrentStep();
+    }
 
+    /**
+     * Show a step in the standard 3-step flow (Rendered/Mask/Raw/Tiled/Crops).
+     */
+    private void showStandardStep(int step) {
+        // Ensure the shared image-selection pane is in standard (non-panel)
+        // mode whenever a non-panel category is active.
+        imageSelectionPane.setPanelMode(false);
+        Node centerContent;
         switch (step) {
             case 1 -> centerContent = categoryPane;
             case 2 -> {
-                selectedCategory = categoryPane.getSelectedCategory();
                 Node configPane = switch (selectedCategory) {
                     case RENDERED -> renderedConfigPane;
                     case MASK -> maskConfigPane;
                     case RAW -> rawConfigPane;
                     case TILED -> tiledConfigPane;
                     case OBJECT_CROPS -> objectCropConfigPane;
+                    case PANEL -> renderedConfigPane;  // not reachable
                 };
-                // Wrap in ScrollPane so navigation buttons remain visible
-                // when the config pane content is taller than the window
                 var scrollPane = new ScrollPane(configPane);
                 scrollPane.setFitToWidth(true);
                 scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
                 centerContent = scrollPane;
-
-                // Show context-sensitive QUAREP guidelines on the right
                 root.setRight(new GuidelinesPane(qupath, selectedCategory));
-
-                // Highlight config sections that have advice issues (when navigating back)
                 var adviceItems = imageSelectionPane.getAdviceItems();
                 if (selectedCategory == ExportCategory.RENDERED) {
                     renderedConfigPane.highlightAdviceSections(adviceItems);
                 }
             }
             case 3 -> {
-                // Set default output dir if empty
                 File currentDir = imageSelectionPane.getOutputDirectory();
                 if (currentDir == null) {
                     imageSelectionPane.setDefaultOutputDir(selectedCategory);
                 }
-                // Update publication advice based on current config
                 imageSelectionPane.updateAdvice(
                         selectedCategory, buildCurrentConfigForAdvice());
                 centerContent = imageSelectionPane;
             }
             default -> centerContent = categoryPane;
         }
-
         root.setCenter(centerContent);
-        // Guidelines panel only shown on Step 2
         if (step != 2) {
             root.setRight(null);
         }
-        updateNavButtons();
+    }
 
-        // Toggle is hidden on step 1 (nothing to simplify) and shown on steps 2 & 3
-        simpleModeToggle.setVisible(step != 1);
-        simpleModeToggle.setManaged(step != 1);
+    /**
+     * Show a step in the panel / montage 3-step flow:
+     * 1 Select Images, 2 Recipe, 3 Layout/Captions/Output.
+     * The category picker is skipped -- panel mode is launched directly.
+     */
+    private void showPanelStep(int step) {
+        root.setRight(null);
+        Node centerContent;
+        switch (step) {
+            case 1 -> {
+                imageSelectionPane.setPanelMode(true);
+                var scroll = new ScrollPane(imageSelectionPane);
+                scroll.setFitToWidth(true);
+                scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+                centerContent = scroll;
+            }
+            case 2 -> {
+                if (panelRecipePane == null) {
+                    panelRecipePane = new PanelRecipePane(qupath, stage);
+                }
+                centerContent = panelRecipePane;
+            }
+            case 3 -> {
+                if (panelLayoutPane == null) {
+                    panelLayoutPane = new PanelLayoutPane(qupath, stage);
+                }
+                // Default the output directory the first time the layout
+                // step is shown.
+                if (panelLayoutPane.getOutputDirectory() == null) {
+                    setPanelDefaultOutputDir();
+                }
+                panelLayoutPane.setRecipeCategory(panelRecipePane.getRecipeCategory());
+                Object recipeConfigForScan = null;
+                try {
+                    recipeConfigForScan = panelRecipePane.buildRecipeConfig();
+                } catch (RuntimeException ex) {
+                    logger.debug("Recipe config not yet buildable for scan: {}",
+                            ex.getMessage());
+                }
+                panelLayoutPane.refreshForSelection(
+                        imageSelectionPane.getSelectedEntries(),
+                        panelRecipePane.getRecipeCategory(),
+                        recipeConfigForScan);
+                var scroll = new ScrollPane(panelLayoutPane);
+                scroll.setFitToWidth(true);
+                scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+                centerContent = scroll;
+            }
+            default -> {
+                // Unreachable: panel mode has exactly three steps.
+                throw new IllegalStateException("Invalid panel step: " + step);
+            }
+        }
+        root.setCenter(centerContent);
+    }
 
-        applySimpleModeToCurrentStep();
+    /**
+     * Set the panel-mode output directory to the project's next-available
+     * {@code exports/panels/} directory.
+     */
+    private void setPanelDefaultOutputDir() {
+        var project = qupath.getProject();
+        if (project == null) {
+            return;
+        }
+        var projectDir = project.getPath().getParent();
+        if (projectDir != null) {
+            File dir = ExportCategory.PANEL.getNextAvailableOutputDir(projectDir.toFile());
+            panelLayoutPane.setOutputDirectory(dir.getAbsolutePath());
+        }
     }
 
     private void applySimpleModeToCurrentStep() {
@@ -276,15 +416,26 @@ public class ExportWizard {
         tiledConfigPane.setSimpleMode(simple);
         objectCropConfigPane.setSimpleMode(simple);
         imageSelectionPane.setSimpleMode(simple);
+        if (panelRecipePane != null) {
+            panelRecipePane.applySimpleMode(simple);
+        }
     }
 
     private void updateNavButtons() {
         backButton.setDisable(currentStep == 1);
 
-        if (currentStep == 3) {
+        if (currentStep == lastStep()) {
             nextButton.setText(resources.getString("button.finish"));
         } else {
             nextButton.setText(resources.getString("button.next"));
+        }
+
+        // Panel mode: the Next button on the image-selection step (Step 1) is
+        // disabled until at least one image is selected.
+        if (isPanelMode() && currentStep == 1) {
+            nextButton.setDisable(imageSelectionPane.getSelectedCount() == 0);
+        } else if (currentTask == null || !currentTask.isRunning()) {
+            nextButton.setDisable(false);
         }
     }
 
@@ -295,15 +446,18 @@ public class ExportWizard {
     }
 
     private void goNext() {
-        if (currentStep < 3) {
+        if (currentStep < lastStep()) {
             showStep(currentStep + 1);
         } else {
-            // Step 3: Execute export
             startExport();
         }
     }
 
     private void startExport() {
+        if (isPanelMode()) {
+            startPanelExport();
+            return;
+        }
         // Validate output directory
         File outputDir = imageSelectionPane.getOutputDirectory();
         if (outputDir == null) {
@@ -377,6 +531,7 @@ public class ExportWizard {
                 case TILED -> startTiledExport(outputDir, addToWorkflow, exportGeoJson);
                 case OBJECT_CROPS -> startObjectCropsExport(outputDir, addToWorkflow,
                         exportGeoJson, channelScan.consistent);
+                case PANEL -> startPanelExport();  // not reachable -- handled above
             }
         } catch (IllegalArgumentException e) {
             Dialogs.showWarningNotification(
@@ -547,6 +702,222 @@ public class ExportWizard {
     }
 
     /**
+     * Start a panel / montage export: validate the selection, recipe and
+     * output directory, build the panel config, and run the compose task.
+     */
+    private void startPanelExport() {
+        // Drop the layout-preview window's always-on-top flag for the duration
+        // of the export so the validation, progress and result / error dialogs
+        // are not hidden behind it. If a task actually started, unbindProgress()
+        // restores it when the task finishes; if validation failed and no task
+        // ran, restore it here so the preview returns to the foreground.
+        if (panelLayoutPane != null) {
+            panelLayoutPane.suppressPreviewWindow();
+        }
+        boolean taskStarted = launchPanelExport();
+        if (!taskStarted && panelLayoutPane != null) {
+            panelLayoutPane.restorePreviewWindow();
+        }
+    }
+
+    /**
+     * Validate the panel selection / recipe / output and, if all is well, build
+     * the panel config and launch the compose task.
+     *
+     * @return true if a compose task was started, false if validation failed
+     *         or an error was reported (and no task is running)
+     */
+    private boolean launchPanelExport() {
+        if (imageSelectionPane.getSelectedEntries().isEmpty()) {
+            Dialogs.showWarningNotification(
+                    resources.getString("name"),
+                    resources.getString("panel.error.noImages"));
+            return false;
+        }
+        if (panelRecipePane == null || panelLayoutPane == null) {
+            Dialogs.showWarningNotification(
+                    resources.getString("name"),
+                    resources.getString("panel.error.noRecipe"));
+            return false;
+        }
+        File outputDir = panelLayoutPane.getOutputDirectory();
+        if (outputDir == null) {
+            Dialogs.showWarningNotification(
+                    resources.getString("name"),
+                    resources.getString("error.invalidDir"));
+            return false;
+        }
+        if (!outputDir.isDirectory() && !outputDir.mkdirs()) {
+            Dialogs.showWarningNotification(
+                    resources.getString("name"),
+                    resources.getString("error.invalidDir"));
+            return false;
+        }
+
+        try {
+            panelRecipePane.savePreferences();
+            panelLayoutPane.savePreferences();
+            ExportCategory recipeCategory = panelRecipePane.getRecipeCategory();
+            Object recipeConfig = panelRecipePane.buildRecipeConfig();
+            var panelConfig = panelLayoutPane.buildConfig(
+                    recipeCategory, recipeConfig, outputDir);
+
+            // Resolve the recipe's classifier / density map so a
+            // CLASSIFIER_OVERLAY or DENSITY_MAP_OVERLAY recipe renders its
+            // overlay in every cell. Fails loudly if resolution is impossible.
+            PixelClassifier classifier = null;
+            DensityMapBuilder densityBuilder = null;
+            if (recipeCategory == ExportCategory.RENDERED
+                    && recipeConfig instanceof RenderedExportConfig rc) {
+                if (rc.getRenderMode()
+                        == RenderedExportConfig.RenderMode.CLASSIFIER_OVERLAY) {
+                    classifier = resolvePanelClassifier();
+                    if (classifier == null) {
+                        return false;
+                    }
+                } else if (rc.getRenderMode()
+                        == RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY) {
+                    densityBuilder = resolvePanelDensityMap();
+                    if (densityBuilder == null) {
+                        return false;
+                    }
+                }
+            }
+
+            // Honour the SVG 16 MP soft-warning for a large composed figure.
+            if (!checkPanelExportSize(panelConfig)) {
+                return false;
+            }
+
+            String workflowScript = ScriptGenerator.generate(
+                    ExportCategory.PANEL, panelConfig);
+
+            QuietPreferences.setLastCategory(ExportCategory.PANEL.name());
+
+            // The layout preview's arrangement (after any drag-reorder) is the
+            // source of truth for cell placement -- not the raw selection order.
+            var orderedEntries = panelLayoutPane.getOrderedEntries();
+            if (orderedEntries.isEmpty()) {
+                orderedEntries = imageSelectionPane.getSelectedEntries();
+            }
+
+            currentTask = BatchExportTask.forPanel(
+                    orderedEntries, panelConfig, classifier, densityBuilder,
+                    workflowScript);
+            lastExportDirectory = outputDir;
+            runTask();
+            return true;
+        } catch (IllegalArgumentException e) {
+            Dialogs.showWarningNotification(
+                    resources.getString("name"), e.getMessage());
+            return false;
+        } catch (Exception e) {
+            logger.error("Failed to start panel export", e);
+            Dialogs.showErrorMessage(
+                    resources.getString("error.title"),
+                    "Failed to start panel export: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Resolve the pixel classifier for a CLASSIFIER_OVERLAY panel recipe.
+     * Returns null (after showing a clear message) if it cannot be resolved --
+     * the caller must abort rather than compose a degraded figure.
+     */
+    private PixelClassifier resolvePanelClassifier() {
+        String classifierName = panelRecipePane.getRenderedClassifierName();
+        if (classifierName == null || classifierName.isEmpty()) {
+            Dialogs.showWarningNotification(
+                    resources.getString("name"),
+                    resources.getString("error.noClassifier"));
+            return null;
+        }
+        if (RenderedConfigPane.ACTIVE_OVERLAY_DISPLAY_LABEL.equals(classifierName)) {
+            PixelClassifier classifier =
+                    RenderedConfigPane.getActiveOverlayClassifier(qupath);
+            if (classifier == null) {
+                Dialogs.showWarningNotification(
+                        resources.getString("name"),
+                        "No active pixel classification overlay found on the current viewer.");
+            }
+            return classifier;
+        }
+        try {
+            PixelClassifier classifier =
+                    qupath.getProject().getPixelClassifiers().get(classifierName);
+            if (classifier == null) {
+                Dialogs.showErrorMessage(
+                        resources.getString("error.title"),
+                        String.format(resources.getString("error.classifierLoad"),
+                                classifierName));
+            }
+            return classifier;
+        } catch (Exception e) {
+            logger.error("Failed to load classifier: {}", classifierName, e);
+            Dialogs.showErrorMessage(
+                    resources.getString("error.title"),
+                    String.format(resources.getString("error.classifierLoad"),
+                            classifierName));
+            return null;
+        }
+    }
+
+    /**
+     * Resolve the density-map builder for a DENSITY_MAP_OVERLAY panel recipe.
+     * Returns null (after showing a clear message) if it cannot be resolved.
+     */
+    private DensityMapBuilder resolvePanelDensityMap() {
+        String dmName = panelRecipePane.getRenderedDensityMapName();
+        if (dmName == null || dmName.isEmpty()) {
+            Dialogs.showWarningNotification(
+                    resources.getString("name"),
+                    resources.getString("error.noDensityMap"));
+            return null;
+        }
+        try {
+            var dmResources = qupath.getProject().getResources(
+                    DensityMaps.PROJECT_LOCATION, DensityMapBuilder.class, "json");
+            DensityMapBuilder builder = dmResources.get(dmName);
+            if (builder == null) {
+                Dialogs.showErrorMessage(
+                        resources.getString("error.title"),
+                        String.format(resources.getString("error.densityMapLoad"),
+                                dmName));
+            }
+            return builder;
+        } catch (Exception e) {
+            logger.error("Failed to load density map: {}", dmName, e);
+            Dialogs.showErrorMessage(
+                    resources.getString("error.title"),
+                    String.format(resources.getString("error.densityMapLoad"),
+                            dmName));
+            return null;
+        }
+    }
+
+    /**
+     * Apply the SVG 16-megapixel soft-warning to a panel export, using the
+     * estimated composed-figure dimensions (per design D7). Returns true if
+     * the export should proceed, false if the user cancelled.
+     */
+    private boolean checkPanelExportSize(
+            qupath.ext.quiet.export.PanelExportConfig panelConfig) {
+        if (panelConfig.getFormat() != OutputFormat.SVG) {
+            return true;
+        }
+        long[] size = panelLayoutPane.estimatedFigureSize();
+        long totalPixels = size[0] * size[1];
+        if (totalPixels > 16_000_000L) {
+            return Dialogs.showConfirmDialog(
+                    resources.getString("warning.title"),
+                    String.format(resources.getString("warning.svgLargeExport"),
+                            size[0], size[1]));
+        }
+        return true;
+    }
+
+    /**
      * Scan selected images for channel consistency before export.
      * Opens each image briefly to read channel metadata (no pixel reading).
      */
@@ -631,11 +1002,28 @@ public class ExportWizard {
         return true;
     }
 
+    /** The progress bar of the currently active step (panel-aware). */
+    private javafx.scene.control.ProgressBar activeProgressBar() {
+        if (isPanelMode() && panelLayoutPane != null) {
+            return panelLayoutPane.getProgressBar();
+        }
+        return imageSelectionPane.getProgressBar();
+    }
+
+    /** The status label of the currently active step (panel-aware). */
+    private javafx.scene.control.Label activeStatusLabel() {
+        if (isPanelMode() && panelLayoutPane != null) {
+            return panelLayoutPane.getStatusLabel();
+        }
+        return imageSelectionPane.getStatusLabel();
+    }
+
     private void runTask() {
-        var progressBar = imageSelectionPane.getProgressBar();
-        var statusLabel = imageSelectionPane.getStatusLabel();
+        var progressBar = activeProgressBar();
+        var statusLabel = activeStatusLabel();
 
         progressBar.setVisible(true);
+        progressBar.setManaged(true);
         progressBar.progressProperty().bind(currentTask.progressProperty());
         statusLabel.textProperty().bind(currentTask.messageProperty());
         nextButton.setDisable(true);
@@ -661,7 +1049,7 @@ public class ExportWizard {
         unbindProgress();
         showPostExportButtons();
 
-        imageSelectionPane.getStatusLabel().setText(result.getSummary());
+        activeStatusLabel().setText(result.getSummary());
 
         // Show open folder button after successful export
         if (lastExportDirectory != null && result.getSucceeded() > 0) {
@@ -674,6 +1062,12 @@ public class ExportWizard {
             Dialogs.showErrorMessage(
                     resources.getString("error.title"),
                     result.getSummary() + "\n\nErrors:\n" + errorText);
+        } else if (isPanelMode()) {
+            Dialogs.showInfoNotification(
+                    resources.getString("name"),
+                    result.getSummary() + "\n\n"
+                    + String.format(resources.getString("export.sidecarNotice"),
+                            "panel_figure_info.txt"));
         } else {
             // Include sidecar file notice in success message
             String sidecarName = (selectedCategory == ExportCategory.MASK)
@@ -691,7 +1085,10 @@ public class ExportWizard {
         logger.error("Export task failed", exception);
 
         String message = exception != null ? exception.getMessage() : "Unknown error";
-        imageSelectionPane.getStatusLabel().setText("Export failed: " + message);
+        if (exception instanceof OutOfMemoryError) {
+            message = resources.getString("panel.error.outOfMemory");
+        }
+        activeStatusLabel().setText("Export failed: " + message);
         Dialogs.showErrorMessage(
                 resources.getString("error.title"),
                 "Export failed: " + message);
@@ -700,7 +1097,7 @@ public class ExportWizard {
     private void onExportCancelled() {
         unbindProgress();
         showPostExportButtons();
-        imageSelectionPane.getStatusLabel().setText("Export cancelled.");
+        activeStatusLabel().setText("Export cancelled.");
     }
 
     /**
@@ -712,23 +1109,47 @@ public class ExportWizard {
     }
 
     private void unbindProgress() {
-        imageSelectionPane.getProgressBar().progressProperty().unbind();
-        imageSelectionPane.getStatusLabel().textProperty().unbind();
+        activeProgressBar().progressProperty().unbind();
+        activeStatusLabel().textProperty().unbind();
         nextButton.setDisable(false);
         backButton.setDisable(false);
         updateNavButtons();
+        // Restore the layout-preview window's always-on-top flag now the export
+        // (and its result / error dialogs) is done. No-op if it is not open.
+        if (isPanelMode() && panelLayoutPane != null) {
+            panelLayoutPane.restorePreviewWindow();
+        }
     }
 
     /**
      * Open the result folder in the system file manager.
+     * <p>
+     * The {@link Desktop#open} call runs on a short-lived daemon thread, never
+     * on the JavaFX Application Thread: on some platforms (notably WSL with no
+     * registered file manager) the underlying native handler can block
+     * indefinitely, and calling it on the FX thread would freeze the whole UI.
      */
     private void openResultFolder() {
-        if (lastExportDirectory == null || !lastExportDirectory.isDirectory()) return;
-        try {
-            Desktop.getDesktop().open(lastExportDirectory);
-        } catch (Exception e) {
-            logger.warn("Failed to open result folder: {}", e.getMessage());
+        if (lastExportDirectory == null || !lastExportDirectory.isDirectory()) {
+            return;
         }
+        if (!Desktop.isDesktopSupported()
+                || !Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+            logger.warn("Opening a folder is not supported on this platform: {}",
+                    lastExportDirectory.getAbsolutePath());
+            return;
+        }
+        File dir = lastExportDirectory;
+        Thread opener = new Thread(() -> {
+            try {
+                Desktop.getDesktop().open(dir);
+            } catch (Exception e) {
+                logger.warn("Failed to open result folder {}: {}",
+                        dir.getAbsolutePath(), e.getMessage());
+            }
+        }, "QuIET-open-folder");
+        opener.setDaemon(true);
+        opener.start();
     }
 
     /**
@@ -743,6 +1164,12 @@ public class ExportWizard {
             rawConfigPane.savePreferences();
             tiledConfigPane.savePreferences();
             objectCropConfigPane.savePreferences();
+            if (panelRecipePane != null) {
+                panelRecipePane.savePreferences();
+            }
+            if (panelLayoutPane != null) {
+                panelLayoutPane.savePreferences();
+            }
             QuietPreferences.setFilenamePrefix(imageSelectionPane.getFilenamePrefix());
             QuietPreferences.setFilenameSuffix(imageSelectionPane.getFilenameSuffix());
         } catch (Exception e) {
@@ -777,12 +1204,17 @@ public class ExportWizard {
             ExportCategory category = selectedCategory != null
                     ? selectedCategory : categoryPane.getSelectedCategory();
 
+            if (category == ExportCategory.PANEL) {
+                // Panel mode does not use the shared Step-3 script buttons.
+                return null;
+            }
             Object config = switch (category) {
                 case RENDERED -> renderedConfigPane.buildConfig(outputDir);
                 case MASK -> maskConfigPane.buildConfig(outputDir);
                 case RAW -> rawConfigPane.buildConfig(outputDir);
                 case TILED -> tiledConfigPane.buildConfig(outputDir);
                 case OBJECT_CROPS -> objectCropConfigPane.buildConfig(outputDir);
+                case PANEL -> null;  // not reachable
             };
 
             return ScriptGenerator.generate(category, config);
@@ -812,6 +1244,7 @@ public class ExportWizard {
                 case RAW -> rawConfigPane.buildConfig(tempDir);
                 case TILED -> tiledConfigPane.buildConfig(tempDir);
                 case OBJECT_CROPS -> objectCropConfigPane.buildConfig(tempDir);
+                case PANEL -> null;  // panel mode has no shared advice config
             };
         } catch (IllegalArgumentException e) {
             // Config is incomplete -- return null so advice runs with no config

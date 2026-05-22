@@ -2,6 +2,7 @@ package qupath.ext.quiet.export;
 
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -120,6 +121,74 @@ public class ObjectCropExporter {
 
         logger.info("Exported {} object crops for: {}", exported, entryName);
         return exported;
+    }
+
+    /**
+     * Render a single representative object crop to an in-memory
+     * {@link BufferedImage}, without writing any file. Used by the
+     * Panel / Montage export, where one image contributes one panel cell.
+     * <p>
+     * The first object matching the crop configuration (object type and class
+     * filter) is used. If the image contains no matching object, an
+     * {@link IOException} is thrown so the caller can skip that panel cell.
+     *
+     * @param imageData the image data (caller is responsible for closing)
+     * @param config    the crop configuration
+     * @param entryName the image entry name (for error messages)
+     * @return the first matching object crop
+     * @throws IOException if no matching object exists or reading fails
+     */
+    public static BufferedImage renderToImage(ImageData<BufferedImage> imageData,
+                                              ObjectCropConfig config,
+                                              String entryName) throws IOException {
+        var server = imageData.getServer();
+        var hierarchy = imageData.getHierarchy();
+        double downsample = config.getDownsample();
+
+        Collection<PathObject> objects = getFilteredObjects(hierarchy, config);
+        if (!config.getSelectedClasses().isEmpty()) {
+            objects = objects.stream()
+                    .filter(o -> o.getPathClass() != null
+                            && config.getSelectedClasses().contains(o.getPathClass().getName()))
+                    .collect(Collectors.toList());
+        }
+        if (objects.isEmpty()) {
+            throw new IOException("no matching objects to crop in: " + entryName);
+        }
+
+        int serverW = server.getWidth();
+        int serverH = server.getHeight();
+        int halfCrop = (int) Math.round((config.getCropSize() / 2.0) * downsample);
+        int paddingScaled = (int) Math.round(config.getPadding() * downsample);
+
+        for (var obj : objects) {
+            var roi = obj.getROI();
+            if (roi == null) {
+                continue;
+            }
+            double cx = roi.getCentroidX();
+            double cy = roi.getCentroidY();
+            int regionSize = (halfCrop + paddingScaled) * 2;
+            int x = Math.max(0, (int) Math.round(cx) - halfCrop - paddingScaled);
+            int y = Math.max(0, (int) Math.round(cy) - halfCrop - paddingScaled);
+            int w = Math.min(regionSize, serverW - x);
+            int h = Math.min(regionSize, serverH - y);
+            if (w <= 0 || h <= 0) {
+                continue;
+            }
+            try {
+                var region = RegionRequest.createInstance(
+                        server.getPath(), downsample, x, y, w, h);
+                BufferedImage crop = server.readRegion(region);
+                if (crop != null) {
+                    return crop;
+                }
+            } catch (Exception e) {
+                logger.warn("Failed to read object crop in {}: {}",
+                        entryName, e.getMessage());
+            }
+        }
+        throw new IOException("could not read an object crop in: " + entryName);
     }
 
     /**
