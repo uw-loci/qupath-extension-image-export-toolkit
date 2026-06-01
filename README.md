@@ -41,6 +41,9 @@ The extension appears under **Extensions > QuIET**, with two menu items: **Image
 1. Open a QuPath project containing annotated images
 2. Go to **Extensions > QuIET > Image Export...**
 3. **Step 1** -- Choose an export category. There are **five** categories: Rendered, Mask, Raw, Tiled, and Object Crops.
+
+![Step 1 Select Export Category screen with five cards: Rendered Image, Label / Mask, Raw Image Data, Tiled Export (ML), and Object Crops (Classification)](documentation/images/export-category-picker.png)
+
 4. **Step 2** -- Configure export settings (grouped into collapsible sections). A QUAREP-LiMi guidelines panel on the right provides context-sensitive recommendations based on your project's images.
 5. **Step 3** -- Select images, choose output directory, review Publication Advice, and click **Export**
 
@@ -392,6 +395,8 @@ Panel / Montage has its own menu item -- **Extensions > QuIET > Panel / Montage 
 1. **Step 1 -- Select images.** Choose which project images go into the figure. Image selection comes *before* the layout on purpose -- the grid size is suggested from how many images you pick.
 2. **Step 2 -- Recipe.** Choose how a single image should be exported. The recipe can be any of QuIET's single-image categories (Rendered, Raw, Mask); the same recipe is applied to every image. You can accept the pre-filled settings and continue, or adjust them. Optionally **Save recipe...** to a `.json` file, or **Load recipe...** to reuse one.
 3. **Step 3 -- Layout, captions and output.** Set the grid (rows x columns), the gutter spacing, the background colour, the cell-fit mode and optional captions, then choose the output format and export. Click **Open layout preview...** for a separate, resizable, always-on-top window that shows the montage with thumbnails -- drag any image onto another to swap their positions and rearrange the figure.
+
+![Panel / Montage Step 3 Layout, captions and output, showing the grid layout controls, output settings, and size estimate beside the separate Panel Layout Preview window of composed image thumbnails](documentation/images/panel-montage-layout-preview.png)
 
 The first time you open Panel / Montage Export, a short one-time introduction explains how recipes work; you can dismiss it permanently with "Do not show this message again."
 
