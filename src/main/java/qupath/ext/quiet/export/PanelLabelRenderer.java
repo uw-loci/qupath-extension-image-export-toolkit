@@ -17,6 +17,21 @@ import java.awt.RenderingHints;
  */
 public class PanelLabelRenderer {
 
+    /**
+     * Style of per-cell label used on a composed panel / montage figure.
+     * <p>
+     * Publication figures conventionally use {@link #UPPER} (A, B, C...);
+     * {@link #LOWER} (a, b, c...) is used by some journals; {@link #NUMERIC}
+     * (1, 2, 3...) is intended for slides, posters, and other non-publication
+     * presentations. {@link #NONE} disables per-cell labels entirely.
+     */
+    public enum PanelLabelStyle {
+        NONE,
+        UPPER,
+        LOWER,
+        NUMERIC
+    }
+
     private PanelLabelRenderer() {
         // Utility class
     }
@@ -116,19 +131,41 @@ public class PanelLabelRenderer {
     }
 
     /**
-     * Convert a zero-based index to a panel label string.
+     * Convert a zero-based index to an uppercase panel label string.
      * <p>
      * 0 -> "A", 1 -> "B", ..., 25 -> "Z", 26 -> "AA", 27 -> "AB", etc.
      *
      * @param index zero-based index
-     * @return the corresponding letter label
+     * @return the corresponding uppercase letter label
      */
     public static String labelForIndex(int index) {
-        if (index < 0) return "A";
+        return labelForIndex(index, PanelLabelStyle.UPPER);
+    }
+
+    /**
+     * Convert a zero-based index to a panel label string in the requested style.
+     * <p>
+     * Letter styles overflow Excel-column-style after Z ("AA", "AB", ...).
+     * {@link PanelLabelStyle#NUMERIC} is one-based (0 -> "1"). {@link
+     * PanelLabelStyle#NONE} returns the empty string.
+     *
+     * @param index zero-based index
+     * @param style which style to format in
+     * @return the formatted label
+     */
+    public static String labelForIndex(int index, PanelLabelStyle style) {
+        if (style == null || style == PanelLabelStyle.NONE) {
+            return "";
+        }
+        if (style == PanelLabelStyle.NUMERIC) {
+            return Integer.toString(Math.max(1, index + 1));
+        }
+        int safeIndex = Math.max(0, index);
+        char base = style == PanelLabelStyle.LOWER ? 'a' : 'A';
         StringBuilder sb = new StringBuilder();
-        int n = index;
+        int n = safeIndex;
         do {
-            sb.insert(0, (char) ('A' + (n % 26)));
+            sb.insert(0, (char) (base + (n % 26)));
             n = n / 26 - 1;
         } while (n >= 0);
         return sb.toString();

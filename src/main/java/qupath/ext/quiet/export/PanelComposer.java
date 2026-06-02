@@ -146,6 +146,22 @@ public final class PanelComposer {
                             cellWidth, fontSize, cell.getCaptionLines(),
                             config.getCaptionColor());
                 }
+                if (config.hasPanelLabel()) {
+                    String label = PanelLabelRenderer.labelForIndex(
+                            idx, config.getPanelLabelStyle());
+                    Graphics2D labelG2d = (Graphics2D) g2d.create();
+                    try {
+                        labelG2d.translate(slotX, imageAreaY);
+                        PanelLabelRenderer.drawPanelLabel(labelG2d,
+                                cellWidth, cellHeight, label,
+                                config.getPanelLabelPosition(),
+                                config.getPanelLabelFontSize(),
+                                config.isPanelLabelBold(),
+                                config.getPanelLabelColor());
+                    } finally {
+                        labelG2d.dispose();
+                    }
+                }
             }
         } finally {
             g2d.dispose();

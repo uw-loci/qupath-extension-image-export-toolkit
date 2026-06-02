@@ -435,6 +435,8 @@ QuIET's panel/montage layout follows conventions established by figure-assembly 
 
 **Layout preview** -- The **Open layout preview...** button on Step 3 opens a separate, resizable, always-on-top window showing the composed grid with image thumbnails, the real gutters and background colour, and caption placeholders drawn as horizontal bars. It updates live as you change the grid, gutters, background, cell-fit mode or captions. **Drag any image cell onto another to swap them** -- the arrangement in the preview is the order the figure is composed in. The window stays open beside the wizard so you can adjust settings and watch the result; its always-on-top is lifted automatically while an export runs so progress and result dialogs stay visible.
 
+**Per-panel labels (A, B, C...)** -- Step 3 has a **Panel labels** section that prints a label inside each cell. Three styles are supported: **A, B, C** (uppercase, default for journal figures), **a, b, c** (lowercase, used by some journals), and **1, 2, 3** (numeric, intended for slides, posters, and other non-publication contexts). Pick the corner (upper / lower x left / right), font size (0 = auto-scale to cell size), bold, and label colour; the renderer adds a luminance-based contrast outline automatically so the label stays legible on any background. Labels are drawn into the cell *image* area (not the caption band) and follow the same drag-reorder order the figure is composed in, so swapping cell positions also renumbers the labels.
+
 **Cell-fit mode** -- The **Cell fit** control on Step 3 decides how each image is fitted into its grid cell. All three modes **preserve the image aspect ratio** -- no mode distorts an image:
 
 | Cell fit mode | Behaviour |
@@ -467,6 +469,11 @@ All panel settings persist across QuPath sessions, like every other QuIET settin
 | `quiet.panel.metadataFields` | Which metadata fields to print, one line each |
 | `quiet.panel.captionFontSize` | Caption font size |
 | `quiet.panel.captionColor` | Caption text colour |
+| `quiet.panel.label.style` | Per-cell label style: `NONE` / `UPPER` (A,B,C) / `LOWER` (a,b,c) / `NUMERIC` (1,2,3) |
+| `quiet.panel.label.position` | Corner the label is drawn in: `UPPER_LEFT` / `UPPER_RIGHT` / `LOWER_LEFT` / `LOWER_RIGHT` |
+| `quiet.panel.label.fontSize` | Label font size in pixels (0 = auto-scale from cell size) |
+| `quiet.panel.label.bold` | Whether the label is drawn in bold |
+| `quiet.panel.label.color` | Label text colour |
 | `quiet.panel.format` | Output format for the composed figure |
 | `quiet.panel.recipeCategory` | Last-used single-image recipe category |
 
@@ -494,6 +501,7 @@ All panel settings persist across QuPath sessions, like every other QuIET settin
 | **Background** | Background colour of the figure and the gutters / caption bands |
 | **Cell fit** | Fit (letterbox), Fill (crop), or Actual size -- aspect ratio always preserved |
 | **Captions** | Optional per-image filename caption plus metadata lines, drawn above or below each panel |
+| **Panel labels** | Optional per-cell label inside the image area: A,B,C / a,b,c / 1,2,3, configurable corner, font size, bold, colour |
 | **Format** | PNG, TIFF, JPEG, OME-TIFF, OME-TIFF Pyramid, SVG -- restricted to OME-TIFF at or above 100 megapixels |
 
 </details>
@@ -691,7 +699,7 @@ src/main/resources/
 - Density map overlay requires a density map saved in the QuPath project (created via **Analyze > Density maps**).
 - **Display Settings** "Current Viewer" mode requires an image to be open in the viewer at export time. "Saved Preset" mode requires presets saved via QuPath's Brightness & Contrast dialog.
 - **Panel / Montage** composes the whole figure as one in-memory image. Figures at or above 100 megapixels are restricted to OME-TIFF output; very large panels may still need a higher QuPath memory limit (`-Xmx`). See Troubleshooting in the Panel / Montage section.
-- **Panel / Montage** fills cells in the order images appear in the Step 2 selection list (row-major, left to right, top to bottom). Drag-to-reorder is planned for a future release.
+- **Panel / Montage** fills cells in the order images appear in the Step 1 selection list (row-major, left to right, top to bottom). Open the Layout preview window to drag any cell onto another and swap their positions; the arrangement you leave the preview in is what the figure is composed in.
 - A panel **export recipe** is a saved `.json` file. A recipe file that has been hand-edited into an invalid state is rejected with an error rather than silently corrected.
 
 </details>
@@ -701,27 +709,11 @@ src/main/resources/
 
 Future releases may include:
 
-- Inset / zoom panels exposed in the UI (the `InsetRenderer` primitive exists in code but is not yet wired into any config pane)
-- Drag-to-reorder panel cells (cells currently fill the grid in image-selection-list order)
-- Per-panel letter labels (A, B, C) on the composed figure
 - Contour/outline mask export
 - Stain deconvolution channel export
 - COCO/YOLO annotation format export
 
-**Recently implemented** (now available):
-
-- ~~Multi-panel grid / figure layout composition~~ -- compose many project images into one montage figure (v1.0.0)
-- ~~Export recipes~~ -- save and reload single-image export settings as a `.json` recipe (v1.0.0)
-- ~~Split-channel export~~ -- individual fluorescence channels + merge (v0.6.0)
-- ~~Display range matching~~ -- global matched display settings across batch images (v0.6.0)
-- ~~DPI / resolution control~~ -- target DPI mode for journal requirements (v0.7.0)
-- ~~Dimension / timestamp labels~~ -- info label with template placeholders (v0.7.0)
-- ~~Scale bar smart defaults~~ -- auto-detect color from project images (v0.7.3)
-- ~~QUAREP guidelines panel~~ -- context-sensitive publication advice on Step 2 (v0.7.3)
-- ~~Publication Advice floating dialog~~ -- with section highlighting on Step 2 (v0.7.3)
-- ~~Channel / stain legend overlay~~ -- optional color legend on rendered exports, plus per-panel color swatches for split-channel
-- ~~Skip empty mask images~~ -- omit mask output for images that have no objects in the selected classes
-- ~~Simple / Advanced UI mode~~ -- single-click toggle to hide or reveal rarely-used controls across every step
+**Inset / zoom panels are intentionally not built into the Panel / Montage composer.** QuIET's `InsetRenderer` primitive can magnify and frame a region on a single image, but composing a multi-cell figure that *also* has insets on individual cells (with consistent margins, connecting lines and labels) is a layout problem better solved in a vector editor. For figures of that shape, export the cells from QuIET and assemble them in [Inkscape](https://inkscape.org/) (free, open-source), Affinity Designer, or Adobe Illustrator -- those tools already handle the per-cell inset arrangement that would otherwise have to be re-invented inside QuIET. If you want a single-image inset (one zoomed region on one image), that primitive is in the codebase and could be wired into the Rendered config pane -- open an issue if you have a use case.
 
 See `documentation/POTENTIAL_FEATURES.md` for detailed implementation plans.
 

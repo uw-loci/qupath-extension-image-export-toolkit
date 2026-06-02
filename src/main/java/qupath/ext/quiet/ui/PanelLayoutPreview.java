@@ -13,12 +13,17 @@ import javafx.scene.control.Tooltip;
 import javafx.scene.image.Image;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
+import javafx.scene.text.TextAlignment;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import qupath.ext.quiet.export.CellFitMode;
 import qupath.ext.quiet.export.PanelExportConfig;
+import qupath.ext.quiet.export.PanelLabelRenderer;
+import qupath.ext.quiet.export.ScaleBarRenderer;
 import qupath.lib.projects.ProjectImageEntry;
 
 /**
@@ -77,6 +82,13 @@ public class PanelLayoutPreview extends Pane {
     private int cellWidth = 512;
     private int cellHeight = 512;
     private int captionFontSize = 14;
+
+    private PanelLabelRenderer.PanelLabelStyle labelStyle =
+            PanelLabelRenderer.PanelLabelStyle.NONE;
+    private ScaleBarRenderer.Position labelPosition = ScaleBarRenderer.Position.UPPER_LEFT;
+    private int labelFontSize;
+    private boolean labelBold = true;
+    private Color labelColor = Color.WHITE;
 
     /** Logical canvas size (the figure mapped into the LOGICAL_BOUND box). */
     private double logicalWidth = LOGICAL_BOUND;
@@ -173,6 +185,18 @@ public class PanelLayoutPreview extends Pane {
             this.background = new Color(
                     awt.getRed() / 255.0, awt.getGreen() / 255.0,
                     awt.getBlue() / 255.0, awt.getAlpha() / 255.0);
+        }
+        this.labelStyle = config.getPanelLabelStyle() != null
+                ? config.getPanelLabelStyle() : PanelLabelRenderer.PanelLabelStyle.NONE;
+        this.labelPosition = config.getPanelLabelPosition() != null
+                ? config.getPanelLabelPosition() : ScaleBarRenderer.Position.UPPER_LEFT;
+        this.labelFontSize = Math.max(0, config.getPanelLabelFontSize());
+        this.labelBold = config.isPanelLabelBold();
+        var labelAwt = config.getPanelLabelColor();
+        if (labelAwt != null) {
+            this.labelColor = new Color(
+                    labelAwt.getRed() / 255.0, labelAwt.getGreen() / 255.0,
+                    labelAwt.getBlue() / 255.0, labelAwt.getAlpha() / 255.0);
         }
         redraw();
     }
@@ -354,6 +378,10 @@ public class PanelLayoutPreview extends Pane {
                 if (band > 0) {
                     drawCaptionBars(gc, slotX, captionY, cellW, band);
                 }
+                if (labelStyle != PanelLabelRenderer.PanelLabelStyle.NONE) {
+                    String text = PanelLabelRenderer.labelForIndex(idx, labelStyle);
+                    drawCellLabel(gc, text, slotX, imageAreaY, cellW, cellH, figScale * s);
+                }
             }
             // Cell outline -- a thin frame so empty/filled cells read clearly.
             gc.setStroke(idx < filled ? Color.gray(0.55) : Color.gray(0.78));
@@ -430,6 +458,83 @@ public class PanelLayoutPreview extends Pane {
             }
             default -> gc.drawImage(img, areaX, areaY, areaW, areaH);
         }
+        gc.restore();
+    }
+
+    /**
+     * Draw the per-cell label (A, B, C... / a, b, c... / 1, 2, 3...) over the
+     * cell image area, mirroring the layout in {@link PanelLabelRenderer}.
+     * Font size is in on-screen pixels; the auto path (figureFontPx == 0) scales
+     * from the figure-pixel cell size {@link #cellWidth} / {@link #cellHeight}
+     * mapped through {@code figureToScreen}.
+     */
+    private void drawCellLabel(GraphicsContext gc, String text,
+                               double areaX, double areaY,
+                               double areaW, double areaH,
+                               double figureToScreen) {
+        if (text == null || text.isEmpty() || areaW <= 0 || areaH <= 0) {
+            return;
+        }
+        int minFigureDim = Math.min(cellWidth, cellHeight);
+        double fontPx;
+        if (labelFontSize > 0) {
+            fontPx = labelFontSize * figureToScreen;
+        } else {
+            fontPx = Math.max(14, minFigureDim / 25.0) * figureToScreen;
+        }
+        if (fontPx < 6) {
+            fontPx = 6;
+        }
+        double margin = Math.max(2, minFigureDim / 40.0) * figureToScreen;
+
+        gc.save();
+        gc.beginPath();
+        gc.rect(areaX, areaY, areaW, areaH);
+        gc.clip();
+        gc.setFont(Font.font("System", labelBold ? FontWeight.BOLD : FontWeight.NORMAL,
+                fontPx));
+        gc.setTextAlign(TextAlignment.LEFT);
+        gc.setTextBaseline(javafx.geometry.VPos.BASELINE);
+
+        // Approximate the text bbox so we can place upper-vs-lower / left-vs-right.
+        double ascent = fontPx * 0.8;
+        double approxWidth = fontPx * 0.6 * text.length();
+
+        double textX;
+        double textY;
+        switch (labelPosition != null ? labelPosition : ScaleBarRenderer.Position.UPPER_LEFT) {
+            case UPPER_RIGHT -> {
+                textX = areaX + areaW - margin - approxWidth;
+                textY = areaY + margin + ascent;
+            }
+            case LOWER_LEFT -> {
+                textX = areaX + margin;
+                textY = areaY + areaH - margin;
+            }
+            case LOWER_RIGHT -> {
+                textX = areaX + areaW - margin - approxWidth;
+                textY = areaY + areaH - margin;
+            }
+            case UPPER_LEFT -> {
+                textX = areaX + margin;
+                textY = areaY + margin + ascent;
+            }
+            default -> {
+                textX = areaX + margin;
+                textY = areaY + margin + ascent;
+            }
+        }
+
+        // Contrast outline (black for light text, white for dark text).
+        double lum = 0.299 * labelColor.getRed()
+                + 0.587 * labelColor.getGreen()
+                + 0.114 * labelColor.getBlue();
+        Color outline = lum > 0.5 ? Color.BLACK : Color.WHITE;
+        gc.setLineWidth(Math.max(1.0, fontPx * 0.08));
+        gc.setStroke(outline);
+        gc.strokeText(text, textX, textY);
+        gc.setFill(labelColor);
+        gc.fillText(text, textX, textY);
         gc.restore();
     }
 

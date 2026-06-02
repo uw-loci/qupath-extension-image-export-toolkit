@@ -72,6 +72,16 @@ final class PanelScriptGenerator {
         appendLine(sb, fieldStr.toString());
         appendLine(sb, "def captionFontSize = " + config.getCaptionFontSize());
         appendLine(sb, "def captionColor = " + quote(toHex(config.getCaptionColor())));
+        appendLine(sb, "");
+        appendLine(sb, "// ---------- Panel labels (A,B,C / a,b,c / 1,2,3) ----------");
+        appendLine(sb, "def panelLabelStyle = " + quote(config.getPanelLabelStyle().name()));
+        appendLine(sb, "def panelLabelPosition = "
+                + quote(config.getPanelLabelPosition().name()));
+        appendLine(sb, "def panelLabelFontSize = "
+                + config.getPanelLabelFontSize() + "  // 0 = auto");
+        appendLine(sb, "def panelLabelBold = " + config.isPanelLabelBold());
+        appendLine(sb, "def panelLabelColor = "
+                + quote(toHex(config.getPanelLabelColor())));
         appendLine(sb, "// =========================================");
         appendLine(sb, "");
 

@@ -47,6 +47,8 @@ import qupath.ext.quiet.export.OutputFormat;
 import qupath.ext.quiet.export.PanelComposer;
 import qupath.ext.quiet.export.PanelExportConfig;
 import qupath.ext.quiet.export.PanelImageExporter;
+import qupath.ext.quiet.export.PanelLabelRenderer;
+import qupath.ext.quiet.export.ScaleBarRenderer;
 import qupath.ext.quiet.preferences.QuietPreferences;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.ProjectImageEntry;
@@ -91,6 +93,12 @@ public class PanelLayoutPane extends VBox {
     private ListView<MetadataFieldItem> metadataFieldsList;
     private Spinner<Integer> captionFontSizeSpinner;
     private ColorPicker captionColorPicker;
+
+    private ComboBox<PanelLabelRenderer.PanelLabelStyle> labelStyleCombo;
+    private ComboBox<ScaleBarRenderer.Position> labelPositionCombo;
+    private Spinner<Integer> labelFontSizeSpinner;
+    private CheckBox labelBoldCheck;
+    private ColorPicker labelColorPicker;
 
     private ComboBox<OutputFormat> formatCombo;
     private TextField outputDirField;
@@ -150,11 +158,110 @@ public class PanelLayoutPane extends VBox {
         getChildren().addAll(banner, header,
                 buildGridSection(),
                 buildCaptionsSection(),
+                buildLabelsSection(),
                 buildPreviewSection(),
                 buildOutputSection(),
                 buildSizeSection(),
                 progressBar,
                 statusLabel);
+    }
+
+    private VBox buildLabelsSection() {
+        labelStyleCombo = new ComboBox<>(FXCollections.observableArrayList(
+                PanelLabelRenderer.PanelLabelStyle.values()));
+        labelStyleCombo.setValue(PanelLabelRenderer.PanelLabelStyle.NONE);
+        labelStyleCombo.setTooltip(tooltip("tooltip.panel.labelStyle"));
+        labelStyleCombo.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(PanelLabelRenderer.PanelLabelStyle s) {
+                if (s == null) return "";
+                return switch (s) {
+                    case NONE -> resources.getString("panel.label.style.none");
+                    case UPPER -> resources.getString("panel.label.style.upper");
+                    case LOWER -> resources.getString("panel.label.style.lower");
+                    case NUMERIC -> resources.getString("panel.label.style.numeric");
+                };
+            }
+
+            @Override
+            public PanelLabelRenderer.PanelLabelStyle fromString(String s) {
+                return PanelLabelRenderer.PanelLabelStyle.NONE;
+            }
+        });
+
+        labelPositionCombo = new ComboBox<>(FXCollections.observableArrayList(
+                ScaleBarRenderer.Position.values()));
+        labelPositionCombo.setValue(ScaleBarRenderer.Position.UPPER_LEFT);
+        labelPositionCombo.setTooltip(tooltip("tooltip.panel.labelPosition"));
+        labelPositionCombo.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(ScaleBarRenderer.Position p) {
+                if (p == null) return "";
+                return switch (p) {
+                    case UPPER_LEFT -> resources.getString("panel.label.position.upperLeft");
+                    case UPPER_RIGHT -> resources.getString("panel.label.position.upperRight");
+                    case LOWER_LEFT -> resources.getString("panel.label.position.lowerLeft");
+                    case LOWER_RIGHT -> resources.getString("panel.label.position.lowerRight");
+                };
+            }
+
+            @Override
+            public ScaleBarRenderer.Position fromString(String s) {
+                return ScaleBarRenderer.Position.UPPER_LEFT;
+            }
+        });
+
+        labelFontSizeSpinner = intSpinner(0, 200, 0, 2);
+        labelFontSizeSpinner.setTooltip(tooltip("tooltip.panel.labelFontSize"));
+
+        labelBoldCheck = new CheckBox(resources.getString("panel.step4.labelBold"));
+        labelBoldCheck.setTooltip(tooltip("tooltip.panel.labelBold"));
+        labelBoldCheck.setSelected(true);
+
+        labelColorPicker = new ColorPicker(Color.WHITE);
+        labelColorPicker.setTooltip(tooltip("tooltip.panel.labelColor"));
+
+        var note = new Label(resources.getString("panel.step4.labelsNote"));
+        note.setWrapText(true);
+        note.setStyle("-fx-text-fill: #555555;");
+
+        var grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(8);
+        grid.add(new Label(resources.getString("panel.step4.labelStyleLabel")), 0, 0);
+        grid.add(labelStyleCombo, 1, 0);
+        grid.add(new Label(resources.getString("panel.step4.labelPositionLabel")), 2, 0);
+        grid.add(labelPositionCombo, 3, 0);
+        grid.add(new Label(resources.getString("panel.step4.labelFontSizeLabel")), 0, 1);
+        grid.add(labelFontSizeSpinner, 1, 1);
+        grid.add(labelBoldCheck, 2, 1);
+        grid.add(new Label(resources.getString("panel.step4.labelColorLabel")), 0, 2);
+        grid.add(labelColorPicker, 1, 2);
+
+        Runnable updateEnabled = () -> {
+            boolean enabled =
+                    labelStyleCombo.getValue() != PanelLabelRenderer.PanelLabelStyle.NONE;
+            labelPositionCombo.setDisable(!enabled);
+            labelFontSizeSpinner.setDisable(!enabled);
+            labelBoldCheck.setDisable(!enabled);
+            labelColorPicker.setDisable(!enabled);
+        };
+
+        Runnable update = this::updateSizeFeedback;
+        labelStyleCombo.valueProperty().addListener((o, a, b) -> {
+            updateEnabled.run();
+            update.run();
+        });
+        labelPositionCombo.valueProperty().addListener((o, a, b) -> update.run());
+        labelFontSizeSpinner.valueProperty().addListener((o, a, b) -> update.run());
+        labelBoldCheck.selectedProperty().addListener((o, a, b) -> update.run());
+        labelColorPicker.valueProperty().addListener((o, a, b) -> update.run());
+        updateEnabled.run();
+
+        var content = new VBox(8, note, grid);
+        content.setPadding(new Insets(5));
+        return new VBox(6, SectionBuilder.createSection(
+                resources.getString("panel.step4.labelsSection"), false, content));
     }
 
     /**
@@ -558,6 +665,23 @@ public class PanelLayoutPane extends VBox {
                 .setValue(QuietPreferences.getPanelCaptionFontSize());
         captionColorPicker.setValue(parseColor(QuietPreferences.getPanelCaptionColor(),
                 Color.BLACK));
+        try {
+            labelStyleCombo.setValue(PanelLabelRenderer.PanelLabelStyle.valueOf(
+                    QuietPreferences.getPanelLabelStyle()));
+        } catch (IllegalArgumentException e) {
+            labelStyleCombo.setValue(PanelLabelRenderer.PanelLabelStyle.NONE);
+        }
+        try {
+            labelPositionCombo.setValue(ScaleBarRenderer.Position.valueOf(
+                    QuietPreferences.getPanelLabelPosition()));
+        } catch (IllegalArgumentException e) {
+            labelPositionCombo.setValue(ScaleBarRenderer.Position.UPPER_LEFT);
+        }
+        labelFontSizeSpinner.getValueFactory()
+                .setValue(QuietPreferences.getPanelLabelFontSize());
+        labelBoldCheck.setSelected(QuietPreferences.isPanelLabelBold());
+        labelColorPicker.setValue(parseColor(QuietPreferences.getPanelLabelColor(),
+                Color.WHITE));
         filenameField.setText(QuietPreferences.getPanelFilename());
         seededCount = QuietPreferences.getPanelSeededCount();
     }
@@ -584,6 +708,15 @@ public class PanelLayoutPane extends VBox {
         if (fmt != null) {
             QuietPreferences.setPanelFormat(fmt.name());
         }
+        if (labelStyleCombo.getValue() != null) {
+            QuietPreferences.setPanelLabelStyle(labelStyleCombo.getValue().name());
+        }
+        if (labelPositionCombo.getValue() != null) {
+            QuietPreferences.setPanelLabelPosition(labelPositionCombo.getValue().name());
+        }
+        QuietPreferences.setPanelLabelFontSize(labelFontSizeSpinner.getValue());
+        QuietPreferences.setPanelLabelBold(labelBoldCheck.isSelected());
+        QuietPreferences.setPanelLabelColor(toHex(labelColorPicker.getValue()));
     }
 
     /**
@@ -959,7 +1092,16 @@ public class PanelLayoutPane extends VBox {
                 .captionColor(toAwt(captionColorPicker.getValue()))
                 .format(formatCombo.getValue() != null
                         ? formatCombo.getValue() : OutputFormat.PNG)
-                .filename(filenameField.getText());
+                .filename(filenameField.getText())
+                .panelLabelStyle(labelStyleCombo.getValue() != null
+                        ? labelStyleCombo.getValue()
+                        : PanelLabelRenderer.PanelLabelStyle.NONE)
+                .panelLabelPosition(labelPositionCombo.getValue() != null
+                        ? labelPositionCombo.getValue()
+                        : ScaleBarRenderer.Position.UPPER_LEFT)
+                .panelLabelFontSize(labelFontSizeSpinner.getValue())
+                .panelLabelBold(labelBoldCheck.isSelected())
+                .panelLabelColor(toAwt(labelColorPicker.getValue()));
         return builder;
     }
 

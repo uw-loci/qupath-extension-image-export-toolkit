@@ -45,6 +45,11 @@ public class PanelExportConfig {
     private final OutputFormat format;
     private final File outputDirectory;
     private final String filename;
+    private final PanelLabelRenderer.PanelLabelStyle panelLabelStyle;
+    private final ScaleBarRenderer.Position panelLabelPosition;
+    private final int panelLabelFontSize;
+    private final boolean panelLabelBold;
+    private final Color panelLabelColor;
 
     private PanelExportConfig(Builder b) {
         this.recipeCategory = b.recipeCategory;
@@ -64,6 +69,11 @@ public class PanelExportConfig {
         this.format = b.format;
         this.outputDirectory = b.outputDirectory;
         this.filename = b.filename;
+        this.panelLabelStyle = b.panelLabelStyle;
+        this.panelLabelPosition = b.panelLabelPosition;
+        this.panelLabelFontSize = b.panelLabelFontSize;
+        this.panelLabelBold = b.panelLabelBold;
+        this.panelLabelColor = b.panelLabelColor;
     }
 
     public ExportCategory getRecipeCategory() {
@@ -144,6 +154,33 @@ public class PanelExportConfig {
         return showFilenameCaption || !metadataFields.isEmpty();
     }
 
+    public PanelLabelRenderer.PanelLabelStyle getPanelLabelStyle() {
+        return panelLabelStyle;
+    }
+
+    public ScaleBarRenderer.Position getPanelLabelPosition() {
+        return panelLabelPosition;
+    }
+
+    /** Label font size in pixels; {@code 0} means auto-compute from cell size. */
+    public int getPanelLabelFontSize() {
+        return panelLabelFontSize;
+    }
+
+    public boolean isPanelLabelBold() {
+        return panelLabelBold;
+    }
+
+    public Color getPanelLabelColor() {
+        return panelLabelColor;
+    }
+
+    /** Whether per-cell labels (A,B,C / a,b,c / 1,2,3) should be drawn. */
+    public boolean hasPanelLabel() {
+        return panelLabelStyle != null
+                && panelLabelStyle != PanelLabelRenderer.PanelLabelStyle.NONE;
+    }
+
     /**
      * Build the sanitized output filename for the composed figure, including
      * the format extension. Uses {@link GeneralTools#stripInvalidFilenameChars}
@@ -207,6 +244,13 @@ public class PanelExportConfig {
         private OutputFormat format = OutputFormat.PNG;
         private File outputDirectory;
         private String filename = "panel_figure";
+        private PanelLabelRenderer.PanelLabelStyle panelLabelStyle =
+                PanelLabelRenderer.PanelLabelStyle.NONE;
+        private ScaleBarRenderer.Position panelLabelPosition =
+                ScaleBarRenderer.Position.UPPER_LEFT;
+        private int panelLabelFontSize = 0;
+        private boolean panelLabelBold = true;
+        private Color panelLabelColor = Color.WHITE;
 
         public Builder recipeCategory(ExportCategory c) {
             this.recipeCategory = c;
@@ -288,6 +332,31 @@ public class PanelExportConfig {
             return this;
         }
 
+        public Builder panelLabelStyle(PanelLabelRenderer.PanelLabelStyle s) {
+            this.panelLabelStyle = s;
+            return this;
+        }
+
+        public Builder panelLabelPosition(ScaleBarRenderer.Position p) {
+            this.panelLabelPosition = p;
+            return this;
+        }
+
+        public Builder panelLabelFontSize(int size) {
+            this.panelLabelFontSize = size;
+            return this;
+        }
+
+        public Builder panelLabelBold(boolean bold) {
+            this.panelLabelBold = bold;
+            return this;
+        }
+
+        public Builder panelLabelColor(Color c) {
+            this.panelLabelColor = c;
+            return this;
+        }
+
         /**
          * Build the panel export configuration, validating and clamping fields.
          *
@@ -349,6 +418,16 @@ public class PanelExportConfig {
             if (cellFitMode == null) {
                 cellFitMode = CellFitMode.FIT_LETTERBOX;
             }
+            if (panelLabelStyle == null) {
+                panelLabelStyle = PanelLabelRenderer.PanelLabelStyle.NONE;
+            }
+            if (panelLabelPosition == null) {
+                panelLabelPosition = ScaleBarRenderer.Position.UPPER_LEFT;
+            }
+            if (panelLabelColor == null) {
+                panelLabelColor = Color.WHITE;
+            }
+            panelLabelFontSize = Math.max(0, Math.min(panelLabelFontSize, 200));
             return new PanelExportConfig(this);
         }
     }

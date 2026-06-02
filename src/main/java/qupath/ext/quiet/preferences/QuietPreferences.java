@@ -374,6 +374,21 @@ public class QuietPreferences {
     private static final BooleanProperty panelShowIntroDialog =
             PathPrefs.createPersistentPreference(PREFIX + "panel.showIntroDialog", true);
 
+    private static final StringProperty panelLabelStyle =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.label.style", "NONE");
+
+    private static final StringProperty panelLabelPosition =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.label.position", "UPPER_LEFT");
+
+    private static final IntegerProperty panelLabelFontSize =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.label.fontSize", 0);
+
+    private static final BooleanProperty panelLabelBold =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.label.bold", true);
+
+    private static final StringProperty panelLabelColor =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.label.color", "#FFFFFF");
+
     private QuietPreferences() {
         // Utility class
     }
@@ -841,6 +856,26 @@ public class QuietPreferences {
     public static BooleanProperty panelShowIntroDialogProperty() { return panelShowIntroDialog; }
     public static boolean isPanelShowIntroDialog() { return panelShowIntroDialog.get(); }
     public static void setPanelShowIntroDialog(boolean value) { panelShowIntroDialog.set(value); }
+
+    public static StringProperty panelLabelStyleProperty() { return panelLabelStyle; }
+    public static String getPanelLabelStyle() { return panelLabelStyle.get(); }
+    public static void setPanelLabelStyle(String value) { panelLabelStyle.set(value != null ? value : "NONE"); }
+
+    public static StringProperty panelLabelPositionProperty() { return panelLabelPosition; }
+    public static String getPanelLabelPosition() { return panelLabelPosition.get(); }
+    public static void setPanelLabelPosition(String value) { panelLabelPosition.set(value != null ? value : "UPPER_LEFT"); }
+
+    public static IntegerProperty panelLabelFontSizeProperty() { return panelLabelFontSize; }
+    public static int getPanelLabelFontSize() { return panelLabelFontSize.get(); }
+    public static void setPanelLabelFontSize(int value) { panelLabelFontSize.set(value); }
+
+    public static BooleanProperty panelLabelBoldProperty() { return panelLabelBold; }
+    public static boolean isPanelLabelBold() { return panelLabelBold.get(); }
+    public static void setPanelLabelBold(boolean value) { panelLabelBold.set(value); }
+
+    public static StringProperty panelLabelColorProperty() { return panelLabelColor; }
+    public static String getPanelLabelColor() { return panelLabelColor.get(); }
+    public static void setPanelLabelColor(String value) { panelLabelColor.set(value != null ? value : "#FFFFFF"); }
 
     // ==================== Recipe snapshot / restore ====================
 
