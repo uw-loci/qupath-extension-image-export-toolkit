@@ -139,6 +139,14 @@ public class RenderedConfigPane extends VBox {
     private CheckBox channelColorLegendCheck;
     private Label splitChannelNoteLabel;
 
+    // Split-stains (color deconvolution) controls
+    private CheckBox splitStainsCheck;
+    private CheckBox splitStainsIncludeResidualCheck;
+    private CheckBox splitStainsGrayscaleCheck;
+    private CheckBox splitStainsColorBorderCheck;
+    private CheckBox splitStainsColorLegendCheck;
+    private Label splitStainsNoteLabel;
+
     // Global matched controls
     private Label matchedPercentileLabel;
     private Spinner<Double> matchedPercentileSpinner;
@@ -187,6 +195,7 @@ public class RenderedConfigPane extends VBox {
     private TitledPane overlaySourceSection;
     private TitledPane objectOverlaysSection;
     private TitledPane splitChannelSection;
+    private TitledPane splitStainsSection;
     private TitledPane scaleBarSection;
     private TitledPane colorScaleBarSection;
     private TitledPane infoLabelSection;
@@ -213,6 +222,7 @@ public class RenderedConfigPane extends VBox {
         overlaySourceSection = buildOverlaySourceSection();
         objectOverlaysSection = buildObjectOverlaysSection();
         splitChannelSection = buildSplitChannelSection();
+        splitStainsSection = buildSplitStainsSection();
         scaleBarSection = buildScaleBarSection();
         colorScaleBarSection = buildColorScaleBarSection();
         infoLabelSection = buildInfoLabelSection();
@@ -222,8 +232,8 @@ public class RenderedConfigPane extends VBox {
         previewButton.setMaxWidth(Double.MAX_VALUE);
 
         getChildren().addAll(header, imageSettingsSection, overlaySourceSection,
-                objectOverlaysSection, splitChannelSection, scaleBarSection,
-                colorScaleBarSection, infoLabelSection,
+                objectOverlaysSection, splitChannelSection, splitStainsSection,
+                scaleBarSection, colorScaleBarSection, infoLabelSection,
                 previewButton);
 
         // Scale bar visibility toggling + SVG auto-default
@@ -265,8 +275,25 @@ public class RenderedConfigPane extends VBox {
 
         // Split-channel sub-option visibility
         splitChannelsCheck.selectedProperty().addListener(
-                (obs, oldVal, newVal) -> updateSplitChannelVisibility(newVal));
+                (obs, oldVal, newVal) -> {
+                    updateSplitChannelVisibility(newVal);
+                    if (newVal && splitStainsCheck != null
+                            && splitStainsCheck.isSelected()) {
+                        splitStainsCheck.setSelected(false);
+                    }
+                });
         updateSplitChannelVisibility(false);
+
+        // Split-stains sub-option visibility (mutually exclusive with split-channel)
+        splitStainsCheck.selectedProperty().addListener(
+                (obs, oldVal, newVal) -> {
+                    updateSplitStainsVisibility(newVal);
+                    if (newVal && splitChannelsCheck != null
+                            && splitChannelsCheck.isSelected()) {
+                        splitChannelsCheck.setSelected(false);
+                    }
+                });
+        updateSplitStainsVisibility(false);
 
         // Object overlay SVG auto-default
         includeAnnotationsCheck.selectedProperty().addListener(
@@ -967,6 +994,73 @@ public class RenderedConfigPane extends VBox {
                 resources.getString("rendered.section.splitChannel"), false, grid);
     }
 
+    private TitledPane buildSplitStainsSection() {
+        var grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        int row = 0;
+
+        splitStainsCheck = new CheckBox(resources.getString("rendered.label.splitStains"));
+        splitStainsCheck.setTooltip(createTooltip("tooltip.rendered.splitStains"));
+        grid.add(splitStainsCheck, 0, row, 2, 1);
+        row++;
+
+        splitStainsIncludeResidualCheck = new CheckBox(
+                resources.getString("rendered.label.splitStainsIncludeResidual"));
+        splitStainsIncludeResidualCheck.setTooltip(
+                createTooltip("tooltip.rendered.splitStainsIncludeResidual"));
+        grid.add(splitStainsIncludeResidualCheck, 0, row, 2, 1);
+        row++;
+
+        splitStainsGrayscaleCheck = new CheckBox(
+                resources.getString("rendered.label.splitStainsGrayscale"));
+        splitStainsGrayscaleCheck.setSelected(true);
+        splitStainsGrayscaleCheck.setTooltip(
+                createTooltip("tooltip.rendered.splitStainsGrayscale"));
+        grid.add(splitStainsGrayscaleCheck, 0, row, 2, 1);
+        row++;
+
+        splitStainsColorBorderCheck = new CheckBox(
+                resources.getString("rendered.label.splitStainsColorBorder"));
+        splitStainsColorBorderCheck.setTooltip(
+                createTooltip("tooltip.rendered.splitStainsColorBorder"));
+        grid.add(splitStainsColorBorderCheck, 0, row, 2, 1);
+        row++;
+
+        splitStainsColorLegendCheck = new CheckBox(
+                resources.getString("rendered.label.splitStainsColorLegend"));
+        splitStainsColorLegendCheck.setSelected(true);
+        splitStainsColorLegendCheck.setTooltip(
+                createTooltip("tooltip.rendered.splitStainsColorLegend"));
+        grid.add(splitStainsColorLegendCheck, 0, row, 2, 1);
+        row++;
+
+        splitStainsNoteLabel = new Label(resources.getString("rendered.label.splitStainsNote"));
+        splitStainsNoteLabel.setWrapText(true);
+        splitStainsNoteLabel.setMaxWidth(400);
+        splitStainsNoteLabel.setStyle("-fx-font-size: 11; -fx-text-fill: #666666; "
+                + "-fx-font-style: italic;");
+        grid.add(splitStainsNoteLabel, 0, row, 2, 1);
+        row++;
+
+        return SectionBuilder.createSection(
+                resources.getString("rendered.section.splitStains"), false, grid);
+    }
+
+    private void updateSplitStainsVisibility(boolean splitEnabled) {
+        splitStainsIncludeResidualCheck.setVisible(splitEnabled);
+        splitStainsIncludeResidualCheck.setManaged(splitEnabled);
+        splitStainsGrayscaleCheck.setVisible(splitEnabled);
+        splitStainsGrayscaleCheck.setManaged(splitEnabled);
+        splitStainsColorBorderCheck.setVisible(splitEnabled);
+        splitStainsColorBorderCheck.setManaged(splitEnabled);
+        splitStainsColorLegendCheck.setVisible(splitEnabled);
+        splitStainsColorLegendCheck.setManaged(splitEnabled);
+        splitStainsNoteLabel.setVisible(splitEnabled);
+        splitStainsNoteLabel.setManaged(splitEnabled);
+        applySimpleModeOverrides();
+    }
+
     private void updateSplitChannelVisibility(boolean splitEnabled) {
         splitChannelsGrayscaleCheck.setVisible(splitEnabled);
         splitChannelsGrayscaleCheck.setManaged(splitEnabled);
@@ -1382,6 +1476,9 @@ public class RenderedConfigPane extends VBox {
         // Split channels section
         splitChannelSection.setVisible(false);
         splitChannelSection.setManaged(false);
+        // Split stains section
+        splitStainsSection.setVisible(false);
+        splitStainsSection.setManaged(false);
         // Scale bar styling (keep show checkbox visible; hide styling controls)
         scaleBarPositionLabel.setVisible(false);
         scaleBarPositionLabel.setManaged(false);
@@ -1765,6 +1862,15 @@ public class RenderedConfigPane extends VBox {
         channelColorLegendCheck.setSelected(QuietPreferences.isRenderedChannelColorLegend());
         updateSplitChannelVisibility(splitChannelsCheck.isSelected());
 
+        // Split-stains preferences
+        splitStainsCheck.setSelected(QuietPreferences.isRenderedSplitStains());
+        splitStainsIncludeResidualCheck.setSelected(
+                QuietPreferences.isRenderedSplitStainsIncludeResidual());
+        splitStainsGrayscaleCheck.setSelected(QuietPreferences.isRenderedSplitStainsGrayscale());
+        splitStainsColorBorderCheck.setSelected(QuietPreferences.isRenderedSplitStainsColorBorder());
+        splitStainsColorLegendCheck.setSelected(QuietPreferences.isRenderedSplitStainsColorLegend());
+        updateSplitStainsVisibility(splitStainsCheck.isSelected());
+
         // Global matched preferences
         matchedPercentileSpinner.getValueFactory().setValue(
                 QuietPreferences.getRenderedMatchedDisplayPercentile());
@@ -1849,6 +1955,12 @@ public class RenderedConfigPane extends VBox {
         QuietPreferences.setRenderedSplitChannelsGrayscale(splitChannelsGrayscaleCheck.isSelected());
         QuietPreferences.setRenderedSplitChannelColorBorder(splitChannelColorBorderCheck.isSelected());
         QuietPreferences.setRenderedChannelColorLegend(channelColorLegendCheck.isSelected());
+        QuietPreferences.setRenderedSplitStains(splitStainsCheck.isSelected());
+        QuietPreferences.setRenderedSplitStainsIncludeResidual(
+                splitStainsIncludeResidualCheck.isSelected());
+        QuietPreferences.setRenderedSplitStainsGrayscale(splitStainsGrayscaleCheck.isSelected());
+        QuietPreferences.setRenderedSplitStainsColorBorder(splitStainsColorBorderCheck.isSelected());
+        QuietPreferences.setRenderedSplitStainsColorLegend(splitStainsColorLegendCheck.isSelected());
         QuietPreferences.setRenderedMatchedDisplayPercentile(
                 matchedPercentileSpinner.getValue() != null ? matchedPercentileSpinner.getValue() : 0.1);
 
@@ -1945,6 +2057,13 @@ public class RenderedConfigPane extends VBox {
                 .matchedDisplayPercentile(
                         matchedPercentileSpinner.getValue() != null
                                 ? matchedPercentileSpinner.getValue() : 0.1);
+
+        // Split-stains (color deconvolution) options
+        builder.splitStains(splitStainsCheck.isSelected())
+                .splitStainsIncludeResidual(splitStainsIncludeResidualCheck.isSelected())
+                .splitStainsGrayscale(splitStainsGrayscaleCheck.isSelected())
+                .splitStainsColorBorder(splitStainsColorBorderCheck.isSelected())
+                .splitStainsColorLegend(splitStainsColorLegendCheck.isSelected());
 
         // DPI control
         boolean isDpiMode = "By Target DPI".equals(resolutionModeCombo.getValue());

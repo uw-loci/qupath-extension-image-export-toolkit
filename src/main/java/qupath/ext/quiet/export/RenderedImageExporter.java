@@ -34,7 +34,9 @@ import qupath.lib.analysis.heatmaps.DensityMaps;
 import qupath.lib.analysis.heatmaps.DensityMaps.DensityMapBuilder;
 import qupath.lib.classifiers.pixel.PixelClassificationImageServer;
 import qupath.lib.classifiers.pixel.PixelClassifier;
+import qupath.lib.color.ColorDeconvolutionStains;
 import qupath.lib.color.ColorMaps;
+import qupath.lib.color.StainVector;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.display.ImageDisplay;
 import qupath.lib.display.settings.DisplaySettingUtils;
@@ -43,6 +45,7 @@ import qupath.lib.gui.viewer.OverlayOptions;
 import qupath.lib.gui.viewer.overlays.HierarchyOverlay;
 import qupath.lib.images.ImageData;
 import qupath.lib.images.servers.ImageServer;
+import qupath.lib.images.servers.TransformedServerBuilder;
 import qupath.lib.images.writers.ImageWriterTools;
 import qupath.lib.objects.PathAnnotationObject;
 import qupath.lib.objects.PathObject;
@@ -1726,6 +1729,110 @@ public class RenderedImageExporter {
             } catch (Exception e) {
                 logger.error("Failed to export channel {} for {}: {}",
                         ch, entryName, e.getMessage());
+            }
+        }
+
+        return filesExported;
+    }
+
+    /**
+     * Export deconvolved-stain panels: one image per stain (H, E, DAB, ...) on
+     * a brightfield image with color deconvolution stains set on its
+     * {@link ImageData}.
+     * <p>
+     * Brightfield equivalent of {@link #exportSplitChannels}. Decorations
+     * (grayscale, colour border, colour-legend swatch, scale bar) mirror the
+     * split-channel pipeline so the two outputs look like siblings on a panel
+     * figure. The residual stain is skipped unless
+     * {@link RenderedExportConfig.SplitStainsConfig#includeResidual()} is set.
+     * <p>
+     * The image must be brightfield with stains set; otherwise the export is
+     * skipped (the caller logs and returns 0) -- {@code BatchExportTask}
+     * surfaces this as a per-image warning rather than an error.
+     *
+     * @param imageData  the image data to export (must be brightfield with stains)
+     * @param config     rendered export configuration with splitStains enabled
+     * @param entryName  the image entry name (used for filename generation)
+     * @param panelIndex zero-based index, currently unused but reserved for
+     *                   future panel-label support per stain
+     * @return the number of files exported (0 if the image has no stains)
+     * @throws IOException if the export fails
+     */
+    public static int exportSplitStains(ImageData<BufferedImage> imageData,
+                                         RenderedExportConfig config,
+                                         String entryName,
+                                         int panelIndex) throws IOException {
+        ColorDeconvolutionStains stains = imageData.getColorDeconvolutionStains();
+        if (stains == null) {
+            logger.warn("Split-stains export skipped for {}: image has no stains set "
+                    + "(only brightfield images with color deconvolution stains are supported)",
+                    entryName);
+            return 0;
+        }
+
+        var baseServer = imageData.getServer();
+        double downsample = resolveEffectiveDownsample(config, baseServer);
+        File outDir = config.getOutputDirectory();
+        boolean includeResidual = config.splitStains().includeResidual();
+        int filesExported = 0;
+
+        for (int stainIdx = 1; stainIdx <= 3; stainIdx++) {
+            StainVector stain = stains.getStain(stainIdx);
+            if (stain == null) {
+                continue;
+            }
+            if (stain.isResidual() && !includeResidual) {
+                continue;
+            }
+            ImageServer<BufferedImage> stainServer = null;
+            try {
+                stainServer = new TransformedServerBuilder(baseServer)
+                        .deconvolveStains(stains, stainIdx)
+                        .build();
+
+                RegionRequest request = RegionRequest.createInstance(
+                        stainServer.getPath(), downsample,
+                        0, 0, stainServer.getWidth(), stainServer.getHeight());
+                BufferedImage stainImage = stainServer.readRegion(request);
+
+                if (config.splitStains().grayscale()) {
+                    stainImage = convertToGrayscale(stainImage);
+                }
+
+                BufferedImage result = new BufferedImage(
+                        stainImage.getWidth(), stainImage.getHeight(),
+                        BufferedImage.TYPE_INT_RGB);
+                Graphics2D g2d = result.createGraphics();
+                try {
+                    g2d.drawImage(stainImage, 0, 0, null);
+
+                    int packedColor = stain.getColor();
+                    if (config.splitStains().colorBorder()) {
+                        drawChannelColorBorder(g2d, result.getWidth(), result.getHeight(),
+                                packedColor);
+                    }
+                    if (config.splitStains().colorLegend()) {
+                        drawChannelColorLegend(g2d, result.getWidth(), result.getHeight(),
+                                packedColor, stain.getName());
+                    }
+                    maybeDrawScaleBar(g2d, imageData, config,
+                            result.getWidth(), result.getHeight());
+                } finally {
+                    g2d.dispose();
+                }
+
+                String stainFilename = config.buildSplitStainFilename(
+                        entryName, stainIdx, stain.getName());
+                File stainFile = new File(outDir, stainFilename);
+                ImageWriterTools.writeImage(result, stainFile.getAbsolutePath());
+                logger.info("Exported stain {} ({}): {}",
+                        stainIdx, stain.getName(), stainFile.getAbsolutePath());
+                filesExported++;
+            } catch (Exception e) {
+                logger.error("Failed to export stain {} for {}: {}",
+                        stainIdx, entryName, e.getMessage());
+            } finally {
+                closeQuietly(stainServer, entryName);
             }
         }
 

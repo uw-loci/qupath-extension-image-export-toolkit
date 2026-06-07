@@ -128,6 +128,22 @@ public class RenderedExportConfig {
     ) {}
 
     /**
+     * Split-stains (color deconvolution) export configuration.
+     * <p>
+     * Brightfield equivalent of {@link SplitChannelConfig}: one image per
+     * deconvolved stain (H, E, DAB, ...). The residual is optional and off by
+     * default. Requires the image to be brightfield with stains set on its
+     * {@code ImageData}.
+     */
+    public record SplitStainsConfig(
+            boolean enabled,
+            boolean includeResidual,
+            boolean grayscale,
+            boolean colorBorder,
+            boolean colorLegend
+    ) {}
+
+    /**
      * Inset/zoom panel configuration.
      */
     public record InsetConfig(
@@ -182,6 +198,7 @@ public class RenderedExportConfig {
     private final TextLabelConfig panelLabel;
     private final TextLabelConfig infoLabel;
     private final SplitChannelConfig splitChannel;
+    private final SplitStainsConfig splitStains;
     private final InsetConfig inset;
 
     // -----------------------------------------------------------------------
@@ -245,6 +262,12 @@ public class RenderedExportConfig {
                 builder.splitChannelsGrayscale,
                 builder.splitChannelColorBorder,
                 builder.channelColorLegend);
+        this.splitStains = new SplitStainsConfig(
+                builder.splitStains,
+                builder.splitStainsIncludeResidual,
+                builder.splitStainsGrayscale,
+                builder.splitStainsColorBorder,
+                builder.splitStainsColorLegend);
         this.inset = new InsetConfig(
                 builder.showInset,
                 builder.insetSourceX,
@@ -379,6 +402,10 @@ public class RenderedExportConfig {
         return splitChannel;
     }
 
+    public SplitStainsConfig splitStains() {
+        return splitStains;
+    }
+
     public InsetConfig inset() {
         return inset;
     }
@@ -449,6 +476,23 @@ public class RenderedExportConfig {
         String safeCh = GeneralTools.stripInvalidFilenameChars(channelName);
         if (safeCh == null || safeCh.isBlank()) safeCh = "ch" + channelIndex;
         return sanitized + "_Ch" + (channelIndex + 1) + "_" + safeCh + "." + format.getExtension();
+    }
+
+    /**
+     * Generates a filename for one deconvolved-stain image (e.g.
+     * {@code imageName_Stain1_Hematoxylin.png}).
+     *
+     * @param entryName  the project image entry name
+     * @param stainIndex one-based stain index (1, 2 or 3)
+     * @param stainName  the QuPath stain name
+     * @return the per-stain filename
+     */
+    public String buildSplitStainFilename(String entryName, int stainIndex, String stainName) {
+        String sanitized = GeneralTools.stripInvalidFilenameChars(entryName);
+        if (sanitized == null || sanitized.isBlank()) sanitized = "unnamed";
+        String safe = GeneralTools.stripInvalidFilenameChars(stainName);
+        if (safe == null || safe.isBlank()) safe = "stain" + stainIndex;
+        return sanitized + "_Stain" + stainIndex + "_" + safe + "." + format.getExtension();
     }
 
     /**
@@ -534,6 +578,11 @@ public class RenderedExportConfig {
         private boolean splitChannels = false;
         private boolean splitChannelsGrayscale = true;
         private boolean splitChannelColorBorder = false;
+        private boolean splitStains = false;
+        private boolean splitStainsIncludeResidual = false;
+        private boolean splitStainsGrayscale = true;
+        private boolean splitStainsColorBorder = false;
+        private boolean splitStainsColorLegend = true;
         private boolean channelColorLegend = true;
 
         // -- Inset fields --
@@ -864,6 +913,45 @@ public class RenderedExportConfig {
             this.splitChannelsGrayscale = cfg.grayscale();
             this.splitChannelColorBorder = cfg.colorBorder();
             this.channelColorLegend = cfg.colorLegend();
+            return this;
+        }
+
+        // =============================================================
+        //  Split stains (color deconvolution) -- individual setters
+        // =============================================================
+
+        public Builder splitStains(boolean split) {
+            this.splitStains = split;
+            return this;
+        }
+
+        public Builder splitStainsIncludeResidual(boolean include) {
+            this.splitStainsIncludeResidual = include;
+            return this;
+        }
+
+        public Builder splitStainsGrayscale(boolean grayscale) {
+            this.splitStainsGrayscale = grayscale;
+            return this;
+        }
+
+        public Builder splitStainsColorBorder(boolean border) {
+            this.splitStainsColorBorder = border;
+            return this;
+        }
+
+        public Builder splitStainsColorLegend(boolean legend) {
+            this.splitStainsColorLegend = legend;
+            return this;
+        }
+
+        /** Sets all split-stains fields from a sub-config record. */
+        public Builder splitStains(SplitStainsConfig cfg) {
+            this.splitStains = cfg.enabled();
+            this.splitStainsIncludeResidual = cfg.includeResidual();
+            this.splitStainsGrayscale = cfg.grayscale();
+            this.splitStainsColorBorder = cfg.colorBorder();
+            this.splitStainsColorLegend = cfg.colorLegend();
             return this;
         }
 

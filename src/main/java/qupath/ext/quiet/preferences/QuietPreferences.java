@@ -158,6 +158,21 @@ public class QuietPreferences {
     private static final BooleanProperty renderedChannelColorLegend =
             PathPrefs.createPersistentPreference(PREFIX + "rendered.channelColorLegend", true);
 
+    private static final BooleanProperty renderedSplitStains =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.splitStains", false);
+
+    private static final BooleanProperty renderedSplitStainsIncludeResidual =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.splitStainsIncludeResidual", false);
+
+    private static final BooleanProperty renderedSplitStainsGrayscale =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.splitStainsGrayscale", true);
+
+    private static final BooleanProperty renderedSplitStainsColorBorder =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.splitStainsColorBorder", false);
+
+    private static final BooleanProperty renderedSplitStainsColorLegend =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.splitStainsColorLegend", true);
+
     private static final DoubleProperty renderedMatchedDisplayPercentile =
             PathPrefs.createPersistentPreference(PREFIX + "rendered.matchedDisplayPercentile", 0.1);
 
@@ -577,6 +592,26 @@ public class QuietPreferences {
     public static boolean isRenderedChannelColorLegend() { return renderedChannelColorLegend.get(); }
     public static void setRenderedChannelColorLegend(boolean value) { renderedChannelColorLegend.set(value); }
 
+    public static BooleanProperty renderedSplitStainsProperty() { return renderedSplitStains; }
+    public static boolean isRenderedSplitStains() { return renderedSplitStains.get(); }
+    public static void setRenderedSplitStains(boolean value) { renderedSplitStains.set(value); }
+
+    public static BooleanProperty renderedSplitStainsIncludeResidualProperty() { return renderedSplitStainsIncludeResidual; }
+    public static boolean isRenderedSplitStainsIncludeResidual() { return renderedSplitStainsIncludeResidual.get(); }
+    public static void setRenderedSplitStainsIncludeResidual(boolean value) { renderedSplitStainsIncludeResidual.set(value); }
+
+    public static BooleanProperty renderedSplitStainsGrayscaleProperty() { return renderedSplitStainsGrayscale; }
+    public static boolean isRenderedSplitStainsGrayscale() { return renderedSplitStainsGrayscale.get(); }
+    public static void setRenderedSplitStainsGrayscale(boolean value) { renderedSplitStainsGrayscale.set(value); }
+
+    public static BooleanProperty renderedSplitStainsColorBorderProperty() { return renderedSplitStainsColorBorder; }
+    public static boolean isRenderedSplitStainsColorBorder() { return renderedSplitStainsColorBorder.get(); }
+    public static void setRenderedSplitStainsColorBorder(boolean value) { renderedSplitStainsColorBorder.set(value); }
+
+    public static BooleanProperty renderedSplitStainsColorLegendProperty() { return renderedSplitStainsColorLegend; }
+    public static boolean isRenderedSplitStainsColorLegend() { return renderedSplitStainsColorLegend.get(); }
+    public static void setRenderedSplitStainsColorLegend(boolean value) { renderedSplitStainsColorLegend.set(value); }
+
     public static DoubleProperty renderedMatchedDisplayPercentileProperty() { return renderedMatchedDisplayPercentile; }
     public static double getRenderedMatchedDisplayPercentile() { return renderedMatchedDisplayPercentile.get(); }
     public static void setRenderedMatchedDisplayPercentile(double value) { renderedMatchedDisplayPercentile.set(value); }
@@ -924,6 +959,11 @@ public class QuietPreferences {
                 map.put(PREFIX + "rendered.splitChannelsGrayscale", renderedSplitChannelsGrayscale);
                 map.put(PREFIX + "rendered.splitChannelColorBorder", renderedSplitChannelColorBorder);
                 map.put(PREFIX + "rendered.channelColorLegend", renderedChannelColorLegend);
+                map.put(PREFIX + "rendered.splitStains", renderedSplitStains);
+                map.put(PREFIX + "rendered.splitStainsIncludeResidual", renderedSplitStainsIncludeResidual);
+                map.put(PREFIX + "rendered.splitStainsGrayscale", renderedSplitStainsGrayscale);
+                map.put(PREFIX + "rendered.splitStainsColorBorder", renderedSplitStainsColorBorder);
+                map.put(PREFIX + "rendered.splitStainsColorLegend", renderedSplitStainsColorLegend);
                 map.put(PREFIX + "rendered.matchedDisplayPercentile", renderedMatchedDisplayPercentile);
                 map.put(PREFIX + "rendered.showInfoLabel", renderedShowInfoLabel);
                 map.put(PREFIX + "rendered.infoLabelTemplate", renderedInfoLabelTemplate);

@@ -933,6 +933,25 @@ class RenderedScriptGenerator {
     }
 
     /**
+     * Emit a config-record block for split-stains (color deconvolution).
+     * Re-run via the QuIET wizard -- the wizard wires the
+     * {@code TransformedServerBuilder.deconvolveStains} path; the script is a
+     * settings snapshot, not a runnable export.
+     */
+    static void emitSplitStainsConfig(StringBuilder sb, RenderedExportConfig config) {
+        if (!config.splitStains().enabled()) return;
+        appendLine(sb, "// ---------- Split stains (color deconvolution) ----------");
+        appendLine(sb, "def splitStains = true");
+        appendLine(sb, "def splitStainsIncludeResidual = "
+                + config.splitStains().includeResidual());
+        appendLine(sb, "def splitStainsGrayscale = " + config.splitStains().grayscale());
+        appendLine(sb, "def splitStainsColorBorder = " + config.splitStains().colorBorder());
+        appendLine(sb, "def splitStainsColorLegend = " + config.splitStains().colorLegend());
+        appendLine(sb, "// Re-run via the QuIET wizard (Rendered category) -- the wizard");
+        appendLine(sb, "// invokes TransformedServerBuilder.deconvolveStains() per stain.");
+    }
+
+    /**
      * Emit additional imports needed for split-channel export.
      */
     private static void emitSplitChannelImports(StringBuilder sb, RenderedExportConfig config) {
@@ -1121,6 +1140,7 @@ class RenderedScriptGenerator {
         emitRegionTypeConfig(sb, config);
         emitDisplayConfig(sb, config);
         emitSplitChannelConfig(sb, config);
+        emitSplitStainsConfig(sb, config);
         appendLine(sb, "def overlayOpacity = " + config.getOverlayOpacity());
         appendLine(sb, "def downsample = " + config.getDownsample());
         emitDpiConfig(sb, config);
@@ -1455,6 +1475,7 @@ class RenderedScriptGenerator {
         emitRegionTypeConfig(sb, config);
         emitDisplayConfig(sb, config);
         emitSplitChannelConfig(sb, config);
+        emitSplitStainsConfig(sb, config);
         appendLine(sb, "def overlayOpacity = " + config.getOverlayOpacity());
         appendLine(sb, "def downsample = " + config.getDownsample());
         emitDpiConfig(sb, config);
@@ -1726,6 +1747,7 @@ class RenderedScriptGenerator {
         emitRegionTypeConfig(sb, config);
         emitDisplayConfig(sb, config);
         emitSplitChannelConfig(sb, config);
+        emitSplitStainsConfig(sb, config);
         appendLine(sb, "def overlayOpacity = " + config.getOverlayOpacity());
         appendLine(sb, "def downsample = " + config.getDownsample());
         emitDpiConfig(sb, config);

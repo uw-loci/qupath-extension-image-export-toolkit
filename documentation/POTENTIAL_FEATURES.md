@@ -1286,19 +1286,19 @@ Based on thorough review of the current codebase, the following potential featur
 were identified by examining what the code already supports vs. what could be
 easily extended:
 
-### F21. Stain Separation / Color Deconvolution Export (Candidate)
+### F21. Stain Separation / Color Deconvolution Export (DONE v1.2.0)
 
 **Priority:** P2
 **Source:** Codebase analysis -- brightfield counterpart to F4
 
-The codebase already handles brightfield image types (`BRIGHTFIELD_H_E`,
-`BRIGHTFIELD_H_DAB`, `BRIGHTFIELD_OTHER`) in `ExportMetadataWriter.writeBrightfieldInfo()`
-and tracks stain vectors. QuPath supports color deconvolution to separate
-H&E or H-DAB stains into individual components. Exporting these separated
-stain channels as individual panels would be the brightfield equivalent of
-F4 (split-channel export). QuPath's `TransformedServerBuilder.deconvolveStains()`
-provides the API. This fills a gap since F4 explicitly notes it is
-"fluorescence-only."
+Shipped as a Rendered-category toggle "Split stains (color deconvolution)"
+that mirrors the split-channel pipeline. On a brightfield image with stains
+set on its `ImageData`, each deconvolved stain is written to its own file
+(e.g. `imageName_Stain1_Hematoxylin.png`), with the same optional
+grayscale / colour border / colour-legend swatch / scale bar decorations
+as split-channel. Built on `TransformedServerBuilder.deconvolveStains()`.
+The residual stain is excluded by default; the toggle is mutually exclusive
+with Split channels in the UI.
 
 ### F22. Per-Annotation Mask Export with Matching Rendered Image (Candidate)
 
@@ -1346,7 +1346,7 @@ image read alongside the rendered version.
 | F19. Contour mask export | P2 | Medium | None | Phase 3 | 4 | ~200 |
 | F20. Matched panel dimensions | P2 | Medium | None (but F3 uses) | Phase 3 | 4 | ~150 |
 | F9. Arrow / shape overlays | P2 | Medium | None | Phase 3 | 2-3 | ~120 |
-| F21. Stain separation export | P2 | Medium | None | Phase 3 | 3-4 | ~200 |
+| ~~F21. Stain separation export~~ | ~~P2~~ | ~~Medium~~ | ~~None~~ | **DONE (v1.2.0)** | 7 | ~250 |
 | ~~F6. SVG / vector export~~ | ~~P2~~ | ~~High~~ | ~~None~~ | **DONE (v0.6.0)** | 3 | ~500 |
 | F13. Custom text overlays | P2 | Medium | F11 | Phase 4 | 3-4 | ~250 |
 | F12. Crop and rotation | P2 | High | F1 | Phase 4 | 3-4 | ~200 |

@@ -296,6 +296,23 @@ For multi-channel fluorescence images, the rendered export can emit one panel pe
 
 </details>
 
+<details>
+<summary><b>Split Stains (Color Deconvolution)</b></summary>
+
+The brightfield equivalent of split channels. On a brightfield image with color-deconvolution stains set (Analyze -> *Estimate stain vectors* / *Set color deconvolution stains*), QuIET can write each deconvolved stain as its own image file: `imageName_Stain1_Hematoxylin.ext`, `imageName_Stain2_Eosin.ext`, and so on. Built on QuPath's `TransformedServerBuilder.deconvolveStains()`.
+
+| Option | Values |
+|--------|--------|
+| **Split stains (color deconvolution)** | Enable/disable. When on, each exported image produces one file per stain (residual optional). |
+| **Include residual stain** | Off by default. Turn on to also export the residual channel for QC of the stain estimation. |
+| **Individual stains as grayscale** | Render each stain panel as grayscale (default, recommended for publications) or its stain pseudocolor. |
+| **Color border on stain panels** | Draw a colored border around each stain panel matching that stain's pseudocolor. |
+| **Stain color legend swatch** | Draw a small colored rectangle plus the stain name in the upper-left corner of each per-stain panel. |
+
+**Mutually exclusive with Split channels.** Requires brightfield image type and stains set; images without stains are skipped with a warning. Settings are persisted under `quiet.rendered.splitStains*`.
+
+</details>
+
 </details>
 
 <details>
@@ -710,7 +727,6 @@ src/main/resources/
 Future releases may include:
 
 - Contour/outline mask export
-- Stain deconvolution channel export
 - COCO/YOLO annotation format export
 
 **Inset / zoom panels are intentionally not built into the Panel / Montage composer.** QuIET's `InsetRenderer` primitive can magnify and frame a region on a single image, but composing a multi-cell figure that *also* has insets on individual cells (with consistent margins, connecting lines and labels) is a layout problem better solved in a vector editor. For figures of that shape, export the cells from QuIET and assemble them in [Inkscape](https://inkscape.org/) (free, open-source), Affinity Designer, or Adobe Illustrator -- those tools already handle the per-cell inset arrangement that would otherwise have to be re-invented inside QuIET. If you want a single-image inset (one zoomed region on one image), that primitive is in the codebase and could be wired into the Rendered config pane -- open an issue if you have a use case.

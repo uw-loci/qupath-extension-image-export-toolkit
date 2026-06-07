@@ -402,6 +402,15 @@ public class BatchExportTask extends Task<ExportResult> {
             return;
         }
 
+        // Split-stains (color deconvolution) dispatch.
+        // The UI keeps split-stains and split-channels mutually exclusive, but
+        // if both are somehow enabled the split-channel branch above wins.
+        if (config.splitStains().enabled()) {
+            RenderedImageExporter.exportSplitStains(
+                    imageData, config, entryName, panelIndex);
+            return;
+        }
+
         if (config.getRegionType() == RenderedExportConfig.RegionType.ALL_ANNOTATIONS) {
             RenderedImageExporter.exportPerAnnotation(
                     imageData, classifier, densityBuilder, config, entryName, panelIndex);
@@ -561,6 +570,7 @@ public class BatchExportTask extends Task<ExportResult> {
                 .panelLabel(original.panelLabel())
                 .infoLabel(original.infoLabel())
                 .splitChannel(original.splitChannel())
+                .splitStains(original.splitStains())
                 .inset(original.inset())
                 .build();
     }
