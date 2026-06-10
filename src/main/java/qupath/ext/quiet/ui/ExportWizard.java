@@ -1051,10 +1051,15 @@ public class ExportWizard {
 
         activeStatusLabel().setText(result.getSummary());
 
-        // Show open folder button after successful export
+        // Show open folder button after successful export, and auto-open the
+        // folder so the user lands at the output without an extra click.
+        // Same behaviour across every export category (Rendered, Mask, Raw,
+        // Tiled, Object Crops, Panel / Montage). Best-effort: if Desktop is
+        // unsupported on this platform, the button stays as the fallback.
         if (lastExportDirectory != null && result.getSucceeded() > 0) {
             openFolderButton.setVisible(true);
             openFolderButton.setManaged(true);
+            openResultFolder();
         }
 
         if (result.hasErrors()) {

@@ -257,6 +257,11 @@ public class PublicationAdviceChecker {
                                                List<AdviceItem> items) {
         for (var img : images) {
             if (!img.isFluorescence() || img.nChannels() < 2) continue;
+            // At >=7 channels the conventional palette runs out anyway; QuPath
+            // has to assign some pair of channels to red+green by default, so
+            // flagging it as a colorblind issue is unhelpful and produces a
+            // false-positive warning on every high-plex multiplex image.
+            if (img.nChannels() >= 7) continue;
             if (img.channelColors() == null) continue;
 
             boolean hasRed = false;

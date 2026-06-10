@@ -769,6 +769,44 @@ public class RenderedImageExporter {
     }
 
     /**
+     * Wrap a single {@link BufferedImage} as a minimal SVG document and write
+     * it. Used by the split-channel / split-stains paths when the user has
+     * chosen SVG as the output format: each per-channel / per-stain panel is
+     * already a rendered raster (single-channel + decorations), so the SVG is
+     * simply the embedded raster with no vector object overlays -- there are no
+     * annotations to vectorize in a per-channel panel.
+     */
+    private static void writeImageAsSvg(BufferedImage image, File outputFile) throws IOException {
+        SVGGraphics2D svgG2d = new SVGGraphics2D(image.getWidth(), image.getHeight());
+        try {
+            svgG2d.setRenderingHint(
+                    RenderingHints.KEY_INTERPOLATION,
+                    RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            svgG2d.drawImage(image, 0, 0, null);
+            Files.writeString(outputFile.toPath(),
+                    svgG2d.getSVGDocument(), StandardCharsets.UTF_8);
+        } finally {
+            svgG2d.dispose();
+        }
+    }
+
+    /**
+     * Write a rendered panel image using the format chosen on the export config:
+     * SVG goes through {@link #writeImageAsSvg}; everything else goes through
+     * {@link ImageWriterTools#writeImage}. Centralises the dispatch so the
+     * split-channel and split-stains paths cannot silently land on the wrong
+     * writer when the user picks SVG.
+     */
+    private static void writePanelImage(BufferedImage image, File outputFile,
+                                         RenderedExportConfig config) throws IOException {
+        if (config.getFormat() == OutputFormat.SVG) {
+            writeImageAsSvg(image, outputFile);
+        } else {
+            ImageWriterTools.writeImage(image, outputFile.getAbsolutePath());
+        }
+    }
+
+    /**
      * Paint QuPath objects as native SVG vector elements using ROI shapes.
      * <p>
      * Each PathClass is grouped into an SVG {@code <g>} element via JFreeSVG
@@ -1728,7 +1766,7 @@ public class RenderedImageExporter {
                         imageData, baseServer, mergeServer, config, panelLabel);
             }
 
-            ImageWriterTools.writeImage(mergeImage, mergeFile.getAbsolutePath());
+            writePanelImage(mergeImage, mergeFile, config);
             logger.info("Exported merge: {}", mergeFile.getAbsolutePath());
             filesExported++;
             closeQuietly(mergeServer, entryName);
@@ -1789,7 +1827,7 @@ public class RenderedImageExporter {
                 String chName = channels.get(ch).getName();
                 String chFilename = config.buildSplitChannelFilename(entryName, ch, chName);
                 File chFile = new File(outDir, chFilename);
-                ImageWriterTools.writeImage(result, chFile.getAbsolutePath());
+                writePanelImage(result, chFile, config);
                 logger.info("Exported channel {}: {}", chName, chFile.getAbsolutePath());
                 filesExported++;
 
@@ -1892,7 +1930,7 @@ public class RenderedImageExporter {
                 String stainFilename = config.buildSplitStainFilename(
                         entryName, stainIdx, stain.getName());
                 File stainFile = new File(outDir, stainFilename);
-                ImageWriterTools.writeImage(result, stainFile.getAbsolutePath());
+                writePanelImage(result, stainFile, config);
                 logger.info("Exported stain {} ({}): {}",
                         stainIdx, stain.getName(), stainFile.getAbsolutePath());
                 filesExported++;
@@ -2157,6 +2195,11 @@ public class RenderedImageExporter {
 
     /**
      * Paint object overlays onto a graphics context.
+     * <p>
+     * Whole-image counterpart to {@link #paintObjectsInRegion}; both bypass
+     * QuPath's {@code HierarchyOverlay} for the same reason: it drops detections
+     * when downsample > 1.0 unless a viewer-side {@code regionStore} tile cache
+     * is provided, which we don't have in headless export. See GitHub #1.
      */
     private static void paintObjects(Graphics2D g2d,
                                      ImageData<BufferedImage> imageData,
@@ -2172,19 +2215,31 @@ public class RenderedImageExporter {
             overlayOptions.setShowDetections(showDetections);
             overlayOptions.setFillAnnotations(fillAnnotations);
             overlayOptions.setShowNames(showNames);
-            var hierarchyOverlay = new HierarchyOverlay(null, overlayOptions, imageData);
+
+            var hierarchy = imageData.getHierarchy();
+            var server = imageData.getServer();
+            var region = ImageRegion.createInstance(
+                    0, 0, server.getWidth(), server.getHeight(), 0, 0);
+            var paintable = hierarchy.getObjectsForRegion(null, region, null).stream()
+                    .filter(PathObject::hasROI)
+                    .filter(o -> {
+                        if (o.isAnnotation()) return showAnnotations;
+                        if (o.isDetection()) return showDetections;
+                        return false;
+                    })
+                    .toList();
+            if (paintable.isEmpty()) {
+                return;
+            }
 
             var gCopy = (Graphics2D) g2d.create();
-            gCopy.scale(1.0 / downsample, 1.0 / downsample);
-
-            var region = ImageRegion.createInstance(
-                    0, 0,
-                    imageData.getServer().getWidth(),
-                    imageData.getServer().getHeight(),
-                    0, 0);
-
-            hierarchyOverlay.paintOverlay(gCopy, region, downsample, imageData, true);
-            gCopy.dispose();
+            try {
+                gCopy.scale(1.0 / downsample, 1.0 / downsample);
+                PathObjectPainter.paintSpecifiedObjects(
+                        gCopy, paintable, overlayOptions, null, downsample);
+            } finally {
+                gCopy.dispose();
+            }
         } catch (Exception e) {
             logger.warn("Failed to paint objects: {}", e.getMessage());
         }
