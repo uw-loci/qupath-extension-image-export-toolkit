@@ -38,6 +38,7 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.util.StringConverter;
 
@@ -2269,10 +2270,18 @@ public class RenderedConfigPane extends VBox {
         final PixelClassifier finalClassifier = classifier;
         final DensityMapBuilder finalDensityBuilder = densityBuilder;
 
+        // Render at up to half the screen's longer dimension so the preview
+        // window can fill the cap without being blurry on a large monitor.
+        // Bounded between 800 and 4000 px so a tiny screen still gets a
+        // legible preview and a huge screen does not trigger a massive read.
+        var previewBounds = Screen.getPrimary().getVisualBounds();
+        int maxPreviewDim = (int) Math.max(800, Math.min(4000,
+                Math.max(previewBounds.getWidth(), previewBounds.getHeight()) / 2.0));
+
         Thread previewThread = new Thread(() -> {
             try {
                 BufferedImage preview = RenderedImageExporter.renderPreview(
-                        imageData, finalClassifier, finalDensityBuilder, config, 800);
+                        imageData, finalClassifier, finalDensityBuilder, config, maxPreviewDim);
 
                 Platform.runLater(() -> {
                     progressStage.close();
@@ -2290,10 +2299,24 @@ public class RenderedConfigPane extends VBox {
 
     private void showPreviewWindow(BufferedImage preview) {
         var fxImage = SwingFXUtils.toFXImage(preview, null);
+        double imgW = fxImage.getWidth();
+        double imgH = fxImage.getHeight();
+
+        // Expand the preview window to show the image at its natural size,
+        // capped at half the primary screen's visible area on each axis.
+        // Never upscale -- if the image is smaller than the cap, the window is
+        // sized to the image. Aspect ratio is preserved.
+        var screenBounds = Screen.getPrimary().getVisualBounds();
+        double maxW = screenBounds.getWidth() / 2.0;
+        double maxH = screenBounds.getHeight() / 2.0;
+        double scale = Math.min(1.0, Math.min(maxW / imgW, maxH / imgH));
+        double fitW = Math.max(1.0, imgW * scale);
+        double fitH = Math.max(1.0, imgH * scale);
+
         var imageView = new ImageView(fxImage);
         imageView.setPreserveRatio(true);
-        imageView.setFitWidth(800);
-        imageView.setFitHeight(600);
+        imageView.setFitWidth(fitW);
+        imageView.setFitHeight(fitH);
 
         var pane = new StackPane(imageView);
         pane.setPadding(new Insets(5));
