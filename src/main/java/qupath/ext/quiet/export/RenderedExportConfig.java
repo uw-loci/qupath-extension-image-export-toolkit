@@ -124,8 +124,17 @@ public class RenderedExportConfig {
             boolean enabled,
             boolean grayscale,
             boolean colorBorder,
-            boolean colorLegend
-    ) {}
+            boolean colorLegend,
+            ScaleBarRenderer.Position colorLegendPosition
+    ) {
+        // Backward-compatible constructor used by older builders / call sites
+        // that don't yet pass a corner.
+        public SplitChannelConfig(boolean enabled, boolean grayscale,
+                                   boolean colorBorder, boolean colorLegend) {
+            this(enabled, grayscale, colorBorder, colorLegend,
+                    ScaleBarRenderer.Position.UPPER_LEFT);
+        }
+    }
 
     /**
      * Split-stains (color deconvolution) export configuration.
@@ -263,7 +272,8 @@ public class RenderedExportConfig {
                 builder.splitChannels,
                 builder.splitChannelsGrayscale,
                 builder.splitChannelColorBorder,
-                builder.channelColorLegend);
+                builder.channelColorLegend,
+                builder.channelColorLegendPosition);
         this.splitStains = new SplitStainsConfig(
                 builder.splitStains,
                 builder.splitStainsIncludeResidual,
@@ -608,6 +618,8 @@ public class RenderedExportConfig {
         private boolean splitStainsColorBorder = false;
         private boolean splitStainsColorLegend = true;
         private boolean channelColorLegend = true;
+        private ScaleBarRenderer.Position channelColorLegendPosition =
+                ScaleBarRenderer.Position.UPPER_LEFT;
 
         // -- Inset fields --
         private boolean showInset = false;
@@ -936,12 +948,21 @@ public class RenderedExportConfig {
             return this;
         }
 
+        public Builder channelColorLegendPosition(ScaleBarRenderer.Position position) {
+            this.channelColorLegendPosition = position != null
+                    ? position : ScaleBarRenderer.Position.UPPER_LEFT;
+            return this;
+        }
+
         /** Sets all split channel fields from a sub-config record. */
         public Builder splitChannel(SplitChannelConfig cfg) {
             this.splitChannels = cfg.enabled();
             this.splitChannelsGrayscale = cfg.grayscale();
             this.splitChannelColorBorder = cfg.colorBorder();
             this.channelColorLegend = cfg.colorLegend();
+            this.channelColorLegendPosition = cfg.colorLegendPosition() != null
+                    ? cfg.colorLegendPosition()
+                    : ScaleBarRenderer.Position.UPPER_LEFT;
             return this;
         }
 

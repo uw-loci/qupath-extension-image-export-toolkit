@@ -138,6 +138,11 @@ public class RenderedConfigPane extends VBox {
     private CheckBox splitChannelsGrayscaleCheck;
     private CheckBox splitChannelColorBorderCheck;
     private CheckBox channelColorLegendCheck;
+    private ComboBox<ScaleBarRenderer.Position> channelColorLegendPositionCombo;
+    private Label channelColorLegendPositionLabel;
+
+    /** Amber warning shown above the Preview button when overlays share a corner. */
+    private Label overlayCollisionWarningLabel;
     private Label splitChannelNoteLabel;
 
     // Split-stains (color deconvolution) controls
@@ -237,9 +242,18 @@ public class RenderedConfigPane extends VBox {
         previewButton.setOnAction(e -> handlePreview());
         previewButton.setMaxWidth(Double.MAX_VALUE);
 
+        overlayCollisionWarningLabel = new Label();
+        overlayCollisionWarningLabel.setWrapText(true);
+        overlayCollisionWarningLabel.setMaxWidth(Double.MAX_VALUE);
+        overlayCollisionWarningLabel.setStyle("-fx-text-fill: #b36b00; "
+                + "-fx-font-style: italic; -fx-font-size: 11;");
+        overlayCollisionWarningLabel.setVisible(false);
+        overlayCollisionWarningLabel.setManaged(false);
+
         getChildren().addAll(header, imageSettingsSection, overlaySourceSection,
                 objectOverlaysSection, splitChannelSection, splitStainsSection,
                 scaleBarSection, colorScaleBarSection, infoLabelSection,
+                overlayCollisionWarningLabel,
                 previewButton);
 
         // Scale bar visibility toggling + SVG auto-default
@@ -288,6 +302,13 @@ public class RenderedConfigPane extends VBox {
                         splitStainsCheck.setSelected(false);
                     }
                 });
+        // Re-evaluate visibility (and the collision warning) whenever the
+        // channel-legend toggle flips, so the position picker shows/hides.
+        channelColorLegendCheck.selectedProperty().addListener(
+                (obs, oldVal, newVal) -> {
+                    updateSplitChannelVisibility(splitChannelsCheck.isSelected());
+                    updateOverlayCollisionWarning();
+                });
         updateSplitChannelVisibility(false);
 
         // Split-stains sub-option visibility (mutually exclusive with split-channel)
@@ -306,6 +327,22 @@ public class RenderedConfigPane extends VBox {
                 (obs, oldVal, newVal) -> { if (newVal) maybeSwitchToSvg(); });
         includeDetectionsCheck.selectedProperty().addListener(
                 (obs, oldVal, newVal) -> { if (newVal) maybeSwitchToSvg(); });
+
+        // Overlay-corner collision warning: re-check whenever any of the
+        // corner-anchored overlays change their show flag or position.
+        Runnable warn = this::updateOverlayCollisionWarning;
+        showScaleBarCheck.selectedProperty().addListener((o, a, b) -> warn.run());
+        scaleBarPositionCombo.valueProperty().addListener((o, a, b) -> warn.run());
+        showColorScaleBarCheck.selectedProperty().addListener((o, a, b) -> warn.run());
+        colorScaleBarPositionCombo.valueProperty().addListener((o, a, b) -> warn.run());
+        showPanelLabelCheck.selectedProperty().addListener((o, a, b) -> warn.run());
+        panelLabelPositionCombo.valueProperty().addListener((o, a, b) -> warn.run());
+        showInfoLabelCheck.selectedProperty().addListener((o, a, b) -> warn.run());
+        infoLabelPositionCombo.valueProperty().addListener((o, a, b) -> warn.run());
+        showChannelLegendCheck.selectedProperty().addListener((o, a, b) -> warn.run());
+        splitChannelsCheck.selectedProperty().addListener((o, a, b) -> warn.run());
+        channelColorLegendPositionCombo.valueProperty().addListener((o, a, b) -> warn.run());
+        updateOverlayCollisionWarning();
 
         // Preview button enabled state depends on image being open
         updatePreviewButtonState();
@@ -945,6 +982,29 @@ public class RenderedConfigPane extends VBox {
         grid.add(channelColorLegendCheck, 0, row, 2, 1);
         row++;
 
+        channelColorLegendPositionLabel = new Label(
+                resources.getString("rendered.label.channelColorLegendPosition"));
+        grid.add(channelColorLegendPositionLabel, 0, row);
+        channelColorLegendPositionCombo = new ComboBox<>(FXCollections.observableArrayList(
+                ScaleBarRenderer.Position.values()));
+        channelColorLegendPositionCombo.setValue(ScaleBarRenderer.Position.UPPER_LEFT);
+        channelColorLegendPositionCombo.setConverter(new StringConverter<>() {
+            @Override public String toString(ScaleBarRenderer.Position pos) {
+                if (pos == null) return "";
+                return switch (pos) {
+                    case LOWER_RIGHT -> resources.getString("rendered.scaleBar.lowerRight");
+                    case LOWER_LEFT -> resources.getString("rendered.scaleBar.lowerLeft");
+                    case UPPER_RIGHT -> resources.getString("rendered.scaleBar.upperRight");
+                    case UPPER_LEFT -> resources.getString("rendered.scaleBar.upperLeft");
+                };
+            }
+            @Override public ScaleBarRenderer.Position fromString(String s) {
+                return ScaleBarRenderer.Position.UPPER_LEFT;
+            }
+        });
+        grid.add(channelColorLegendPositionCombo, 1, row);
+        row++;
+
         // Informational note about grayscale vs color
         splitChannelNoteLabel = new Label(resources.getString("rendered.label.splitChannelNote"));
         splitChannelNoteLabel.setWrapText(true);
@@ -1104,6 +1164,11 @@ public class RenderedConfigPane extends VBox {
         splitChannelColorBorderCheck.setManaged(splitEnabled);
         channelColorLegendCheck.setVisible(splitEnabled);
         channelColorLegendCheck.setManaged(splitEnabled);
+        boolean showLegendPos = splitEnabled && channelColorLegendCheck.isSelected();
+        channelColorLegendPositionLabel.setVisible(showLegendPos);
+        channelColorLegendPositionLabel.setManaged(showLegendPos);
+        channelColorLegendPositionCombo.setVisible(showLegendPos);
+        channelColorLegendPositionCombo.setManaged(showLegendPos);
         splitChannelNoteLabel.setVisible(splitEnabled);
         splitChannelNoteLabel.setManaged(splitEnabled);
         // Panel label was previously hidden when split-channel was off, which
@@ -1924,6 +1989,14 @@ public class RenderedConfigPane extends VBox {
         splitStainsColorLegendCheck.setSelected(QuietPreferences.isRenderedSplitStainsColorLegend());
         updateSplitStainsVisibility(splitStainsCheck.isSelected());
 
+        // Channel-legend corner
+        try {
+            channelColorLegendPositionCombo.setValue(ScaleBarRenderer.Position.valueOf(
+                    QuietPreferences.getRenderedChannelColorLegendPosition()));
+        } catch (IllegalArgumentException e) {
+            channelColorLegendPositionCombo.setValue(ScaleBarRenderer.Position.UPPER_LEFT);
+        }
+
         // Global matched preferences
         matchedPercentileSpinner.getValueFactory().setValue(
                 QuietPreferences.getRenderedMatchedDisplayPercentile());
@@ -2012,6 +2085,10 @@ public class RenderedConfigPane extends VBox {
         QuietPreferences.setRenderedSplitChannelsGrayscale(splitChannelsGrayscaleCheck.isSelected());
         QuietPreferences.setRenderedSplitChannelColorBorder(splitChannelColorBorderCheck.isSelected());
         QuietPreferences.setRenderedChannelColorLegend(channelColorLegendCheck.isSelected());
+        if (channelColorLegendPositionCombo.getValue() != null) {
+            QuietPreferences.setRenderedChannelColorLegendPosition(
+                    channelColorLegendPositionCombo.getValue().name());
+        }
         QuietPreferences.setRenderedSplitStains(splitStainsCheck.isSelected());
         QuietPreferences.setRenderedSplitStainsIncludeResidual(
                 splitStainsIncludeResidualCheck.isSelected());
@@ -2113,6 +2190,10 @@ public class RenderedConfigPane extends VBox {
                 .splitChannelsGrayscale(splitChannelsGrayscaleCheck.isSelected())
                 .splitChannelColorBorder(splitChannelColorBorderCheck.isSelected())
                 .channelColorLegend(channelColorLegendCheck.isSelected())
+                .channelColorLegendPosition(
+                        channelColorLegendPositionCombo.getValue() != null
+                                ? channelColorLegendPositionCombo.getValue()
+                                : ScaleBarRenderer.Position.UPPER_LEFT)
                 .matchedDisplayPercentile(
                         matchedPercentileSpinner.getValue() != null
                                 ? matchedPercentileSpinner.getValue() : 0.1)
@@ -2193,6 +2274,85 @@ public class RenderedConfigPane extends VBox {
      * Renders the current image with current settings in a background thread
      * and shows the result in a popup window.
      */
+    /**
+     * Recompute the overlay-collision warning. Walks every corner-anchored
+     * overlay that is currently enabled (scale bar, color scale bar, panel
+     * label, info label, channel/stain legend) and reports any corner with
+     * more than one tenant. Warning text is the same color as the grid
+     * overflow notice (amber italic) so it stays visible but not alarming.
+     */
+    private void updateOverlayCollisionWarning() {
+        if (overlayCollisionWarningLabel == null) return;
+
+        // Build (corner -> overlay names) for everything currently on. We use
+        // the ResourceBundle short names so the warning reads in English.
+        java.util.Map<ScaleBarRenderer.Position, java.util.List<String>> byCorner =
+                new java.util.EnumMap<>(ScaleBarRenderer.Position.class);
+        addOverlayPlacement(byCorner,
+                showScaleBarCheck != null && showScaleBarCheck.isSelected(),
+                scaleBarPositionCombo != null ? scaleBarPositionCombo.getValue() : null,
+                "Scale bar");
+        addOverlayPlacement(byCorner,
+                showColorScaleBarCheck != null && showColorScaleBarCheck.isSelected(),
+                colorScaleBarPositionCombo != null ? colorScaleBarPositionCombo.getValue() : null,
+                "Color scale bar");
+        addOverlayPlacement(byCorner,
+                showPanelLabelCheck != null && showPanelLabelCheck.isSelected(),
+                panelLabelPositionCombo != null ? panelLabelPositionCombo.getValue() : null,
+                "Panel label");
+        addOverlayPlacement(byCorner,
+                showInfoLabelCheck != null && showInfoLabelCheck.isSelected(),
+                infoLabelPositionCombo != null ? infoLabelPositionCombo.getValue() : null,
+                "Info label");
+        // Channel/stain legend either via top-level toggle or the split-channel
+        // swatch toggle. Both place themselves at the channel-legend position.
+        boolean legendOn = (showChannelLegendCheck != null
+                && showChannelLegendCheck.isSelected())
+                || (splitChannelsCheck != null && splitChannelsCheck.isSelected()
+                        && channelColorLegendCheck != null
+                        && channelColorLegendCheck.isSelected());
+        addOverlayPlacement(byCorner, legendOn,
+                channelColorLegendPositionCombo != null
+                        ? channelColorLegendPositionCombo.getValue() : null,
+                "Channel/stain legend");
+
+        var collisions = new java.util.ArrayList<String>();
+        for (var entry : byCorner.entrySet()) {
+            if (entry.getValue().size() > 1) {
+                collisions.add(String.join(" + ", entry.getValue())
+                        + " (" + cornerLabel(entry.getKey()) + ")");
+            }
+        }
+        if (collisions.isEmpty()) {
+            overlayCollisionWarningLabel.setVisible(false);
+            overlayCollisionWarningLabel.setManaged(false);
+        } else {
+            overlayCollisionWarningLabel.setText(
+                    "Overlapping placement -- these overlays share a corner and may "
+                    + "draw on top of each other: "
+                    + String.join("; ", collisions));
+            overlayCollisionWarningLabel.setVisible(true);
+            overlayCollisionWarningLabel.setManaged(true);
+        }
+    }
+
+    private static void addOverlayPlacement(
+            java.util.Map<ScaleBarRenderer.Position, java.util.List<String>> map,
+            boolean enabled, ScaleBarRenderer.Position pos, String name) {
+        if (!enabled || pos == null) return;
+        map.computeIfAbsent(pos, k -> new java.util.ArrayList<>()).add(name);
+    }
+
+    private static String cornerLabel(ScaleBarRenderer.Position pos) {
+        if (pos == null) return "";
+        return switch (pos) {
+            case UPPER_LEFT -> "upper left";
+            case UPPER_RIGHT -> "upper right";
+            case LOWER_LEFT -> "lower left";
+            case LOWER_RIGHT -> "lower right";
+        };
+    }
+
     private void handlePreview() {
         var viewer = qupath.getViewer();
         if (viewer == null || viewer.getImageData() == null) {

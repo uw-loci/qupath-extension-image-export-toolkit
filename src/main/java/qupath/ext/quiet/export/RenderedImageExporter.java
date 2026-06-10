@@ -1429,7 +1429,8 @@ public class RenderedImageExporter {
                 if (config.splitChannel().colorLegend()) {
                     String chName = channels.get(0).getName();
                     drawChannelColorLegend(g2d, result.getWidth(), result.getHeight(),
-                            channelColor, chName);
+                            channelColor, chName,
+                            config.splitChannel().colorLegendPosition());
                 }
                 maybeDrawScaleBar(g2d, imageData, config,
                         result.getWidth(), result.getHeight(), previewDownsample);
@@ -1931,7 +1932,8 @@ public class RenderedImageExporter {
                 if (config.splitChannel().colorLegend()) {
                     String chName = channels.get(ch).getName();
                     drawChannelColorLegend(g2d, result.getWidth(), result.getHeight(),
-                            channelColor, chName);
+                            channelColor, chName,
+                            config.splitChannel().colorLegendPosition());
                 }
 
                 // Scale bar on per-channel panels too
@@ -2034,8 +2036,11 @@ public class RenderedImageExporter {
                                 packedColor);
                     }
                     if (config.splitStains().colorLegend()) {
+                        // Split-stains shares the split-channel legend position
+                        // for consistency on the per-stain panel.
                         drawChannelColorLegend(g2d, result.getWidth(), result.getHeight(),
-                                packedColor, stain.getName());
+                                packedColor, stain.getName(),
+                                config.splitChannel().colorLegendPosition());
                     }
                     maybeDrawScaleBar(g2d, imageData, config,
                             result.getWidth(), result.getHeight());
@@ -2093,10 +2098,11 @@ public class RenderedImageExporter {
 
     /**
      * Draw a small colored rectangle (swatch) with the channel name in the
-     * upper-left corner of the image.
+     * configured corner of the image.
      */
     private static void drawChannelColorLegend(Graphics2D g2d, int w, int h,
-                                                int packedColor, String channelName) {
+                                                int packedColor, String channelName,
+                                                ScaleBarRenderer.Position position) {
         int r = (packedColor >> 16) & 0xFF;
         int g = (packedColor >> 8) & 0xFF;
         int b = packedColor & 0xFF;
@@ -2108,22 +2114,51 @@ public class RenderedImageExporter {
         int fontSize = Math.max(10, minDim / 40);
 
         g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
+        g2d.setFont(new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD, fontSize));
+        FontMetrics fm = g2d.getFontMetrics();
+        int textW = (channelName == null || channelName.isEmpty())
+                ? 0 : fm.stringWidth(channelName);
+
+        // Compute the legend's bounding origin from the chosen corner.
+        ScaleBarRenderer.Position pos = position != null
+                ? position : ScaleBarRenderer.Position.UPPER_LEFT;
+        int contentW = swatchSize + (textW > 0 ? margin + textW : 0);
+        int contentH = swatchSize;
+        int x0, y0;
+        switch (pos) {
+            case UPPER_RIGHT -> {
+                x0 = Math.max(margin, w - margin - contentW);
+                y0 = margin;
+            }
+            case LOWER_LEFT -> {
+                x0 = margin;
+                y0 = Math.max(margin, h - margin - contentH);
+            }
+            case LOWER_RIGHT -> {
+                x0 = Math.max(margin, w - margin - contentW);
+                y0 = Math.max(margin, h - margin - contentH);
+            }
+            case UPPER_LEFT -> {
+                x0 = margin;
+                y0 = margin;
+            }
+            default -> {
+                x0 = margin;
+                y0 = margin;
+            }
+        }
 
         // Draw swatch
         g2d.setColor(chColor);
-        g2d.fillRect(margin, margin, swatchSize, swatchSize);
-
-        // Draw outline around swatch for visibility
+        g2d.fillRect(x0, y0, swatchSize, swatchSize);
         g2d.setColor(Color.WHITE);
-        g2d.drawRect(margin, margin, swatchSize, swatchSize);
+        g2d.drawRect(x0, y0, swatchSize, swatchSize);
 
-        // Draw channel name next to swatch
-        if (channelName != null && !channelName.isEmpty()) {
-            g2d.setFont(new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD, fontSize));
-            int textX = margin + swatchSize + margin;
-            int textY = margin + swatchSize - 2;
+        // Draw channel name to the right of the swatch
+        if (textW > 0) {
+            int textX = x0 + swatchSize + margin;
+            int textY = y0 + swatchSize - 2;
 
-            // Outline for readability
             g2d.setColor(Color.BLACK);
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dy = -1; dy <= 1; dy++) {
@@ -2308,11 +2343,44 @@ public class RenderedImageExporter {
         int colWidth = swatchSize + margin / 2 + actualWidest + margin / 2;
         int rowPitch = swatchSize + lineSpacing;
 
+        // Origin of the legend bounding box for the chosen corner. When
+        // split-channel is on, the swatch position is the source of truth
+        // (so swatch + merge legend stay in the same corner); otherwise
+        // default to UPPER_LEFT.
+        ScaleBarRenderer.Position pos = config.splitChannel().enabled()
+                ? config.splitChannel().colorLegendPosition()
+                : ScaleBarRenderer.Position.UPPER_LEFT;
+        int legendW = columns * colWidth;
+        int legendH = rowsPerCol * rowPitch;
+        int originX, originY;
+        switch (pos != null ? pos : ScaleBarRenderer.Position.UPPER_LEFT) {
+            case UPPER_RIGHT -> {
+                originX = Math.max(margin, w - margin - legendW);
+                originY = margin;
+            }
+            case LOWER_LEFT -> {
+                originX = margin;
+                originY = Math.max(margin, h - margin - legendH);
+            }
+            case LOWER_RIGHT -> {
+                originX = Math.max(margin, w - margin - legendW);
+                originY = Math.max(margin, h - margin - legendH);
+            }
+            case UPPER_LEFT -> {
+                originX = margin;
+                originY = margin;
+            }
+            default -> {
+                originX = margin;
+                originY = margin;
+            }
+        }
+
         for (int i = 0; i < n; i++) {
             int col = i / rowsPerCol;
             int row = i % rowsPerCol;
-            int x0 = margin + col * colWidth;
-            int y0 = margin + row * rowPitch;
+            int x0 = originX + col * colWidth;
+            int y0 = originY + row * rowPitch;
 
             int[] rgb = entries.get(i);
             Color chColor = new Color(rgb[0], rgb[1], rgb[2]);

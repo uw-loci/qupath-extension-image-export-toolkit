@@ -158,6 +158,9 @@ public class QuietPreferences {
     private static final BooleanProperty renderedChannelColorLegend =
             PathPrefs.createPersistentPreference(PREFIX + "rendered.channelColorLegend", true);
 
+    private static final StringProperty renderedChannelColorLegendPosition =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.channelColorLegendPosition", "UPPER_LEFT");
+
     private static final BooleanProperty renderedSplitStains =
             PathPrefs.createPersistentPreference(PREFIX + "rendered.splitStains", false);
 
@@ -602,6 +605,10 @@ public class QuietPreferences {
     public static boolean isRenderedChannelColorLegend() { return renderedChannelColorLegend.get(); }
     public static void setRenderedChannelColorLegend(boolean value) { renderedChannelColorLegend.set(value); }
 
+    public static StringProperty renderedChannelColorLegendPositionProperty() { return renderedChannelColorLegendPosition; }
+    public static String getRenderedChannelColorLegendPosition() { return renderedChannelColorLegendPosition.get(); }
+    public static void setRenderedChannelColorLegendPosition(String value) { renderedChannelColorLegendPosition.set(value != null ? value : "UPPER_LEFT"); }
+
     public static BooleanProperty renderedSplitStainsProperty() { return renderedSplitStains; }
     public static boolean isRenderedSplitStains() { return renderedSplitStains.get(); }
     public static void setRenderedSplitStains(boolean value) { renderedSplitStains.set(value); }
@@ -973,6 +980,7 @@ public class QuietPreferences {
                 map.put(PREFIX + "rendered.splitChannelsGrayscale", renderedSplitChannelsGrayscale);
                 map.put(PREFIX + "rendered.splitChannelColorBorder", renderedSplitChannelColorBorder);
                 map.put(PREFIX + "rendered.channelColorLegend", renderedChannelColorLegend);
+                map.put(PREFIX + "rendered.channelColorLegendPosition", renderedChannelColorLegendPosition);
                 map.put(PREFIX + "rendered.splitStains", renderedSplitStains);
                 map.put(PREFIX + "rendered.splitStainsIncludeResidual", renderedSplitStainsIncludeResidual);
                 map.put(PREFIX + "rendered.splitStainsGrayscale", renderedSplitStainsGrayscale);
