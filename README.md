@@ -709,7 +709,7 @@ src/main/resources/
 <summary><h2>Known Limitations</h2></summary>
 
 - **OME-TIFF Pyramid** requires `qupath-extension-bioformats` to be installed alongside QuIET. Without it, pyramid exports fall back to flat OME-TIFF.
-- **SVG export** uses the JFreeSVG library for vector rendering. The base image is embedded as a raster element; annotations and overlays are rendered as vector paths. SVG is only available for rendered exports.
+- **SVG export** uses the JFreeSVG library for vector rendering. The base image is embedded as a raster element; annotations are always rendered as vector paths. Detections are rendered as vector paths up to the per-export **SVG vector detection cap** (default 1000); above the cap, detections are rasterized into the embedded base image so the document stays browser-viewable. Set the cap to `0` to keep every detection as a vector path regardless of count and accept the file size. SVG is only available for rendered exports.
 - **Channel selection** currently uses channel indices. The UI populates available channels, but auto-detection from image metadata is planned for a future release.
 - **Tiled GeoJSON** produces one GeoJSON file per tile via QuPath's `TileExporter.exportJson()` API (not a single consolidated file).
 - Rendered export with classifier overlay requires a pixel classifier saved in the QuPath project.

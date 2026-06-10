@@ -28,6 +28,14 @@ class RenderedScriptGenerator {
         if (config.getFormat() == OutputFormat.SVG) {
             appendLine(sb, "// NOTE: SVG export requires the QuIET extension. Falling back to PNG for script.");
             appendLine(sb, "def outputFormat = " + quote(OutputFormat.PNG.getExtension()));
+            // Record the cap as a comment for re-runs through the wizard.
+            int cap = config.getSvgMaxVectorDetections();
+            if (cap == 0) {
+                appendLine(sb, "// SVG vector detection cap: 0 (no cap -- all detections as vector paths)");
+            } else {
+                appendLine(sb, "// SVG vector detection cap: " + cap
+                        + " (detections above this are rasterized into the embedded base image)");
+            }
         } else {
             appendLine(sb, "def outputFormat = " + quote(config.getFormat().getExtension()));
         }

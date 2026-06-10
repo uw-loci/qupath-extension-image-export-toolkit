@@ -42,6 +42,7 @@ import qupath.lib.display.ImageDisplay;
 import qupath.lib.display.settings.DisplaySettingUtils;
 import qupath.lib.gui.images.servers.ChannelDisplayTransformServer;
 import qupath.lib.gui.viewer.OverlayOptions;
+import qupath.lib.gui.viewer.PathObjectPainter;
 import qupath.lib.gui.viewer.overlays.HierarchyOverlay;
 import qupath.lib.images.ImageData;
 import qupath.lib.images.servers.ImageServer;
@@ -690,6 +691,47 @@ public class RenderedImageExporter {
                 imageData, baseServer, classificationServer, densityServer,
                 displayServer, config, x, y, w, h);
 
+        double effectiveDs = resolveEffectiveDownsample(config,
+                displayServer != null ? displayServer : baseServer);
+
+        // Decide whether detections become vector or get rasterized into the
+        // base image. Annotations are ALWAYS vector. When detection count
+        // exceeds the configured cap, detections are folded into the embedded
+        // base image so the SVG document stays browser-viewable. See
+        // RenderedExportConfig.getSvgMaxVectorDetections() for the contract.
+        int cap = config.getSvgMaxVectorDetections();
+        long detectionCount = 0;
+        if (config.overlays().includeDetections() && cap > 0) {
+            var hierarchy = imageData.getHierarchy();
+            var region = ImageRegion.createInstance(x, y, w, h, 0, 0);
+            detectionCount = hierarchy.getObjectsForRegion(null, region, null).stream()
+                    .filter(PathObject::isDetection)
+                    .filter(PathObject::hasROI)
+                    .count();
+        }
+        boolean detectionsAsVector = !(cap > 0
+                && config.overlays().includeDetections()
+                && detectionCount > cap);
+        if (config.overlays().includeDetections() && !detectionsAsVector) {
+            logger.info("SVG export: {} detections in region exceed vector cap ({}); "
+                    + "rasterizing detections into base image to keep the file viewable. "
+                    + "Set cap to 0 to keep all detections as SVG vector paths.",
+                    detectionCount, cap);
+            Graphics2D rasterG2d = raster.createGraphics();
+            try {
+                rasterG2d.setRenderingHint(
+                        RenderingHints.KEY_ANTIALIASING,
+                        RenderingHints.VALUE_ANTIALIAS_ON);
+                paintObjectsInRegion(rasterG2d, imageData, effectiveDs,
+                        x, y, w, h,
+                        false, true,  // annotations stay vector; rasterize ONLY detections
+                        config.overlays().fillAnnotations(),
+                        config.overlays().showNames());
+            } finally {
+                rasterG2d.dispose();
+            }
+        }
+
         SVGGraphics2D svgG2d = new SVGGraphics2D(raster.getWidth(), raster.getHeight());
         svgG2d.setRenderingHint(
                 RenderingHints.KEY_INTERPOLATION,
@@ -698,13 +740,13 @@ public class RenderedImageExporter {
         // Embed raster base as PNG inside SVG
         svgG2d.drawImage(raster, 0, 0, null);
 
-        double effectiveDs = resolveEffectiveDownsample(config,
-                displayServer != null ? displayServer : baseServer);
-
-        // Paint object overlays as true SVG vector path elements
-        if (config.overlays().includeAnnotations() || config.overlays().includeDetections()) {
+        // Paint annotations (and, when under the cap, detections) as true SVG
+        // vector path elements.
+        boolean anyVectorObjects = config.overlays().includeAnnotations()
+                || (config.overlays().includeDetections() && detectionsAsVector);
+        if (anyVectorObjects) {
             paintObjectsAsSvg(svgG2d, imageData, config,
-                    x, y, w, h, effectiveDs);
+                    x, y, w, h, effectiveDs, detectionsAsVector);
         }
 
         // Draw remaining overlays (scale bar, color scale bar, panel label, info label)
@@ -748,18 +790,23 @@ public class RenderedImageExporter {
                                             RenderedExportConfig config,
                                             int regionX, int regionY,
                                             int regionW, int regionH,
-                                            double downsample) {
+                                            double downsample,
+                                            boolean detectionsAsVector) {
         try {
             var hierarchy = imageData.getHierarchy();
             var region = ImageRegion.createInstance(regionX, regionY, regionW, regionH, 0, 0);
             var allObjects = hierarchy.getObjectsForRegion(null, region, null);
 
-            // Filter by annotation/detection inclusion settings
+            // Filter by annotation/detection inclusion settings. Detections are
+            // dropped from the vector pass when the caller has chosen to rasterize
+            // them (cap exceeded); annotations are always vector when included.
             var objects = allObjects.stream()
                     .filter(o -> o.hasROI())
                     .filter(o -> {
                         if (o.isAnnotation()) return config.overlays().includeAnnotations();
-                        if (o.isDetection()) return config.overlays().includeDetections();
+                        if (o.isDetection()) {
+                            return config.overlays().includeDetections() && detectionsAsVector;
+                        }
                         return false;
                     })
                     .toList();
@@ -853,23 +900,44 @@ public class RenderedImageExporter {
                                               boolean showDetections,
                                               boolean fillAnnotations,
                                               boolean showNames) {
+        // Walks the hierarchy directly and paints with PathObjectPainter, rather
+        // than going through HierarchyOverlay. HierarchyOverlay drops detections
+        // entirely when downsample > 1.0 unless a regionStore tile cache is
+        // provided -- which we don't have in headless export. The viewer hides
+        // that gap with its own tile cache; we'd otherwise silently lose every
+        // detection at every downsample QuIET actually uses. (See GitHub #1.)
         try {
             var overlayOptions = new OverlayOptions();
             overlayOptions.setShowAnnotations(showAnnotations);
             overlayOptions.setShowDetections(showDetections);
             overlayOptions.setFillAnnotations(fillAnnotations);
             overlayOptions.setShowNames(showNames);
-            var hierarchyOverlay = new HierarchyOverlay(null, overlayOptions, imageData);
 
-            var gCopy = (Graphics2D) g2d.create();
-            gCopy.scale(1.0 / downsample, 1.0 / downsample);
-            gCopy.translate(-regionX, -regionY);
-
+            var hierarchy = imageData.getHierarchy();
             var region = ImageRegion.createInstance(
                     regionX, regionY, regionW, regionH, 0, 0);
+            var allObjects = hierarchy.getObjectsForRegion(null, region, null);
+            var paintable = allObjects.stream()
+                    .filter(PathObject::hasROI)
+                    .filter(o -> {
+                        if (o.isAnnotation()) return showAnnotations;
+                        if (o.isDetection()) return showDetections;
+                        return false;
+                    })
+                    .toList();
+            if (paintable.isEmpty()) {
+                return;
+            }
 
-            hierarchyOverlay.paintOverlay(gCopy, region, downsample, imageData, true);
-            gCopy.dispose();
+            var gCopy = (Graphics2D) g2d.create();
+            try {
+                gCopy.scale(1.0 / downsample, 1.0 / downsample);
+                gCopy.translate(-regionX, -regionY);
+                PathObjectPainter.paintSpecifiedObjects(
+                        gCopy, paintable, overlayOptions, null, downsample);
+            } finally {
+                gCopy.dispose();
+            }
         } catch (Exception e) {
             logger.warn("Failed to paint objects in region: {}", e.getMessage());
         }

@@ -176,6 +176,16 @@ public class QuietPreferences {
     private static final DoubleProperty renderedMatchedDisplayPercentile =
             PathPrefs.createPersistentPreference(PREFIX + "rendered.matchedDisplayPercentile", 0.1);
 
+    /**
+     * Maximum vector detections per SVG document before falling back to
+     * rasterizing detections into the embedded base image (annotations always
+     * stay vector). 0 means "never rasterize" -- emit every detection as its
+     * own SVG path regardless of count. Default 1000 keeps the document
+     * browser-viewable on typical detection sets.
+     */
+    private static final IntegerProperty renderedSvgMaxVectorDetections =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.svgMaxVectorDetections", 1000);
+
     // --- Rendered info label preferences ---
 
     private static final BooleanProperty renderedShowInfoLabel =
@@ -616,6 +626,10 @@ public class QuietPreferences {
     public static double getRenderedMatchedDisplayPercentile() { return renderedMatchedDisplayPercentile.get(); }
     public static void setRenderedMatchedDisplayPercentile(double value) { renderedMatchedDisplayPercentile.set(value); }
 
+    public static IntegerProperty renderedSvgMaxVectorDetectionsProperty() { return renderedSvgMaxVectorDetections; }
+    public static int getRenderedSvgMaxVectorDetections() { return renderedSvgMaxVectorDetections.get(); }
+    public static void setRenderedSvgMaxVectorDetections(int value) { renderedSvgMaxVectorDetections.set(Math.max(0, value)); }
+
     // --- Info label ---
 
     public static BooleanProperty renderedShowInfoLabelProperty() { return renderedShowInfoLabel; }
@@ -965,6 +979,7 @@ public class QuietPreferences {
                 map.put(PREFIX + "rendered.splitStainsColorBorder", renderedSplitStainsColorBorder);
                 map.put(PREFIX + "rendered.splitStainsColorLegend", renderedSplitStainsColorLegend);
                 map.put(PREFIX + "rendered.matchedDisplayPercentile", renderedMatchedDisplayPercentile);
+                map.put(PREFIX + "rendered.svgMaxVectorDetections", renderedSvgMaxVectorDetections);
                 map.put(PREFIX + "rendered.showInfoLabel", renderedShowInfoLabel);
                 map.put(PREFIX + "rendered.infoLabelTemplate", renderedInfoLabelTemplate);
                 map.put(PREFIX + "rendered.infoLabelPosition", renderedInfoLabelPosition);

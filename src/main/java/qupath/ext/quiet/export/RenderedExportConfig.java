@@ -187,6 +187,7 @@ public class RenderedExportConfig {
     private final boolean addToWorkflow;
     private final double matchedDisplayPercentile;
     private final boolean showChannelLegend;
+    private final int svgMaxVectorDetections;
 
     // -----------------------------------------------------------------------
     //  Sub-config record instances
@@ -223,6 +224,7 @@ public class RenderedExportConfig {
         this.addToWorkflow = builder.addToWorkflow;
         this.matchedDisplayPercentile = builder.matchedDisplayPercentile;
         this.showChannelLegend = builder.showChannelLegend;
+        this.svgMaxVectorDetections = builder.svgMaxVectorDetections;
 
         // Sub-configs assembled from individual builder fields
         this.overlays = new ObjectOverlayConfig(
@@ -372,6 +374,27 @@ public class RenderedExportConfig {
      */
     public boolean isShowChannelLegend() {
         return showChannelLegend;
+    }
+
+    /**
+     * Maximum number of detections to emit as individual SVG vector path
+     * elements before falling back to rasterizing detections into the
+     * embedded base image.
+     * <p>
+     * Annotations are always vector. The cap exists because each vector
+     * detection becomes a separate {@code <path>} element in the SVG
+     * document; with tens of thousands of detections the file grows past
+     * what a browser can render and well past what most vector editors
+     * handle smoothly. When detection count exceeds the cap, detections are
+     * painted onto the raster layer (still visible in the figure, but not
+     * individually editable in Illustrator / Inkscape); annotations stay
+     * vector regardless.
+     * <p>
+     * Special values: {@code 0} disables the cap (all detections always
+     * vector, accept the file size); a positive value sets the cap.
+     */
+    public int getSvgMaxVectorDetections() {
+        return svgMaxVectorDetections;
     }
 
     // -----------------------------------------------------------------------
@@ -536,6 +559,7 @@ public class RenderedExportConfig {
         private boolean addToWorkflow = true;
         private double matchedDisplayPercentile = 0.1;
         private boolean showChannelLegend = false;
+        private int svgMaxVectorDetections = 1000;
 
         // -- Object overlay fields --
         private String classifierName;
@@ -673,6 +697,11 @@ public class RenderedExportConfig {
 
         public Builder showChannelLegend(boolean show) {
             this.showChannelLegend = show;
+            return this;
+        }
+
+        public Builder svgMaxVectorDetections(int cap) {
+            this.svgMaxVectorDetections = Math.max(0, cap);
             return this;
         }
 

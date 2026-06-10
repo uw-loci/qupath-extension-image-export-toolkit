@@ -174,6 +174,11 @@ public class RenderedConfigPane extends VBox {
     // Format info label
     private Label formatInfoLabel;
 
+    // SVG vector-detection cap
+    private Label svgVectorCapLabel;
+    private Spinner<Integer> svgVectorCapSpinner;
+    private Label svgVectorCapNoteLabel;
+
     // Labels promoted for tooltip wiring (were inline new Label(...))
     private Label modeLabel;
     private Label regionTypeLabel;
@@ -561,8 +566,31 @@ public class RenderedConfigPane extends VBox {
         grid.add(formatInfoLabel, 1, row);
         row++;
 
-        formatCombo.valueProperty().addListener((obs, old, val) -> updateFormatInfo(val));
+        // SVG: vector detection cap (only relevant when SVG format is selected)
+        svgVectorCapLabel = new Label(resources.getString("rendered.label.svgVectorCap"));
+        grid.add(svgVectorCapLabel, 0, row);
+        var svgCapFactory = new SpinnerValueFactory.IntegerSpinnerValueFactory(
+                0, 1_000_000, 1000, 500);
+        svgVectorCapSpinner = new Spinner<>(svgCapFactory);
+        svgVectorCapSpinner.setEditable(true);
+        svgVectorCapSpinner.setPrefWidth(120);
+        svgVectorCapSpinner.setTooltip(createTooltip("tooltip.rendered.svgVectorCap"));
+        grid.add(svgVectorCapSpinner, 1, row);
+        row++;
+        svgVectorCapNoteLabel = new Label(resources.getString("rendered.label.svgVectorCapNote"));
+        svgVectorCapNoteLabel.setWrapText(true);
+        svgVectorCapNoteLabel.setMaxWidth(400);
+        svgVectorCapNoteLabel.setStyle("-fx-font-size: 11; -fx-text-fill: #666666; "
+                + "-fx-font-style: italic;");
+        grid.add(svgVectorCapNoteLabel, 1, row);
+        row++;
+
+        formatCombo.valueProperty().addListener((obs, old, val) -> {
+            updateFormatInfo(val);
+            updateSvgVectorCapVisibility(val == OutputFormat.SVG);
+        });
         updateFormatInfo(OutputFormat.PNG);
+        updateSvgVectorCapVisibility(false);
 
         return SectionBuilder.createSection(
                 resources.getString("rendered.section.imageSettings"), true, grid);
@@ -1313,6 +1341,16 @@ public class RenderedConfigPane extends VBox {
         applySimpleModeOverrides();
     }
 
+    private void updateSvgVectorCapVisibility(boolean svgSelected) {
+        if (svgVectorCapLabel == null) return;
+        svgVectorCapLabel.setVisible(svgSelected);
+        svgVectorCapLabel.setManaged(svgSelected);
+        svgVectorCapSpinner.setVisible(svgSelected);
+        svgVectorCapSpinner.setManaged(svgSelected);
+        svgVectorCapNoteLabel.setVisible(svgSelected);
+        svgVectorCapNoteLabel.setManaged(svgSelected);
+    }
+
     private void updateFormatInfo(OutputFormat format) {
         if (format == null) {
             formatInfoLabel.setText("");
@@ -1449,6 +1487,16 @@ public class RenderedConfigPane extends VBox {
         matchedPercentileLabel.setManaged(false);
         matchedPercentileSpinner.setVisible(false);
         matchedPercentileSpinner.setManaged(false);
+        // SVG vector-detection cap (always hidden in Simple mode -- the format
+        // listener will keep it hidden unless SVG is selected anyway)
+        if (svgVectorCapLabel != null) {
+            svgVectorCapLabel.setVisible(false);
+            svgVectorCapLabel.setManaged(false);
+            svgVectorCapSpinner.setVisible(false);
+            svgVectorCapSpinner.setManaged(false);
+            svgVectorCapNoteLabel.setVisible(false);
+            svgVectorCapNoteLabel.setManaged(false);
+        }
         // DPI/resolution mode
         resolutionModeCombo.setVisible(false);
         resolutionModeCombo.setManaged(false);
@@ -1875,6 +1923,10 @@ public class RenderedConfigPane extends VBox {
         matchedPercentileSpinner.getValueFactory().setValue(
                 QuietPreferences.getRenderedMatchedDisplayPercentile());
 
+        // SVG vector-detection cap
+        svgVectorCapSpinner.getValueFactory().setValue(
+                QuietPreferences.getRenderedSvgMaxVectorDetections());
+
         // DPI preferences
         String savedResMode = QuietPreferences.getRenderedResolutionMode();
         if (savedResMode != null && !savedResMode.isBlank()) {
@@ -1963,6 +2015,8 @@ public class RenderedConfigPane extends VBox {
         QuietPreferences.setRenderedSplitStainsColorLegend(splitStainsColorLegendCheck.isSelected());
         QuietPreferences.setRenderedMatchedDisplayPercentile(
                 matchedPercentileSpinner.getValue() != null ? matchedPercentileSpinner.getValue() : 0.1);
+        QuietPreferences.setRenderedSvgMaxVectorDetections(
+                svgVectorCapSpinner.getValue() != null ? svgVectorCapSpinner.getValue() : 1000);
 
         // DPI preferences
         String resMode = resolutionModeCombo.getValue();
@@ -2056,7 +2110,10 @@ public class RenderedConfigPane extends VBox {
                 .channelColorLegend(channelColorLegendCheck.isSelected())
                 .matchedDisplayPercentile(
                         matchedPercentileSpinner.getValue() != null
-                                ? matchedPercentileSpinner.getValue() : 0.1);
+                                ? matchedPercentileSpinner.getValue() : 0.1)
+                .svgMaxVectorDetections(
+                        svgVectorCapSpinner.getValue() != null
+                                ? svgVectorCapSpinner.getValue() : 1000);
 
         // Split-stains (color deconvolution) options
         builder.splitStains(splitStainsCheck.isSelected())
