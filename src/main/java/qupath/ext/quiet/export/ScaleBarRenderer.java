@@ -93,6 +93,23 @@ public class ScaleBarRenderer {
             int effectiveFontSize = TextRenderUtils.resolveFontSize(fontSize, minDim);
             int margin = Math.max(10, minDim / 40);
 
+            // If the chosen bar length plus a left+right margin exceeds the
+            // image width, step the "nice" length down until it fits. This
+            // protects against tiny exported regions (e.g. a small annotation
+            // crop) where the 15%-of-width default lands outside the image.
+            int maxBarPx = Math.max(2, imageWidth - 2 * margin);
+            while (barLengthPx > maxBarPx) {
+                double shrunkMicrons = pickShorterNiceLength(barLengthMicrons);
+                if (!(shrunkMicrons < barLengthMicrons)) {
+                    barLengthPx = maxBarPx;
+                    barLengthMicrons = barLengthPx * pixelSizeMicrons;
+                    break;
+                }
+                barLengthMicrons = shrunkMicrons;
+                barLengthPx = (int) Math.round(barLengthMicrons / pixelSizeMicrons);
+                if (barLengthPx < 2) return;
+            }
+
             // Format label: >=1000 um -> mm, else um (ASCII-only)
             String label = formatLabel(barLengthMicrons);
 
@@ -126,8 +143,11 @@ public class ScaleBarRenderer {
                     break;
             }
 
-            // Text centered above bar
+            // Text centered above bar, then clamped to the image so a long
+            // label (e.g. "1000 um" on a right-aligned bar) doesn't extend
+            // past the edge.
             int textX = barX + (barLengthPx - textWidth) / 2;
+            textX = Math.max(margin, Math.min(textX, imageWidth - textWidth - margin));
             int textY = barY - 4;
 
             Color primary = barColor != null ? barColor : Color.WHITE;
@@ -189,6 +209,21 @@ public class ScaleBarRenderer {
             }
         }
         return best;
+    }
+
+    /**
+     * Return the next-shorter "nice" length below {@code currentMicrons}, or
+     * {@code currentMicrons} unchanged if it is already the smallest. Used to
+     * iteratively shrink the bar until it fits inside the image width.
+     */
+    private static double pickShorterNiceLength(double currentMicrons) {
+        double best = NICE_LENGTHS[0];
+        for (double candidate : NICE_LENGTHS) {
+            if (candidate < currentMicrons && candidate > best) {
+                best = candidate;
+            }
+        }
+        return best < currentMicrons ? best : currentMicrons;
     }
 
     /**

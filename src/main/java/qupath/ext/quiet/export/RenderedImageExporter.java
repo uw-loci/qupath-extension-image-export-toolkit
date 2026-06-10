@@ -3,6 +3,7 @@ package qupath.ext.quiet.export;
 import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.Shape;
@@ -1120,6 +1121,8 @@ public class RenderedImageExporter {
                 .format(config.getFormat())
                 .outputDirectory(config.getOutputDirectory())
                 .matchedDisplayPercentile(config.getMatchedDisplayPercentile())
+                .showChannelLegend(config.isShowChannelLegend())
+                .svgMaxVectorDetections(config.getSvgMaxVectorDetections())
                 // Sub-configs copied wholesale
                 .overlays(config.overlays())
                 .scaleBar(config.scaleBar())
@@ -1127,6 +1130,7 @@ public class RenderedImageExporter {
                 .panelLabel(config.panelLabel())
                 .infoLabel(config.infoLabel())
                 .splitChannel(config.splitChannel())
+                .splitStains(config.splitStains())
                 .inset(config.inset())
                 .build();
     }
@@ -2119,33 +2123,74 @@ public class RenderedImageExporter {
 
         if (entries.isEmpty()) return;
 
+        // Lay the legend out so it does not overrun the image. With many
+        // channels (e.g. a 20-channel multiplex) a single column at the default
+        // size would obscure the figure entirely; instead, wrap to columns and
+        // shrink the row pitch until both axes fit inside a sensible budget.
+        // Budget: half the image height, half the image width.
         int minDim = Math.min(w, h);
-        int swatchSize = Math.max(8, minDim / 30);
+        int baseSwatch = Math.max(8, minDim / 30);
         int margin = Math.max(6, minDim / 50);
-        int fontSize = Math.max(10, minDim / 45);
-        int lineSpacing = Math.max(2, swatchSize / 4);
+        int baseFont = Math.max(10, minDim / 45);
+        int baseLineSpacing = Math.max(2, baseSwatch / 4);
+        int n = entries.size();
+        int maxLegendH = Math.max(1, (int) (h * 0.5));
+        int maxLegendW = Math.max(1, (int) (w * 0.5));
+
+        // 1. Decide column count so each column fits maxLegendH at the base
+        //    row pitch. Cap at 4 to keep readability.
+        int baseRow = baseSwatch + baseLineSpacing;
+        int rowsPerColAtBase = Math.max(1, maxLegendH / baseRow);
+        int columns = Math.max(1, Math.min(4, (n + rowsPerColAtBase - 1) / rowsPerColAtBase));
+        int rowsPerCol = (n + columns - 1) / columns;
+
+        // 2. Measure the widest label so we can plan column widths.
+        g2d.setFont(new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD, baseFont));
+        FontMetrics fmProbe = g2d.getFontMetrics();
+        int widestText = 0;
+        for (String nm : names) {
+            widestText = Math.max(widestText, fmProbe.stringWidth(nm));
+        }
+        int colWidthAtBase = baseSwatch + margin + widestText + margin;
+        int legendWAtBase = columns * colWidthAtBase;
+        int legendHAtBase = rowsPerCol * baseRow;
+
+        // 3. If either axis still exceeds the budget, shrink proportionally.
+        double scale = Math.min(
+                (double) maxLegendW / Math.max(1, legendWAtBase),
+                (double) maxLegendH / Math.max(1, legendHAtBase));
+        scale = Math.min(1.0, scale);
+        int swatchSize = Math.max(6, (int) Math.round(baseSwatch * scale));
+        int lineSpacing = Math.max(1, (int) Math.round(baseLineSpacing * scale));
+        int fontSize = Math.max(8, (int) Math.round(baseFont * scale));
 
         g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
         g2d.setFont(new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD, fontSize));
+        FontMetrics fm = g2d.getFontMetrics();
+        int actualWidest = 0;
+        for (String nm : names) {
+            actualWidest = Math.max(actualWidest, fm.stringWidth(nm));
+        }
+        int colWidth = swatchSize + margin / 2 + actualWidest + margin / 2;
+        int rowPitch = swatchSize + lineSpacing;
 
-        int y = margin;
-        for (int i = 0; i < entries.size(); i++) {
+        for (int i = 0; i < n; i++) {
+            int col = i / rowsPerCol;
+            int row = i % rowsPerCol;
+            int x0 = margin + col * colWidth;
+            int y0 = margin + row * rowPitch;
+
             int[] rgb = entries.get(i);
             Color chColor = new Color(rgb[0], rgb[1], rgb[2]);
-
-            // Swatch
             g2d.setColor(chColor);
-            g2d.fillRect(margin, y, swatchSize, swatchSize);
+            g2d.fillRect(x0, y0, swatchSize, swatchSize);
             g2d.setColor(Color.WHITE);
-            g2d.drawRect(margin, y, swatchSize, swatchSize);
+            g2d.drawRect(x0, y0, swatchSize, swatchSize);
 
-            // Label
-            int textX = margin + swatchSize + margin;
-            int textY = y + swatchSize - 2;
+            int textX = x0 + swatchSize + margin / 2;
+            int textY = y0 + swatchSize - 2;
             TextRenderUtils.drawOutlinedText(g2d, names.get(i),
                     textX, textY, Color.WHITE, Color.BLACK);
-
-            y += swatchSize + lineSpacing;
         }
     }
 

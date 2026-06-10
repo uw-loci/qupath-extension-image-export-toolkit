@@ -1090,6 +1090,13 @@ public class RenderedConfigPane extends VBox {
     }
 
     private void updateSplitChannelVisibility(boolean splitEnabled) {
+        // Panel label toggle stays visible even when split-channel is off, so
+        // the user can opt out of the auto-incrementing "A" label on a plain
+        // whole-image render. (The toggle was previously hidden here, so a
+        // checked-then-buried preference produced a stuck "A" with no UI
+        // affordance to turn it off.)
+        showPanelLabelCheck.setVisible(true);
+        showPanelLabelCheck.setManaged(true);
         splitChannelsGrayscaleCheck.setVisible(splitEnabled);
         splitChannelsGrayscaleCheck.setManaged(splitEnabled);
         splitChannelColorBorderCheck.setVisible(splitEnabled);
@@ -1098,14 +1105,11 @@ public class RenderedConfigPane extends VBox {
         channelColorLegendCheck.setManaged(splitEnabled);
         splitChannelNoteLabel.setVisible(splitEnabled);
         splitChannelNoteLabel.setManaged(splitEnabled);
-        // Panel label only relevant when split channels is enabled
-        showPanelLabelCheck.setVisible(splitEnabled);
-        showPanelLabelCheck.setManaged(splitEnabled);
-        if (!splitEnabled) {
-            updatePanelLabelVisibility(false);
-        } else {
-            updatePanelLabelVisibility(showPanelLabelCheck.isSelected());
-        }
+        // Panel label was previously hidden when split-channel was off, which
+        // left no way to turn off a stuck-on "A" label. Already forced visible
+        // above. Aux controls (text / position / font / bold) still depend on
+        // whether the toggle itself is checked.
+        updatePanelLabelVisibility(showPanelLabelCheck.isSelected());
         applySimpleModeOverrides();
     }
 
