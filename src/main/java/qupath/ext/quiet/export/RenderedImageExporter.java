@@ -1002,6 +1002,20 @@ public class RenderedImageExporter {
         int serverW = baseServer.getWidth();
         int serverH = baseServer.getHeight();
 
+        // Split-channel mode: preview the first visible channel as it would be
+        // rendered into a per-channel file (grayscale conversion + colour
+        // border + colour-legend swatch + scale bar), so toggling any of those
+        // options visibly changes the preview. Without this branch the preview
+        // showed the merge and the per-channel-only options had no effect.
+        if (config.splitChannel().enabled()) {
+            BufferedImage panel = renderSplitChannelPreview(
+                    imageData, baseServer, config, maxDimension);
+            if (panel != null) {
+                return panel;
+            }
+            // Fall through to merge preview if no visible channels.
+        }
+
         // For per-annotation mode, find the first matching annotation and preview its region
         if (config.getRegionType() == RenderedExportConfig.RegionType.ALL_ANNOTATIONS) {
             PathObject firstAnnotation = findFirstMatchingAnnotation(imageData, config);
@@ -1361,6 +1375,76 @@ public class RenderedImageExporter {
      *
      * @return the configured ImageDisplay, or null for RAW mode or on failure
      */
+    /**
+     * Render the first visible channel as a split-channel panel preview --
+     * applies the same per-channel decorations the real export uses (grayscale
+     * conversion, color border, color-legend swatch, scale bar). Returns null
+     * if no channels are visible (caller falls back to merge preview).
+     */
+    private static BufferedImage renderSplitChannelPreview(
+            ImageData<BufferedImage> imageData,
+            ImageServer<BufferedImage> baseServer,
+            RenderedExportConfig config,
+            int maxDimension) throws IOException {
+        var display = resolveImageDisplay(imageData, config);
+        if (display == null) {
+            return null;
+        }
+        var channels = display.selectedChannels();
+        if (channels == null || channels.isEmpty()) {
+            return null;
+        }
+        double longestSide = Math.max(baseServer.getWidth(), baseServer.getHeight());
+        double previewDownsample = Math.max(config.getDownsample(),
+                longestSide / Math.max(1, maxDimension));
+
+        var singleChannel = List.of(channels.get(0));
+        var chServer = ChannelDisplayTransformServer.createColorTransformServer(
+                baseServer, singleChannel);
+        try {
+            RegionRequest request = RegionRequest.createInstance(
+                    chServer.getPath(), previewDownsample,
+                    0, 0, chServer.getWidth(), chServer.getHeight());
+            BufferedImage chImage = chServer.readRegion(request);
+
+            // Channel color, used for border and legend swatch.
+            int channelColor = 0xFFFFFF;
+            var serverChannels = baseServer.getMetadata().getChannels();
+            if (!serverChannels.isEmpty()) {
+                channelColor = serverChannels.get(0).getColor();
+            }
+            if (config.splitChannel().grayscale()) {
+                chImage = convertToGrayscale(chImage);
+            }
+            BufferedImage result = new BufferedImage(
+                    chImage.getWidth(), chImage.getHeight(),
+                    BufferedImage.TYPE_INT_RGB);
+            Graphics2D g2d = result.createGraphics();
+            try {
+                g2d.drawImage(chImage, 0, 0, null);
+                if (config.splitChannel().colorBorder()) {
+                    drawChannelColorBorder(g2d, result.getWidth(), result.getHeight(),
+                            channelColor);
+                }
+                if (config.splitChannel().colorLegend()) {
+                    String chName = channels.get(0).getName();
+                    drawChannelColorLegend(g2d, result.getWidth(), result.getHeight(),
+                            channelColor, chName);
+                }
+                maybeDrawScaleBar(g2d, imageData, config,
+                        result.getWidth(), result.getHeight(), previewDownsample);
+            } finally {
+                g2d.dispose();
+            }
+            return result;
+        } catch (Exception e) {
+            logger.warn("Failed to render split-channel preview: {}", e.getMessage());
+            return null;
+        } finally {
+            closeQuietly(chServer, "preview");
+        }
+    }
+
     /**
      * Read a region from the base server and colorize it through the live
      * {@link ImageDisplay} the way QuPath's viewer does.
@@ -2114,7 +2198,13 @@ public class RenderedImageExporter {
                                                 ImageData<BufferedImage> imageData,
                                                 RenderedExportConfig config,
                                                 int w, int h) {
-        if (!config.isShowChannelLegend()) return;
+        // Draw the whole-image legend when the user explicitly asked for it
+        // OR when split-channel + "Channel color legend swatch" is on -- so
+        // the merge picks up the same legend the per-channel files do.
+        boolean wantLegend = config.isShowChannelLegend()
+                || (config.splitChannel().enabled()
+                        && config.splitChannel().colorLegend());
+        if (!wantLegend) return;
 
         var server = imageData.getServer();
         var entries = new java.util.ArrayList<int[]>();
