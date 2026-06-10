@@ -467,12 +467,10 @@ public class RenderedImageExporter {
 
         double downsample = resolveEffectiveDownsample(config, baseServer);
 
-        // Read base image region
-        ImageServer<BufferedImage> readServer =
-                displayServer != null ? displayServer : baseServer;
-        RegionRequest request = RegionRequest.createInstance(
-                readServer.getPath(), downsample, x, y, w, h);
-        BufferedImage baseImage = readServer.readRegion(request);
+        // Read raw from baseServer and colorize via ImageDisplay.applyTransforms.
+        BufferedImage baseImage = readForRender(
+                imageData, baseServer, displayServer, config,
+                x, y, w, h, downsample);
 
         BufferedImage result = new BufferedImage(
                 baseImage.getWidth(), baseImage.getHeight(),
@@ -1232,13 +1230,9 @@ public class RenderedImageExporter {
         int outputWidth = (int) Math.ceil(baseServer.getWidth() / downsample);
         int outputHeight = (int) Math.ceil(baseServer.getHeight() / downsample);
 
-        ImageServer<BufferedImage> readServer =
-                displayServer != null ? displayServer : baseServer;
-        RegionRequest request = RegionRequest.createInstance(
-                readServer.getPath(), downsample,
-                0, 0, readServer.getWidth(), readServer.getHeight());
-
-        BufferedImage baseImage = readServer.readRegion(request);
+        BufferedImage baseImage = readForRender(
+                imageData, baseServer, displayServer, config,
+                0, 0, baseServer.getWidth(), baseServer.getHeight(), downsample);
 
         RegionRequest classRequest = RegionRequest.createInstance(
                 classificationServer.getPath(), downsample,
@@ -1317,13 +1311,9 @@ public class RenderedImageExporter {
         int outputWidth = (int) Math.ceil(baseServer.getWidth() / downsample);
         int outputHeight = (int) Math.ceil(baseServer.getHeight() / downsample);
 
-        ImageServer<BufferedImage> readServer =
-                displayServer != null ? displayServer : baseServer;
-        RegionRequest request = RegionRequest.createInstance(
-                readServer.getPath(), downsample,
-                0, 0, readServer.getWidth(), readServer.getHeight());
-
-        BufferedImage baseImage = readServer.readRegion(request);
+        BufferedImage baseImage = readForRender(
+                imageData, baseServer, displayServer, config,
+                0, 0, baseServer.getWidth(), baseServer.getHeight(), downsample);
 
         BufferedImage result = new BufferedImage(
                 baseImage.getWidth(), baseImage.getHeight(),
@@ -1371,6 +1361,47 @@ public class RenderedImageExporter {
      *
      * @return the configured ImageDisplay, or null for RAW mode or on failure
      */
+    /**
+     * Read a region from the base server and colorize it through the live
+     * {@link ImageDisplay} the way QuPath's viewer does.
+     * <p>
+     * Why this exists: {@code ChannelDisplayTransformServer.createColorTransformServer}
+     * is designed for ML / pixel-export pipelines and returns a multi-band raw
+     * raster for multi-channel input. Drawing that onto a {@code TYPE_INT_RGB}
+     * target silently grayscales the merge -- the bug the user hit on a
+     * 6-visible-channel multiplex. {@link ImageDisplay#applyTransforms} is the
+     * viewer's own RGB compositor and produces the right colors.
+     * <p>
+     * When the export is in RAW mode ({@code displayServer == null}) or no
+     * {@link ImageDisplay} can be resolved, returns the raw region unchanged.
+     */
+    static BufferedImage readForRender(ImageData<BufferedImage> imageData,
+                                        ImageServer<BufferedImage> baseServer,
+                                        ImageServer<BufferedImage> displayServer,
+                                        RenderedExportConfig config,
+                                        int x, int y, int w, int h,
+                                        double downsample) throws IOException {
+        RegionRequest request = RegionRequest.createInstance(
+                baseServer.getPath(), downsample, x, y, w, h);
+        BufferedImage raw = baseServer.readRegion(request);
+        if (displayServer == null) {
+            return raw;
+        }
+        ImageDisplay display = resolveImageDisplay(imageData, config);
+        if (display == null) {
+            return raw;
+        }
+        try {
+            return ImageDisplay.applyTransforms(raw, null,
+                    display.selectedChannels(),
+                    display.displayMode().getValue());
+        } catch (Exception e) {
+            logger.warn("ImageDisplay.applyTransforms failed; using raw region: {}",
+                    e.getMessage());
+            return raw;
+        }
+    }
+
     static ImageDisplay resolveImageDisplay(ImageData<BufferedImage> imageData,
                                              RenderedExportConfig config) {
         var mode = config.getDisplaySettingsMode();
@@ -1501,12 +1532,9 @@ public class RenderedImageExporter {
         int outputHeight = (int) Math.ceil(baseServer.getHeight() / downsample);
 
         // Read base image
-        ImageServer<BufferedImage> readServer =
-                displayServer != null ? displayServer : baseServer;
-        RegionRequest request = RegionRequest.createInstance(
-                readServer.getPath(), downsample,
-                0, 0, readServer.getWidth(), readServer.getHeight());
-        BufferedImage baseImage = readServer.readRegion(request);
+        BufferedImage baseImage = readForRender(
+                imageData, baseServer, displayServer, config,
+                0, 0, baseServer.getWidth(), baseServer.getHeight(), downsample);
 
         // Read density map
         RegionRequest densityRequest = RegionRequest.createInstance(
@@ -2108,10 +2136,26 @@ public class RenderedImageExporter {
             }
         }
 
-        // If no stains, use channel colors (fluorescence)
+        // If no stains, use channel colors (fluorescence). Limit to the
+        // channels that are currently visible in the resolved ImageDisplay --
+        // the legend should match what the export actually shows, not list
+        // every channel in the image.
         if (entries.isEmpty()) {
+            ImageDisplay display = resolveImageDisplay(imageData, config);
+            java.util.Set<String> visibleNames = null;
+            if (display != null && display.selectedChannels() != null) {
+                visibleNames = new java.util.LinkedHashSet<>();
+                for (var ch : display.selectedChannels()) {
+                    if (ch != null && ch.getName() != null) {
+                        visibleNames.add(ch.getName());
+                    }
+                }
+            }
             var channels = server.getMetadata().getChannels();
             for (var ch : channels) {
+                if (visibleNames != null && !visibleNames.contains(ch.getName())) {
+                    continue;
+                }
                 int packed = ch.getColor();
                 entries.add(new int[]{
                         (packed >> 16) & 0xFF,

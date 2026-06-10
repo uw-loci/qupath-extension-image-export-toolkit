@@ -326,18 +326,22 @@ class RenderedScriptGenerator {
     private static void emitDisplayServerWrapping(StringBuilder sb, DisplaySettingsMode mode) {
         if (mode == DisplaySettingsMode.RAW) {
             appendLine(sb, "        def readServer = baseServer");
+            appendLine(sb, "        def display = null  // RAW mode -- no display transform");
             return;
         }
 
-        appendLine(sb, "        // Apply display settings (brightness/contrast, channel visibility)");
+        appendLine(sb, "        // Apply display settings (brightness/contrast, channel visibility).");
+        appendLine(sb, "        // Read raw from baseServer and colorize via ImageDisplay.applyTransforms");
+        appendLine(sb, "        // -- ChannelDisplayTransformServer returns a multi-band raw raster for");
+        appendLine(sb, "        // multi-channel input, which Java grayscales when drawn onto a TYPE_INT_RGB");
+        appendLine(sb, "        // target. applyTransforms is the viewer's own RGB compositor.");
         appendLine(sb, "        def display = ImageDisplay.create(imageData)");
         if (mode != DisplaySettingsMode.PER_IMAGE_SAVED) {
             appendLine(sb, "        if (displaySettings != null) {");
             appendLine(sb, "            DisplaySettingUtils.applySettingsToDisplay(display, displaySettings)");
             appendLine(sb, "        }");
         }
-        appendLine(sb, "        def readServer = ChannelDisplayTransformServer.createColorTransformServer(");
-        appendLine(sb, "                baseServer, display.selectedChannels())");
+        appendLine(sb, "        def readServer = baseServer");
     }
 
     // ------------------------------------------------------------------
@@ -883,7 +887,11 @@ class RenderedScriptGenerator {
         appendLine(sb, "            int outH = (int) Math.ceil(ah / downsample)");
         appendLine(sb, "            def request = RegionRequest.createInstance(");
         appendLine(sb, "                    readServer.getPath(), downsample, ax, ay, aw, ah)");
-        appendLine(sb, "            def baseImage = readServer.readRegion(request)");
+        appendLine(sb, "            def rawImage = readServer.readRegion(request)");
+        appendLine(sb, "            def baseImage = display != null ?");
+        appendLine(sb, "                    ImageDisplay.applyTransforms(rawImage, null,");
+        appendLine(sb, "                            display.selectedChannels(), display.displayMode().getValue())");
+        appendLine(sb, "                    : rawImage");
         appendLine(sb, "");
     }
 
@@ -1366,7 +1374,11 @@ class RenderedScriptGenerator {
             appendLine(sb, "        def request = RegionRequest.createInstance(");
             appendLine(sb, "                readServer.getPath(), downsample,");
             appendLine(sb, "                0, 0, readServer.getWidth(), readServer.getHeight())");
-            appendLine(sb, "        def baseImage = readServer.readRegion(request)");
+            appendLine(sb, "        def rawImage = readServer.readRegion(request)");
+            appendLine(sb, "        def baseImage = display != null ?");
+            appendLine(sb, "                ImageDisplay.applyTransforms(rawImage, null,");
+            appendLine(sb, "                        display.selectedChannels(), display.displayMode().getValue())");
+            appendLine(sb, "                : rawImage");
             appendLine(sb, "");
             appendLine(sb, "        def densityRequest = RegionRequest.createInstance(");
             appendLine(sb, "                densityServer.getPath(), downsample,");
@@ -1652,7 +1664,11 @@ class RenderedScriptGenerator {
             appendLine(sb, "        def request = RegionRequest.createInstance(");
             appendLine(sb, "                readServer.getPath(), downsample,");
             appendLine(sb, "                0, 0, readServer.getWidth(), readServer.getHeight())");
-            appendLine(sb, "        def baseImage = readServer.readRegion(request)");
+            appendLine(sb, "        def rawImage = readServer.readRegion(request)");
+            appendLine(sb, "        def baseImage = display != null ?");
+            appendLine(sb, "                ImageDisplay.applyTransforms(rawImage, null,");
+            appendLine(sb, "                        display.selectedChannels(), display.displayMode().getValue())");
+            appendLine(sb, "                : rawImage");
             appendLine(sb, "");
             appendLine(sb, "        def classRequest = RegionRequest.createInstance(");
             appendLine(sb, "                classServer.getPath(), downsample,");
@@ -1892,7 +1908,11 @@ class RenderedScriptGenerator {
             appendLine(sb, "        def request = RegionRequest.createInstance(");
             appendLine(sb, "                readServer.getPath(), downsample,");
             appendLine(sb, "                0, 0, readServer.getWidth(), readServer.getHeight())");
-            appendLine(sb, "        def baseImage = readServer.readRegion(request)");
+            appendLine(sb, "        def rawImage = readServer.readRegion(request)");
+            appendLine(sb, "        def baseImage = display != null ?");
+            appendLine(sb, "                ImageDisplay.applyTransforms(rawImage, null,");
+            appendLine(sb, "                        display.selectedChannels(), display.displayMode().getValue())");
+            appendLine(sb, "                : rawImage");
             appendLine(sb, "");
             appendLine(sb, "        def result = new BufferedImage(");
             appendLine(sb, "                baseImage.getWidth(), baseImage.getHeight(),");
