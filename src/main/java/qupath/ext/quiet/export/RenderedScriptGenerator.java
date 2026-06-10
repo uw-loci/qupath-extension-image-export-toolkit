@@ -240,6 +240,19 @@ class RenderedScriptGenerator {
         appendLine(sb, "    int minDim = Math.min(imgW, imgH)");
         appendLine(sb, "    int fontSize = fSize > 0 ? Math.max(4, Math.min(fSize, 200)) : Math.max(12, minDim / 50)");
         appendLine(sb, "    int margin = Math.max(10, minDim / 40)");
+        appendLine(sb, "    // Shrink the bar to fit inside the image (bar + 2 * margin <= imgW).");
+        appendLine(sb, "    int maxBarPx = Math.max(2, imgW - 2 * margin)");
+        appendLine(sb, "    while (barPx > maxBarPx) {");
+        appendLine(sb, "        double shorter = niceLengths.findAll { it < barUm }.max() ?: 0");
+        appendLine(sb, "        if (shorter <= 0 || shorter >= barUm) {");
+        appendLine(sb, "            barPx = maxBarPx");
+        appendLine(sb, "            barUm = barPx * pxSize");
+        appendLine(sb, "            break");
+        appendLine(sb, "        }");
+        appendLine(sb, "        barUm = shorter");
+        appendLine(sb, "        barPx = (int) Math.round(barUm / pxSize)");
+        appendLine(sb, "        if (barPx < 2) return");
+        appendLine(sb, "    }");
         appendLine(sb, "    String label = barUm >= 1000 ? String.format('%d mm', (int)(barUm / 1000)) : (barUm == Math.floor(barUm) ? String.format('%d um', (int)barUm) : String.format('%.1f um', barUm))");
         appendLine(sb, "    int fontStyle = bold ? Font.BOLD : Font.PLAIN");
         appendLine(sb, "    g2d.setFont(new Font(Font.SANS_SERIF, fontStyle, fontSize))");
@@ -254,6 +267,8 @@ class RenderedScriptGenerator {
         appendLine(sb, "        default: bx = imgW - margin - barPx; by = imgH - margin - barH; break");
         appendLine(sb, "    }");
         appendLine(sb, "    int tx = bx + (barPx - tw) / 2");
+        appendLine(sb, "    // Clamp text X so the label cannot overflow the image edges.");
+        appendLine(sb, "    tx = Math.max(margin, Math.min(tx, imgW - tw - margin))");
         appendLine(sb, "    int ty = by - 4");
         appendLine(sb, "    def primary = new Color(colR, colG, colB)");
         appendLine(sb, "    double lum = (0.299 * colR + 0.587 * colG + 0.114 * colB) / 255.0");
@@ -878,19 +893,47 @@ class RenderedScriptGenerator {
     private static void emitAnnotationObjectOverlay(StringBuilder sb) {
         appendLine(sb, "            if (includeAnnotations || includeDetections) {");
         appendLine(sb, "                g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f))");
-        appendLine(sb, "                def overlayOptions = new OverlayOptions()");
-        appendLine(sb, "                overlayOptions.setShowAnnotations(includeAnnotations)");
-        appendLine(sb, "                overlayOptions.setShowDetections(includeDetections)");
-        appendLine(sb, "                overlayOptions.setFillAnnotations(fillAnnotations)");
-        appendLine(sb, "                overlayOptions.setShowNames(showNames)");
-        appendLine(sb, "                def hierOverlay = new HierarchyOverlay(null, overlayOptions, imageData)");
-        appendLine(sb, "                def gCopy = (Graphics2D) g2d.create()");
-        appendLine(sb, "                gCopy.scale(1.0 / downsample, 1.0 / downsample)");
-        appendLine(sb, "                gCopy.translate(-ax, -ay)");
-        appendLine(sb, "                def region = qupath.lib.regions.ImageRegion.createInstance(ax, ay, aw, ah, 0, 0)");
-        appendLine(sb, "                hierOverlay.paintOverlay(gCopy, region, downsample, imageData, true)");
-        appendLine(sb, "                gCopy.dispose()");
+        emitObjectPaintingBlock(sb, "                ",
+                "qupath.lib.regions.ImageRegion.createInstance(ax, ay, aw, ah, 0, 0)",
+                true);
         appendLine(sb, "            }");
+    }
+
+    /**
+     * Emit object painting code that pulls objects from the hierarchy directly
+     * and paints them through PathObjectPainter.paintSpecifiedObjects. Bypasses
+     * HierarchyOverlay -- HierarchyOverlay drops detections at downsample > 1.0
+     * unless given a regionStore tile cache that the script does not have.
+     * Mirrors the v1.2.1 / v1.2.2 fix in RenderedImageExporter. See GitHub #1.
+     *
+     * @param indent           line indent prefix matching the surrounding scope
+     * @param regionExpr       Groovy expression producing the ImageRegion to paint
+     * @param withRegionOffset true if the surrounding code translates the
+     *                         Graphics2D origin (per-annotation export); false
+     *                         for whole-image renders.
+     */
+    private static void emitObjectPaintingBlock(StringBuilder sb, String indent,
+                                                 String regionExpr,
+                                                 boolean withRegionOffset) {
+        appendLine(sb, indent + "def overlayOptions = new OverlayOptions()");
+        appendLine(sb, indent + "overlayOptions.setShowAnnotations(includeAnnotations)");
+        appendLine(sb, indent + "overlayOptions.setShowDetections(includeDetections)");
+        appendLine(sb, indent + "overlayOptions.setFillAnnotations(fillAnnotations)");
+        appendLine(sb, indent + "overlayOptions.setShowNames(showNames)");
+        appendLine(sb, indent + "def hierarchy = imageData.getHierarchy()");
+        appendLine(sb, indent + "def region = " + regionExpr);
+        appendLine(sb, indent + "def paintable = hierarchy.getObjectsForRegion(null, region, null).findAll { o ->");
+        appendLine(sb, indent + "    o.hasROI() && ((o.isAnnotation() && includeAnnotations) || (o.isDetection() && includeDetections))");
+        appendLine(sb, indent + "}");
+        appendLine(sb, indent + "if (!paintable.isEmpty()) {");
+        appendLine(sb, indent + "    def gCopy = (Graphics2D) g2d.create()");
+        appendLine(sb, indent + "    gCopy.scale(1.0 / downsample, 1.0 / downsample)");
+        if (withRegionOffset) {
+            appendLine(sb, indent + "    gCopy.translate(-ax, -ay)");
+        }
+        appendLine(sb, indent + "    PathObjectPainter.paintSpecifiedObjects(gCopy, paintable, overlayOptions, null, downsample)");
+        appendLine(sb, indent + "    gCopy.dispose()");
+        appendLine(sb, indent + "}");
     }
 
     /**
@@ -1118,7 +1161,7 @@ class RenderedScriptGenerator {
         appendLine(sb, "import qupath.lib.analysis.heatmaps.DensityMaps");
         appendLine(sb, "import qupath.lib.color.ColorMaps");
         appendLine(sb, "import qupath.lib.gui.viewer.OverlayOptions");
-        appendLine(sb, "import qupath.lib.gui.viewer.overlays.HierarchyOverlay");
+        appendLine(sb, "import qupath.lib.gui.viewer.PathObjectPainter");
         appendLine(sb, "import qupath.lib.images.writers.ImageWriterTools");
         appendLine(sb, "import qupath.lib.regions.RegionRequest");
         appendLine(sb, "import java.awt.AlphaComposite");
@@ -1367,18 +1410,9 @@ class RenderedScriptGenerator {
             appendLine(sb, "        if (includeAnnotations || includeDetections) {");
             appendLine(sb, "            g2d.setComposite(AlphaComposite.getInstance(");
             appendLine(sb, "                    AlphaComposite.SRC_OVER, 1.0f))");
-            appendLine(sb, "            def overlayOptions = new OverlayOptions()");
-            appendLine(sb, "            overlayOptions.setShowAnnotations(includeAnnotations)");
-            appendLine(sb, "            overlayOptions.setShowDetections(includeDetections)");
-            appendLine(sb, "            overlayOptions.setFillAnnotations(fillAnnotations)");
-            appendLine(sb, "            overlayOptions.setShowNames(showNames)");
-            appendLine(sb, "            def hierOverlay = new HierarchyOverlay(null, overlayOptions, imageData)");
-            appendLine(sb, "            def gCopy = (Graphics2D) g2d.create()");
-            appendLine(sb, "            gCopy.scale(1.0 / downsample, 1.0 / downsample)");
-            appendLine(sb, "            def region = qupath.lib.regions.ImageRegion.createInstance(");
-            appendLine(sb, "                    0, 0, baseServer.getWidth(), baseServer.getHeight(), 0, 0)");
-            appendLine(sb, "            hierOverlay.paintOverlay(gCopy, region, downsample, imageData, true)");
-            appendLine(sb, "            gCopy.dispose()");
+            emitObjectPaintingBlock(sb, "            ",
+                    "qupath.lib.regions.ImageRegion.createInstance(0, 0, baseServer.getWidth(), baseServer.getHeight(), 0, 0)",
+                    false);
             appendLine(sb, "        }");
             appendLine(sb, "");
             if (config.scaleBar().show()) {
@@ -1457,7 +1491,7 @@ class RenderedScriptGenerator {
         // Imports
         appendLine(sb, "import qupath.lib.classifiers.pixel.PixelClassificationImageServer");
         appendLine(sb, "import qupath.lib.gui.viewer.OverlayOptions");
-        appendLine(sb, "import qupath.lib.gui.viewer.overlays.HierarchyOverlay");
+        appendLine(sb, "import qupath.lib.gui.viewer.PathObjectPainter");
         appendLine(sb, "import qupath.lib.images.writers.ImageWriterTools");
         appendLine(sb, "import qupath.lib.regions.RegionRequest");
         appendLine(sb, "import java.awt.AlphaComposite");
@@ -1645,18 +1679,9 @@ class RenderedScriptGenerator {
             appendLine(sb, "        if (includeAnnotations || includeDetections) {");
             appendLine(sb, "            g2d.setComposite(AlphaComposite.getInstance(");
             appendLine(sb, "                    AlphaComposite.SRC_OVER, 1.0f))");
-            appendLine(sb, "            def overlayOptions = new OverlayOptions()");
-            appendLine(sb, "            overlayOptions.setShowAnnotations(includeAnnotations)");
-            appendLine(sb, "            overlayOptions.setShowDetections(includeDetections)");
-            appendLine(sb, "            overlayOptions.setFillAnnotations(fillAnnotations)");
-            appendLine(sb, "            overlayOptions.setShowNames(showNames)");
-            appendLine(sb, "            def hierOverlay = new HierarchyOverlay(null, overlayOptions, imageData)");
-            appendLine(sb, "            def gCopy = (Graphics2D) g2d.create()");
-            appendLine(sb, "            gCopy.scale(1.0 / downsample, 1.0 / downsample)");
-            appendLine(sb, "            def region = qupath.lib.regions.ImageRegion.createInstance(");
-            appendLine(sb, "                    0, 0, baseServer.getWidth(), baseServer.getHeight(), 0, 0)");
-            appendLine(sb, "            hierOverlay.paintOverlay(gCopy, region, downsample, imageData, true)");
-            appendLine(sb, "            gCopy.dispose()");
+            emitObjectPaintingBlock(sb, "            ",
+                    "qupath.lib.regions.ImageRegion.createInstance(0, 0, baseServer.getWidth(), baseServer.getHeight(), 0, 0)",
+                    false);
             appendLine(sb, "        }");
             appendLine(sb, "");
             if (config.scaleBar().show()) {
@@ -1730,7 +1755,7 @@ class RenderedScriptGenerator {
 
         // Imports
         appendLine(sb, "import qupath.lib.gui.viewer.OverlayOptions");
-        appendLine(sb, "import qupath.lib.gui.viewer.overlays.HierarchyOverlay");
+        appendLine(sb, "import qupath.lib.gui.viewer.PathObjectPainter");
         appendLine(sb, "import qupath.lib.images.writers.ImageWriterTools");
         appendLine(sb, "import qupath.lib.regions.RegionRequest");
         appendLine(sb, "import java.awt.AlphaComposite");
@@ -1882,18 +1907,9 @@ class RenderedScriptGenerator {
             appendLine(sb, "        if (overlayOpacity > 0) {");
             appendLine(sb, "            g2d.setComposite(AlphaComposite.getInstance(");
             appendLine(sb, "                    AlphaComposite.SRC_OVER, (float) overlayOpacity))");
-            appendLine(sb, "            def overlayOptions = new OverlayOptions()");
-            appendLine(sb, "            overlayOptions.setShowAnnotations(includeAnnotations)");
-            appendLine(sb, "            overlayOptions.setShowDetections(includeDetections)");
-            appendLine(sb, "            overlayOptions.setFillAnnotations(fillAnnotations)");
-            appendLine(sb, "            overlayOptions.setShowNames(showNames)");
-            appendLine(sb, "            def hierOverlay = new HierarchyOverlay(null, overlayOptions, imageData)");
-            appendLine(sb, "            def gCopy = (Graphics2D) g2d.create()");
-            appendLine(sb, "            gCopy.scale(1.0 / downsample, 1.0 / downsample)");
-            appendLine(sb, "            def region = qupath.lib.regions.ImageRegion.createInstance(");
-            appendLine(sb, "                    0, 0, baseServer.getWidth(), baseServer.getHeight(), 0, 0)");
-            appendLine(sb, "            hierOverlay.paintOverlay(gCopy, region, downsample, imageData, true)");
-            appendLine(sb, "            gCopy.dispose()");
+            emitObjectPaintingBlock(sb, "            ",
+                    "qupath.lib.regions.ImageRegion.createInstance(0, 0, baseServer.getWidth(), baseServer.getHeight(), 0, 0)",
+                    false);
             appendLine(sb, "        }");
             appendLine(sb, "");
             if (config.scaleBar().show()) {
