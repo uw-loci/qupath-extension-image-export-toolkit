@@ -23,7 +23,7 @@ A guided wizard walks you from "I have an annotated project" to finished files: 
 
 ## Requirements
 
-- **QuPath 0.6.0** or later
+- **QuPath 0.7.0** or later
 - Java 21+
 
 ## Installation
