@@ -41,7 +41,17 @@ class RenderedScriptGeneratorTest {
 
         assertTrue(script.contains("import qupath.lib.classifiers.pixel.PixelClassificationImageServer"));
         assertTrue(script.contains("import qupath.lib.images.writers.ImageWriterTools"));
-        assertTrue(script.contains("import qupath.lib.gui.viewer.overlays.HierarchyOverlay"));
+        // NOT HierarchyOverlay. The generator paints through
+        // PathObjectPainter.paintSpecifiedObjects instead, because
+        // HierarchyOverlay silently drops detections at downsample > 1.0 unless
+        // it is given a regionStore tile cache the generated script does not
+        // have (GitHub #1, fixed in v1.2.1/v1.2.2). This assertion used to
+        // require the import that fix removed, so it failed from the moment the
+        // bug was fixed -- a red test documenting a working fix.
+        assertTrue(script.contains("import qupath.lib.gui.viewer.PathObjectPainter"));
+        assertFalse(script.contains("HierarchyOverlay"),
+                "HierarchyOverlay drops detections at downsample > 1.0 in a script "
+                + "with no tile cache; paint through PathObjectPainter instead (GitHub #1)");
         assertTrue(script.contains("import java.awt.AlphaComposite"));
         assertTrue(script.contains("import java.awt.RenderingHints"));
         assertTrue(script.contains("import qupath.lib.regions.RegionRequest"));
@@ -196,9 +206,13 @@ class RenderedScriptGeneratorTest {
         String script = ScriptGenerator.generate(ExportCategory.RENDERED, objConfig);
 
         assertTrue(script.contains("OverlayOptions"));
-        assertTrue(script.contains("HierarchyOverlay"));
         assertTrue(script.contains("setShowAnnotations"));
         assertTrue(script.contains("setShowDetections"));
+        // Objects are painted directly, not via HierarchyOverlay -- see
+        // testClassifierScriptContainsImports for why.
+        assertTrue(script.contains("PathObjectPainter.paintSpecifiedObjects"));
+        assertFalse(script.contains("HierarchyOverlay"),
+                "HierarchyOverlay drops detections at downsample > 1.0 (GitHub #1)");
     }
 
     @Test
