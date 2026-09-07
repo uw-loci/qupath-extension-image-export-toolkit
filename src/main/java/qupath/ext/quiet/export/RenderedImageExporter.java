@@ -262,15 +262,8 @@ public class RenderedImageExporter {
 
         var selectedClasses = config.getSelectedClassifications();
         if (selectedClasses != null) {
-            Set<String> classSet = Set.copyOf(selectedClasses);
-            annotations = annotations.stream()
-                    .filter(a -> {
-                        PathClass pc = a.getPathClass();
-                        String name = (pc == null || pc == PathClass.NULL_CLASS)
-                                ? "Unclassified" : pc.toString();
-                        return classSet.contains(name);
-                    })
-                    .toList();
+            var wanted = ClassNames.predicate(selectedClasses);
+            annotations = annotations.stream().filter(wanted).toList();
         }
 
         if (annotations.isEmpty()) {
@@ -1155,12 +1148,9 @@ public class RenderedImageExporter {
         var annotations = imageData.getHierarchy().getAnnotationObjects();
         var selectedClasses = config.getSelectedClassifications();
         if (selectedClasses != null) {
-            Set<String> classSet = Set.copyOf(selectedClasses);
+            var wanted = ClassNames.predicate(selectedClasses);
             for (var a : annotations) {
-                PathClass pc = a.getPathClass();
-                String name = (pc == null || pc == PathClass.NULL_CLASS)
-                        ? "Unclassified" : pc.toString();
-                if (classSet.contains(name)) return a;
+                if (wanted.test(a)) return a;
             }
             return null;
         }

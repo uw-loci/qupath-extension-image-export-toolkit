@@ -57,10 +57,8 @@ public class ObjectCropExporter {
 
         // Filter by selected classes (if any)
         if (!config.getSelectedClasses().isEmpty()) {
-            objects = objects.stream()
-                    .filter(o -> o.getPathClass() != null
-                            && config.getSelectedClasses().contains(o.getPathClass().getName()))
-                    .collect(Collectors.toList());
+            var wanted = ClassNames.predicate(config.getSelectedClasses());
+            objects = objects.stream().filter(wanted).collect(Collectors.toList());
         }
 
         if (objects.isEmpty()) {
@@ -101,8 +99,7 @@ public class ObjectCropExporter {
                         server.getPath(), downsample, x, y, w, h);
                 BufferedImage crop = server.readRegion(region);
 
-                String className = (obj.getPathClass() != null)
-                        ? obj.getPathClass().getName() : "Unclassified";
+                String className = ClassNames.displayName(obj);
                 int idx = classCounters.merge(className, 1, Integer::sum);
 
                 File outputFile = config.resolveOutputFile(entryName, className, idx);
@@ -147,10 +144,8 @@ public class ObjectCropExporter {
 
         Collection<PathObject> objects = getFilteredObjects(hierarchy, config);
         if (!config.getSelectedClasses().isEmpty()) {
-            objects = objects.stream()
-                    .filter(o -> o.getPathClass() != null
-                            && config.getSelectedClasses().contains(o.getPathClass().getName()))
-                    .collect(Collectors.toList());
+            var wanted = ClassNames.predicate(config.getSelectedClasses());
+            objects = objects.stream().filter(wanted).collect(Collectors.toList());
         }
         if (objects.isEmpty()) {
             throw new IOException("no matching objects to crop in: " + entryName);

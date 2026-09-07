@@ -91,7 +91,7 @@ class ObjectCropScriptGenerator {
 
         // Filter by class
         appendLine(sb, "if (!selectedClasses.isEmpty()) {");
-        appendLine(sb, "    objects = objects.findAll { it.getPathClass() != null && selectedClasses.contains(it.getPathClass().getName()) }");
+        appendLine(sb, "    objects = objects.findAll { selectedClasses.contains(it.getPathClass() == null ? 'Unclassified' : it.getPathClass().toString()) }");
         appendLine(sb, "}");
         appendLine(sb, "");
         appendLine(sb, "println \"Found ${objects.size()} objects to export\"");
@@ -125,7 +125,7 @@ class ObjectCropScriptGenerator {
         appendLine(sb, "    def region = RegionRequest.createInstance(server.getPath(), downsample, x, y, w, h)");
         appendLine(sb, "    def crop = server.readRegion(region)");
         appendLine(sb, "");
-        appendLine(sb, "    String className = (obj.getPathClass() != null) ? obj.getPathClass().getName() : 'Unclassified'");
+        appendLine(sb, "    String className = (obj.getPathClass() != null) ? obj.getPathClass().toString() : 'Unclassified'");
         appendLine(sb, "    String safeClass = className.replaceAll('[^a-zA-Z0-9._\\\\-]', '_')");
         appendLine(sb, "    int idx = (classCounters[className] ?: 0) + 1");
         appendLine(sb, "    classCounters[className] = idx");

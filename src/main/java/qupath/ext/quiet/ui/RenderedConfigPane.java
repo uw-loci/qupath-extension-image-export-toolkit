@@ -42,6 +42,7 @@ import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.util.StringConverter;
 
+import qupath.ext.quiet.export.ClassNames;
 import qupath.ext.quiet.export.OutputFormat;
 import qupath.ext.quiet.export.RenderedExportConfig;
 import qupath.ext.quiet.export.RenderedExportConfig.DisplaySettingsMode;
@@ -420,8 +421,9 @@ public class RenderedConfigPane extends VBox {
         classificationCombo = new CheckComboBox<>();
         classificationCombo.setMaxWidth(Double.MAX_VALUE);
         GridPane.setHgrow(classificationCombo, Priority.ALWAYS);
-        classificationCombo.setTitle("All selected");
         FXUtils.installSelectAllOrNoneMenu(classificationCombo);
+        classificationCombo.getCheckModel().getCheckedItems().addListener(
+                (javafx.collections.ListChangeListener<String>) c -> updateClassificationTitle());
         var classRefreshButton = new Button(resources.getString("button.refresh"));
         classRefreshButton.setTooltip(createTooltip("tooltip.rendered.refreshClassifications"));
         classRefreshButton.setOnAction(e -> populateAnnotationClassifications());
@@ -1652,7 +1654,7 @@ public class RenderedConfigPane extends VBox {
                     if (pathClass == null || pathClass == PathClass.NULL_CLASS) {
                         hasUnclassified = true;
                     } else {
-                        classNames.add(pathClass.toString());
+                        classNames.add(ClassNames.displayName(pathClass));
                     }
                 }
             } catch (Exception e) {
@@ -1671,14 +1673,32 @@ public class RenderedConfigPane extends VBox {
             hasUnclassified = true;
         }
 
-        if (hasUnclassified) {
-            classificationCombo.getItems().add("Unclassified");
+        if (hasUnclassified && !classNames.contains(ClassNames.UNCLASSIFIED)) {
+            classificationCombo.getItems().add(ClassNames.UNCLASSIFIED);
         }
         classificationCombo.getItems().addAll(classNames);
 
         // Check all items by default
         for (int i = 0; i < classificationCombo.getItems().size(); i++) {
             classificationCombo.getCheckModel().check(i);
+        }
+        updateClassificationTitle();
+    }
+
+    /**
+     * Keeps the class picker's button text honest. ControlsFX shows a non-null
+     * CheckComboBox title INSTEAD of the checked items, so the title is cleared
+     * unless it is summarising an all-or-nothing state.
+     */
+    private void updateClassificationTitle() {
+        int checked = classificationCombo.getCheckModel().getCheckedItems().size();
+        int total = classificationCombo.getItems().size();
+        if (checked == 0) {
+            classificationCombo.setTitle(total == 0 ? "No classes found" : "None checked");
+        } else if (checked == total) {
+            classificationCombo.setTitle("All classes");
+        } else {
+            classificationCombo.setTitle(null);
         }
     }
 
