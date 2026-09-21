@@ -30,17 +30,8 @@ public final class ImageNames {
     private static final Pattern EXTENSION =
             Pattern.compile("\\.(?:" + EXTENSIONS + ")(?=$| - )", Pattern.CASE_INSENSITIVE);
 
-    /** The same rule as Groovy source, appended to generated scripts. */
-    static final String GROOVY_FUNCTION = String.join("\n",
-            "",
-            "// Drop the source file extension from an image name (slide.ome.tif -> slide).",
-            "def stripImageExtension(String name) {",
-            "    if (name == null) return name",
-            "    def stripped = name.replaceFirst('(?i)\\\\.(?:" + EXTENSIONS.replace("\\", "\\\\")
-                    + ")(?=$| - )', '')",
-            "    return stripped.isBlank() ? name : stripped",
-            "}",
-            "");
+    /** Marker line the generators emit; {@link #applyToScript} rewrites it. */
+    private static final String SCRIPT_MARKER = "def entryName = imageName";
 
     private ImageNames() {}
 
@@ -59,29 +50,30 @@ public final class ImageNames {
     }
 
     /**
-     * Base names for a batch. Names that would collide once stripped
-     * ({@code a.tif} and {@code a.czi}) keep their extension so neither
-     * export overwrites the other.
+     * Base names for a batch. A name that would collide with another image in
+     * the project once stripped ({@code a.tif} and {@code a.czi}) keeps its
+     * extension so neither export overwrites the other. Collisions are judged
+     * against the whole project, not the batch, so an image's output name does
+     * not depend on what else was selected -- and matches the generated
+     * scripts, which always see the whole project.
      *
-     * @param names the project image names, in batch order
-     * @param strip whether extensions should be removed at all
+     * @param names        the image names to export, in batch order
+     * @param projectNames every image name in the project (null = just {@code names})
+     * @param strip        whether extensions should be removed at all
      * @return one base name per input, in the same order
      */
-    public static List<String> baseNames(List<String> names, boolean strip) {
+    public static List<String> baseNames(List<String> names, List<String> projectNames, boolean strip) {
         if (!strip) {
             return new ArrayList<>(names);
         }
         Map<String, Integer> counts = new HashMap<>();
-        List<String> stripped = new ArrayList<>(names.size());
-        for (String name : names) {
-            String s = stripExtension(name);
-            stripped.add(s);
-            counts.merge(key(s), 1, Integer::sum);
+        for (String name : projectNames != null ? projectNames : names) {
+            counts.merge(key(stripExtension(name)), 1, Integer::sum);
         }
         List<String> result = new ArrayList<>(names.size());
-        for (int i = 0; i < names.size(); i++) {
-            boolean collides = counts.get(key(stripped.get(i))) > 1;
-            result.add(collides ? names.get(i) : stripped.get(i));
+        for (String name : names) {
+            String stripped = stripExtension(name);
+            result.add(counts.getOrDefault(key(stripped), 0) > 1 ? name : stripped);
         }
         return result;
     }
@@ -92,21 +84,60 @@ public final class ImageNames {
     }
 
     /**
-     * Rewrite a generated script so it names its outputs the same way.
+     * Rewrite a generated script so it names its outputs the way the wizard
+     * run did: same prefix, suffix, extension stripping and collision rule.
      *
      * @param script a script from {@link ScriptGenerator#generate}
-     * @return the script with image names stripped of their extension
+     * @param prefix filename prefix (may be null)
+     * @param suffix filename suffix (may be null)
+     * @param strip  whether source extensions are dropped
+     * @return the script, unchanged when no naming option is in force
      */
-    public static String applyToScript(String script) {
-        if (script == null) {
-            return null;
+    public static String applyToScript(String script, String prefix, String suffix, boolean strip) {
+        String pre = prefix == null ? "" : prefix;
+        String suf = suffix == null ? "" : suffix;
+        if (script == null || !script.contains(SCRIPT_MARKER)
+                || (!strip && pre.isEmpty() && suf.isEmpty())) {
+            return script;
         }
-        String out = script
-                .replace("def entryName = entry.getImageName()",
-                        "def entryName = stripImageExtension(entry.getImageName())")
-                .replace("def entryName = getCurrentImageData().getServer().getMetadata().getName()",
-                        "def entryName = stripImageExtension("
-                                + "getCurrentImageData().getServer().getMetadata().getName())");
-        return out.equals(script) ? script : out + GROOVY_FUNCTION;
+        return script.replace(SCRIPT_MARKER, "def entryName = outputBaseName(imageName)")
+                + groovyNamingBlock(pre, suf, strip);
+    }
+
+    private static String groovyNamingBlock(String prefix, String suffix, boolean strip) {
+        var sb = new StringBuilder("\n");
+        sb.append("// --- Output naming (mirrors the QuIET wizard) ---\n");
+        if (strip) {
+            sb.append("@groovy.transform.Field Map quietStrippedCounts = null\n");
+            sb.append("\n");
+            sb.append("// Drop a known image-file extension (slide.ome.tif -> slide).\n");
+            sb.append("def stripImageExtension(String name) {\n");
+            sb.append("    if (name == null) return name\n");
+            sb.append("    def stripped = name.replaceFirst('(?i)\\\\.(?:")
+                    .append(EXTENSIONS.replace("\\", "\\\\")).append(")(?=$| - )', '')\n");
+            sb.append("    return stripped.isBlank() ? name : stripped\n");
+            sb.append("}\n\n");
+        }
+        sb.append("def outputBaseName(String imageName) {\n");
+        sb.append("    def base = imageName\n");
+        if (strip) {
+            sb.append("    // Images that would share a name once stripped keep their extension.\n");
+            sb.append("    if (quietStrippedCounts == null) {\n");
+            sb.append("        quietStrippedCounts = [:]\n");
+            sb.append("        def proj = getProject()\n");
+            sb.append("        if (proj != null) {\n");
+            sb.append("            proj.getImageList().each {\n");
+            sb.append("                def k = stripImageExtension(it.getImageName()).toLowerCase(Locale.ROOT)\n");
+            sb.append("                quietStrippedCounts[k] = (quietStrippedCounts[k] ?: 0) + 1\n");
+            sb.append("            }\n");
+            sb.append("        }\n");
+            sb.append("    }\n");
+            sb.append("    def stripped = stripImageExtension(imageName)\n");
+            sb.append("    if ((quietStrippedCounts[stripped.toLowerCase(Locale.ROOT)] ?: 0) <= 1) base = stripped\n");
+        }
+        sb.append("    return ").append(ScriptGenerator.quote(prefix)).append(" + base + ")
+                .append(ScriptGenerator.quote(suffix)).append("\n");
+        sb.append("}\n");
+        return sb.toString();
     }
 }

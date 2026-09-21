@@ -76,6 +76,7 @@ public class ScriptGenerator {
         String escaped = value
                 .replace("\\", "\\\\")
                 .replace("\"", "\\\"")
+                .replace("$", "\\$")
                 .replace("\n", "\\n")
                 .replace("\r", "\\r");
         return "\"" + escaped + "\"";

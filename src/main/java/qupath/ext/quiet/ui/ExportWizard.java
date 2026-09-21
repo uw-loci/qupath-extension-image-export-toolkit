@@ -1068,11 +1068,17 @@ public class ExportWizard {
     /** Generate a script that names its outputs the way this wizard run does. */
     private String generateScript(ExportCategory category, Object config) {
         String script = ScriptGenerator.generate(category, config);
-        return imageSelectionPane.isStripImageExtension() ? ImageNames.applyToScript(script) : script;
+        return ImageNames.applyToScript(script,
+                imageSelectionPane.getFilenamePrefix(),
+                imageSelectionPane.getFilenameSuffix(),
+                imageSelectionPane.isStripImageExtension());
     }
 
     private void runTask() {
-        currentTask.setStripImageExtension(imageSelectionPane.isStripImageExtension());
+        var project = qupath.getProject();
+        currentTask.setStripImageExtension(imageSelectionPane.isStripImageExtension(),
+                project == null ? null
+                        : project.getImageList().stream().map(e -> e.getImageName()).toList());
         var progressBar = activeProgressBar();
         var statusLabel = activeStatusLabel();
 

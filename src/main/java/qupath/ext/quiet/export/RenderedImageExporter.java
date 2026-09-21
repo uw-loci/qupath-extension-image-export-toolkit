@@ -2186,7 +2186,14 @@ public class RenderedImageExporter {
         if (template == null || template.isEmpty()) return null;
 
         String result = template;
-        result = result.replace("{imageName}", entryName != null ? entryName : "");
+        // The image's own name, not the output filename: entryName may carry a
+        // prefix/suffix or have lost its extension. A project entry's server is
+        // renamed to the entry name by readImageData().
+        String imageName = imageData.getServerMetadata().getName();
+        if (imageName == null || imageName.isBlank()) {
+            imageName = entryName != null ? entryName : "";
+        }
+        result = result.replace("{imageName}", imageName);
 
         var server = imageData.getServer();
         var cal = server.getPixelCalibration();

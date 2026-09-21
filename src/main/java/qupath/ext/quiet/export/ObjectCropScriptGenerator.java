@@ -126,12 +126,15 @@ class ObjectCropScriptGenerator {
         appendLine(sb, "    def crop = server.readRegion(region)");
         appendLine(sb, "");
         appendLine(sb, "    String className = (obj.getPathClass() != null) ? obj.getPathClass().toString() : 'Unclassified'");
-        appendLine(sb, "    String safeClass = className.replaceAll('[^a-zA-Z0-9._\\\\-]', '_')");
+        appendLine(sb, "    String safeClass = qupath.lib.common.GeneralTools.stripInvalidFilenameChars(className)");
+        appendLine(sb, "    if (safeClass == null || safeClass.isBlank()) safeClass = 'unnamed'");
         appendLine(sb, "    int idx = (classCounters[className] ?: 0) + 1");
         appendLine(sb, "    classCounters[className] = idx");
         appendLine(sb, "");
-        appendLine(sb, "    def entryName = getCurrentImageData().getServer().getMetadata().getName()");
-        appendLine(sb, "    String safeEntry = entryName.replaceAll('[^a-zA-Z0-9._\\\\-]', '_')");
+        appendLine(sb, "    def imageName = getCurrentImageData().getServer().getMetadata().getName()");
+        appendLine(sb, "    def entryName = imageName");
+        appendLine(sb, "    String safeEntry = qupath.lib.common.GeneralTools.stripInvalidFilenameChars(entryName)");
+        appendLine(sb, "    if (safeEntry == null || safeEntry.isBlank()) safeEntry = 'unnamed'");
         appendLine(sb, "");
         appendLine(sb, "    File outputFile");
         appendLine(sb, "    if (labelFormat == 'SUBDIRECTORY') {");

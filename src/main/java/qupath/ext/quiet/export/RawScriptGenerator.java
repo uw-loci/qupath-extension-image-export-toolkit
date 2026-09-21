@@ -105,7 +105,8 @@ class RawScriptGenerator {
         appendLine(sb, "");
         appendLine(sb, "for (int i = 0; i < entries.size(); i++) {");
         appendLine(sb, "    def entry = entries[i]");
-        appendLine(sb, "    def entryName = entry.getImageName()");
+        appendLine(sb, "    def imageName = entry.getImageName()");
+        appendLine(sb, "    def entryName = imageName");
         appendLine(sb, "    println \"[${i + 1}/${entries.size()}] Processing: ${entryName}\"");
         appendLine(sb, "");
         appendLine(sb, "    try {");
@@ -152,7 +153,8 @@ class RawScriptGenerator {
     private static void generateWholeImageExport(StringBuilder sb, RawExportConfig config) {
         if (config.getFormat() == OutputFormat.OME_TIFF_PYRAMID) {
             // OME Pyramid export
-            appendLine(sb, "        def sanitized = entryName.replaceAll('[^a-zA-Z0-9._\\\\-]', '_')");
+            appendLine(sb, "        def sanitized = qupath.lib.common.GeneralTools.stripInvalidFilenameChars(entryName)");
+            appendLine(sb, "        if (sanitized == null || sanitized.isBlank()) sanitized = 'unnamed'");
             appendLine(sb, "        def outputPath = new File(outDir, sanitized + '.' + outputFormat).getAbsolutePath()");
             appendLine(sb, "");
             appendLine(sb, "        def pyramidBuilder = new OMEPyramidWriter.Builder(exportServer)");
@@ -172,7 +174,8 @@ class RawScriptGenerator {
             appendLine(sb, "                0, 0, exportServer.getWidth(), exportServer.getHeight())");
             appendLine(sb, "        def image = exportServer.readRegion(request)");
             appendLine(sb, "");
-            appendLine(sb, "        def sanitized = entryName.replaceAll('[^a-zA-Z0-9._\\\\-]', '_')");
+            appendLine(sb, "        def sanitized = qupath.lib.common.GeneralTools.stripInvalidFilenameChars(entryName)");
+            appendLine(sb, "        if (sanitized == null || sanitized.isBlank()) sanitized = 'unnamed'");
             appendLine(sb, "        def outputPath = new File(outDir, sanitized + '.' + outputFormat).getAbsolutePath()");
             appendLine(sb, "        ImageWriterTools.writeImage(image, outputPath)");
             appendLine(sb, "        println \"  OK: ${outputPath}\"");
@@ -230,7 +233,8 @@ class RawScriptGenerator {
         appendLine(sb, "                    exportServer.getPath(), downsample, x, y, w, h)");
         appendLine(sb, "            def regionImage = exportServer.readRegion(request)");
         appendLine(sb, "");
-        appendLine(sb, "            def sanitized = entryName.replaceAll('[^a-zA-Z0-9._\\\\-]', '_')");
+        appendLine(sb, "            def sanitized = qupath.lib.common.GeneralTools.stripInvalidFilenameChars(entryName)");
+        appendLine(sb, "            if (sanitized == null || sanitized.isBlank()) sanitized = 'unnamed'");
         appendLine(sb, "            def outputPath = new File(outDir, sanitized + \"_region_${regionIndex}.\" + outputFormat).getAbsolutePath()");
         appendLine(sb, "            ImageWriterTools.writeImage(regionImage, outputPath)");
         appendLine(sb, "            println \"  OK: ${outputPath}\"");

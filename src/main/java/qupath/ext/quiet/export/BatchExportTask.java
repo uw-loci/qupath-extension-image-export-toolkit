@@ -51,6 +51,7 @@ public class BatchExportTask extends Task<ExportResult> {
     private final String filenamePrefix;
     private final String filenameSuffix;
     private boolean stripImageExtension;
+    private List<String> projectImageNames;
     private final boolean channelsConsistent;
 
     /** Effective config after optional GLOBAL_MATCHED pre-scan. */
@@ -192,10 +193,13 @@ public class BatchExportTask extends Task<ExportResult> {
      * Name outputs after the image name without its source file extension.
      * Must be set before the task starts.
      *
-     * @param strip true to drop extensions such as {@code .tif} or {@code .ome.tif}
+     * @param strip             true to drop extensions such as {@code .tif} or {@code .ome.tif}
+     * @param projectImageNames every image name in the project, used to keep the
+     *                          extension on names that would otherwise collide
      */
-    public void setStripImageExtension(boolean strip) {
+    public void setStripImageExtension(boolean strip, List<String> projectImageNames) {
         this.stripImageExtension = strip;
+        this.projectImageNames = projectImageNames == null ? null : List.copyOf(projectImageNames);
     }
 
     @Override
@@ -241,7 +245,7 @@ public class BatchExportTask extends Task<ExportResult> {
         PixelCalibration firstCalibration = null;
 
         List<String> baseNames = ImageNames.baseNames(
-                entries.stream().map(e -> e.getImageName()).toList(), stripImageExtension);
+                entries.stream().map(e -> e.getImageName()).toList(), projectImageNames, stripImageExtension);
 
         for (int i = 0; i < total; i++) {
             if (isCancelled()) {

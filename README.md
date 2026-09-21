@@ -610,7 +610,14 @@ Each export is named after its project image, with an optional **Filename Prefix
 | `scan.vsi - 20x_01`, `exp.czi - Scene #1` | `scan - 20x_01`, `exp - Scene #1` |
 | `Dose 1.5 mg`, `sample.v2` | unchanged -- only known image extensions are removed, never "whatever follows the last dot" |
 
-If two selected images would end up with the same name (`a.tif` and `a.czi`), both keep their extension so neither export overwrites the other. Generated scripts apply the same stripping rule, but they process one image at a time and so cannot apply this collision check; if your project has such pairs, untick the option before copying the script. Untick it as well if downstream code expects the old `name.tif.png` filenames.
+If another image **in the project** would end up with the same name (`a.tif` and `a.czi`), both keep their extension so neither export overwrites the other. The check covers the whole project rather than just the current selection, so an image's output name does not change depending on what else you happened to select.
+
+**Generated scripts name files identically.** A script copied or saved from the wizard carries the same prefix, suffix, extension rule and project-wide collision check, and sanitizes names exactly as the wizard does (invalid filename characters are removed; spaces are kept). Scripts generated before v1.2.12 replaced spaces and other characters with `_` and ignored the prefix and suffix, so their filenames could differ from the wizard's.
+
+What the naming options do **not** touch:
+
+- The `{imageName}` info-label placeholder and Panel / Montage captions always show the full project image name, extension included -- a project can hold several versions of one image, and the label should say which one you are looking at.
+- Tile files inside a Tiled export folder are named by QuPath's own `TileExporter` (`name [x=...,y=...]`). The per-image folder follows the options above; the tiles inside it do not take the prefix or suffix.
 
 </details>
 

@@ -422,7 +422,10 @@ public class ImageSelectionPane extends VBox {
             }
         }
 
-        if (isStripImageExtension()) {
+        if (isStripImageExtension() && masterItems != null) {
+            var projectNames = masterItems.stream().map(Object::toString).toList();
+            imageName = ImageNames.baseNames(List.of(imageName), projectNames, true).get(0);
+        } else if (isStripImageExtension()) {
             imageName = ImageNames.stripExtension(imageName);
         }
         filenamePreviewLabel.setText(prefix + imageName + suffix + ".png");

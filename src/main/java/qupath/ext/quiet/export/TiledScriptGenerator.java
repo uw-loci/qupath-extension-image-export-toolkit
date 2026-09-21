@@ -98,7 +98,8 @@ class TiledScriptGenerator {
         appendLine(sb, "");
         appendLine(sb, "for (int i = 0; i < entries.size(); i++) {");
         appendLine(sb, "    def entry = entries[i]");
-        appendLine(sb, "    def entryName = entry.getImageName()");
+        appendLine(sb, "    def imageName = entry.getImageName()");
+        appendLine(sb, "    def entryName = imageName");
         appendLine(sb, "    println \"[${i + 1}/${entries.size()}] Processing: ${entryName}\"");
         appendLine(sb, "");
         appendLine(sb, "    def labelServer = null");
@@ -188,7 +189,8 @@ class TiledScriptGenerator {
         appendLine(sb, "");
 
         // Write tiles
-        appendLine(sb, "        def sanitized = entryName.replaceAll('[^a-zA-Z0-9._\\\\-]', '_')");
+        appendLine(sb, "        def sanitized = qupath.lib.common.GeneralTools.stripInvalidFilenameChars(entryName)");
+        appendLine(sb, "        if (sanitized == null || sanitized.isBlank()) sanitized = 'unnamed'");
         appendLine(sb, "        def imageOutDir = new File(outDir, sanitized)");
         appendLine(sb, "        imageOutDir.mkdirs()");
         appendLine(sb, "        exporter.writeTiles(imageOutDir.getAbsolutePath())");

@@ -598,7 +598,7 @@ class RenderedScriptGenerator {
     private static void emitInfoLabelDrawing(StringBuilder sb) {
         appendLine(sb, "        if (showInfoLabel && infoLabelTemplate != null) {");
         appendLine(sb, "            def infoText = infoLabelTemplate");
-        appendLine(sb, "            infoText = infoText.replace('{imageName}', entryName ?: '')");
+        appendLine(sb, "            infoText = infoText.replace('{imageName}', imageName ?: '')");
         appendLine(sb, "            def cal = imageData.getServer().getPixelCalibration()");
         appendLine(sb, "            def pxStr = cal.hasPixelSizeMicrons() ? String.format('%.3f um/px', cal.getAveragedPixelSizeMicrons()) : 'uncalibrated'");
         appendLine(sb, "            infoText = infoText.replace('{pixelSize}', pxStr)");
@@ -618,7 +618,7 @@ class RenderedScriptGenerator {
     private static void emitInfoLabelDrawingNoClassifier(StringBuilder sb) {
         appendLine(sb, "        if (showInfoLabel && infoLabelTemplate != null) {");
         appendLine(sb, "            def infoText = infoLabelTemplate");
-        appendLine(sb, "            infoText = infoText.replace('{imageName}', entryName ?: '')");
+        appendLine(sb, "            infoText = infoText.replace('{imageName}', imageName ?: '')");
         appendLine(sb, "            def cal = imageData.getServer().getPixelCalibration()");
         appendLine(sb, "            def pxStr = cal.hasPixelSizeMicrons() ? String.format('%.3f um/px', cal.getAveragedPixelSizeMicrons()) : 'uncalibrated'");
         appendLine(sb, "            infoText = infoText.replace('{pixelSize}', pxStr)");
@@ -638,7 +638,7 @@ class RenderedScriptGenerator {
     private static void emitAnnotationInfoLabelDrawing(StringBuilder sb, boolean hasClassifier) {
         appendLine(sb, "            if (showInfoLabel && infoLabelTemplate != null) {");
         appendLine(sb, "                def infoText = infoLabelTemplate");
-        appendLine(sb, "                infoText = infoText.replace('{imageName}', entryName ?: '')");
+        appendLine(sb, "                infoText = infoText.replace('{imageName}', imageName ?: '')");
         appendLine(sb, "                def cal = imageData.getServer().getPixelCalibration()");
         appendLine(sb, "                def pxStr = cal.hasPixelSizeMicrons() ? String.format('%.3f um/px', cal.getAveragedPixelSizeMicrons()) : 'uncalibrated'");
         appendLine(sb, "                infoText = infoText.replace('{pixelSize}', pxStr)");
@@ -965,7 +965,8 @@ class RenderedScriptGenerator {
         String fileLabel = config.splitChannel().enabled() ? "_merge" : "";
         appendLine(sb, "            g2d.dispose()");
         appendLine(sb, "");
-        appendLine(sb, "            def sanitized = entryName.replaceAll('[^a-zA-Z0-9._\\\\-]', '_')");
+        appendLine(sb, "            def sanitized = qupath.lib.common.GeneralTools.stripInvalidFilenameChars(entryName)");
+        appendLine(sb, "            if (sanitized == null || sanitized.isBlank()) sanitized = 'unnamed'");
         appendLine(sb, "            def outputPath = new File(outDir, sanitized + suffix + '" + fileLabel + ".' + outputFormat).getAbsolutePath()");
         appendLine(sb, "            ImageWriterTools.writeImage(result, outputPath)");
         appendLine(sb, "            println \"  OK: ${outputPath}\"");
@@ -1282,7 +1283,8 @@ class RenderedScriptGenerator {
         appendLine(sb, "");
         appendLine(sb, "for (int i = 0; i < entries.size(); i++) {");
         appendLine(sb, "    def entry = entries[i]");
-        appendLine(sb, "    def entryName = entry.getImageName()");
+        appendLine(sb, "    def imageName = entry.getImageName()");
+        appendLine(sb, "    def entryName = imageName");
         appendLine(sb, "    println \"[${i + 1}/${entries.size()}] Processing: ${entryName}\"");
         appendLine(sb, "");
         appendLine(sb, "    def densityServer = null");
@@ -1449,7 +1451,8 @@ class RenderedScriptGenerator {
             }
             appendLine(sb, "        g2d.dispose()");
             appendLine(sb, "");
-            appendLine(sb, "        def sanitized = entryName.replaceAll('[^a-zA-Z0-9._\\\\-]', '_')");
+            appendLine(sb, "        def sanitized = qupath.lib.common.GeneralTools.stripInvalidFilenameChars(entryName)");
+            appendLine(sb, "        if (sanitized == null || sanitized.isBlank()) sanitized = 'unnamed'");
             String densityFileLabel = config.splitChannel().enabled() ? "_merge" : "";
             appendLine(sb, "        def outputPath = new File(outDir, sanitized + '" + densityFileLabel + ".' + outputFormat).getAbsolutePath()");
             appendLine(sb, "        ImageWriterTools.writeImage(result, outputPath)");
@@ -1593,7 +1596,8 @@ class RenderedScriptGenerator {
         appendLine(sb, "");
         appendLine(sb, "for (int i = 0; i < entries.size(); i++) {");
         appendLine(sb, "    def entry = entries[i]");
-        appendLine(sb, "    def entryName = entry.getImageName()");
+        appendLine(sb, "    def imageName = entry.getImageName()");
+        appendLine(sb, "    def entryName = imageName");
         appendLine(sb, "    println \"[${i + 1}/${entries.size()}] Processing: ${entryName}\"");
         appendLine(sb, "");
         appendLine(sb, "    def classServer = null");
@@ -1718,7 +1722,8 @@ class RenderedScriptGenerator {
             }
             appendLine(sb, "        g2d.dispose()");
             appendLine(sb, "");
-            appendLine(sb, "        def sanitized = entryName.replaceAll('[^a-zA-Z0-9._\\\\-]', '_')");
+            appendLine(sb, "        def sanitized = qupath.lib.common.GeneralTools.stripInvalidFilenameChars(entryName)");
+            appendLine(sb, "        if (sanitized == null || sanitized.isBlank()) sanitized = 'unnamed'");
             String classFileLabel = config.splitChannel().enabled() ? "_merge" : "";
             appendLine(sb, "        def outputPath = new File(outDir, sanitized + '" + classFileLabel + ".' + outputFormat).getAbsolutePath()");
             appendLine(sb, "        ImageWriterTools.writeImage(result, outputPath)");
@@ -1853,7 +1858,8 @@ class RenderedScriptGenerator {
         appendLine(sb, "");
         appendLine(sb, "for (int i = 0; i < entries.size(); i++) {");
         appendLine(sb, "    def entry = entries[i]");
-        appendLine(sb, "    def entryName = entry.getImageName()");
+        appendLine(sb, "    def imageName = entry.getImageName()");
+        appendLine(sb, "    def entryName = imageName");
         appendLine(sb, "    println \"[${i + 1}/${entries.size()}] Processing: ${entryName}\"");
         appendLine(sb, "");
         appendLine(sb, "    try {");
@@ -1950,7 +1956,8 @@ class RenderedScriptGenerator {
             }
             appendLine(sb, "        g2d.dispose()");
             appendLine(sb, "");
-            appendLine(sb, "        def sanitized = entryName.replaceAll('[^a-zA-Z0-9._\\\\-]', '_')");
+            appendLine(sb, "        def sanitized = qupath.lib.common.GeneralTools.stripInvalidFilenameChars(entryName)");
+            appendLine(sb, "        if (sanitized == null || sanitized.isBlank()) sanitized = 'unnamed'");
             String objFileLabel = config.splitChannel().enabled() ? "_merge" : "";
             appendLine(sb, "        def outputPath = new File(outDir, sanitized + '" + objFileLabel + ".' + outputFormat).getAbsolutePath()");
             appendLine(sb, "        ImageWriterTools.writeImage(result, outputPath)");
