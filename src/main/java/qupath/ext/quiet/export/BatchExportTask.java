@@ -50,6 +50,7 @@ public class BatchExportTask extends Task<ExportResult> {
     private final File outputDirectory;
     private final String filenamePrefix;
     private final String filenameSuffix;
+    private boolean stripImageExtension;
     private final boolean channelsConsistent;
 
     /** Effective config after optional GLOBAL_MATCHED pre-scan. */
@@ -187,6 +188,16 @@ public class BatchExportTask extends Task<ExportResult> {
         this.channelsConsistent = channelsConsistent;
     }
 
+    /**
+     * Name outputs after the image name without its source file extension.
+     * Must be set before the task starts.
+     *
+     * @param strip true to drop extensions such as {@code .tif} or {@code .ome.tif}
+     */
+    public void setStripImageExtension(boolean strip) {
+        this.stripImageExtension = strip;
+    }
+
     @Override
     protected ExportResult call() throws Exception {
         // Panel / Montage mode: render every image through a recipe, compose
@@ -229,6 +240,9 @@ public class BatchExportTask extends Task<ExportResult> {
         Map<String, ExportMetadataWriter.ChannelGroup> channelGroups = new LinkedHashMap<>();
         PixelCalibration firstCalibration = null;
 
+        List<String> baseNames = ImageNames.baseNames(
+                entries.stream().map(e -> e.getImageName()).toList(), stripImageExtension);
+
         for (int i = 0; i < total; i++) {
             if (isCancelled()) {
                 logger.info("Export cancelled by user after {} of {} images", i, total);
@@ -236,8 +250,7 @@ public class BatchExportTask extends Task<ExportResult> {
             }
 
             var entry = entries.get(i);
-            String rawName = entry.getImageName();
-            String entryName = filenamePrefix + rawName + filenameSuffix;
+            String entryName = filenamePrefix + baseNames.get(i) + filenameSuffix;
 
             updateMessage(String.format("Exporting %d of %d: %s", i + 1, total, entryName));
             updateProgress(i, total);

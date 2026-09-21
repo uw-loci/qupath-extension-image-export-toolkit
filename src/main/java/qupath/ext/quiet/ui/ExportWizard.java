@@ -43,6 +43,7 @@ import qupath.ext.quiet.export.RawExportConfig;
 import qupath.ext.quiet.export.RenderedExportConfig;
 import qupath.ext.quiet.export.TiledExportConfig;
 import qupath.ext.quiet.preferences.QuietPreferences;
+import qupath.ext.quiet.export.ImageNames;
 import qupath.ext.quiet.export.ScriptGenerator;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.analysis.heatmaps.DensityMaps;
@@ -656,7 +657,7 @@ public class ExportWizard {
         boolean isActiveOverlay = RenderedConfigPane.ACTIVE_OVERLAY_DISPLAY_LABEL
                 .equals(renderedConfigPane.getClassifierName());
         String workflowScript = (addToWorkflow && !isActiveOverlay)
-                ? ScriptGenerator.generate(ExportCategory.RENDERED, config) : null;
+                ? generateScript(ExportCategory.RENDERED, config) : null;
 
         String prefix = imageSelectionPane.getFilenamePrefix();
         String suffix = imageSelectionPane.getFilenameSuffix();
@@ -678,7 +679,7 @@ public class ExportWizard {
         }
 
         String workflowScript = addToWorkflow
-                ? ScriptGenerator.generate(ExportCategory.MASK, config) : null;
+                ? generateScript(ExportCategory.MASK, config) : null;
 
         String prefix = imageSelectionPane.getFilenamePrefix();
         String suffix = imageSelectionPane.getFilenameSuffix();
@@ -700,7 +701,7 @@ public class ExportWizard {
         }
 
         String workflowScript = addToWorkflow
-                ? ScriptGenerator.generate(ExportCategory.RAW, config) : null;
+                ? generateScript(ExportCategory.RAW, config) : null;
 
         String prefix = imageSelectionPane.getFilenamePrefix();
         String suffix = imageSelectionPane.getFilenameSuffix();
@@ -717,7 +718,7 @@ public class ExportWizard {
         TiledExportConfig config = tiledConfigPane.buildConfig(outputDir);
 
         String workflowScript = addToWorkflow
-                ? ScriptGenerator.generate(ExportCategory.TILED, config) : null;
+                ? generateScript(ExportCategory.TILED, config) : null;
 
         String prefix = imageSelectionPane.getFilenamePrefix();
         String suffix = imageSelectionPane.getFilenameSuffix();
@@ -735,7 +736,7 @@ public class ExportWizard {
         ObjectCropConfig config = objectCropConfigPane.buildConfig(outputDir);
 
         String workflowScript = addToWorkflow
-                ? ScriptGenerator.generate(ExportCategory.OBJECT_CROPS, config) : null;
+                ? generateScript(ExportCategory.OBJECT_CROPS, config) : null;
 
         String prefix = imageSelectionPane.getFilenamePrefix();
         String suffix = imageSelectionPane.getFilenameSuffix();
@@ -835,7 +836,7 @@ public class ExportWizard {
                 return false;
             }
 
-            String workflowScript = ScriptGenerator.generate(
+            String workflowScript = generateScript(
                     ExportCategory.PANEL, panelConfig);
 
             QuietPreferences.setLastCategory(ExportCategory.PANEL.name());
@@ -1064,7 +1065,14 @@ public class ExportWizard {
         return imageSelectionPane.getStatusLabel();
     }
 
+    /** Generate a script that names its outputs the way this wizard run does. */
+    private String generateScript(ExportCategory category, Object config) {
+        String script = ScriptGenerator.generate(category, config);
+        return imageSelectionPane.isStripImageExtension() ? ImageNames.applyToScript(script) : script;
+    }
+
     private void runTask() {
+        currentTask.setStripImageExtension(imageSelectionPane.isStripImageExtension());
         var progressBar = activeProgressBar();
         var statusLabel = activeStatusLabel();
 
@@ -1268,7 +1276,7 @@ public class ExportWizard {
                 case PANEL -> null;  // not reachable
             };
 
-            return ScriptGenerator.generate(category, config);
+            return generateScript(category, config);
         } catch (Exception e) {
             logger.warn("Failed to generate script: {}", e.getMessage());
             Dialogs.showErrorMessage(

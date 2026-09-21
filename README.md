@@ -597,6 +597,24 @@ Filenames are sanitized using QuPath's `GeneralTools.stripInvalidFilenameChars()
 </details>
 
 <details>
+<summary><h2>Output filenames</h2></summary>
+
+Each export is named after its project image, with an optional **Filename Prefix** and **Filename Suffix** set on the image-selection step. A live preview shows the result for the first selected image.
+
+**Drop source file extension** (on by default) removes the original file's extension first, so `slide.tif` exports as `slide.png` rather than `slide.tif.png`:
+
+| Image name in project | Output base name |
+|---|---|
+| `slide.tif`, `slide.SVS` | `slide` |
+| `slide.ome.tif`, `slide.ome.zarr` | `slide` (the compound extension goes as a unit) |
+| `scan.vsi - 20x_01`, `exp.czi - Scene #1` | `scan - 20x_01`, `exp - Scene #1` |
+| `Dose 1.5 mg`, `sample.v2` | unchanged -- only known image extensions are removed, never "whatever follows the last dot" |
+
+If two selected images would end up with the same name (`a.tif` and `a.czi`), both keep their extension so neither export overwrites the other. Generated scripts apply the same stripping rule, but they process one image at a time and so cannot apply this collision check; if your project has such pairs, untick the option before copying the script. Untick it as well if downstream code expects the old `name.tif.png` filenames.
+
+</details>
+
+<details>
 <summary><h2>Preferences</h2></summary>
 
 The wizard window does not block QuPath: while it is open you can still switch images, check an image's pixel dimensions and calibration in the **Image** tab, or adjust brightness/contrast before choosing a downsample. Only one wizard is open at a time -- choosing the menu item again brings the existing window forward -- and the wizard closes itself if you open a different project, since its image list would no longer apply.

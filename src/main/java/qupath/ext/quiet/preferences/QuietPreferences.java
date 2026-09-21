@@ -42,6 +42,8 @@ public class QuietPreferences {
 
     private static final StringProperty filenameSuffix =
             PathPrefs.createPersistentPreference(PREFIX + "filenameSuffix", "");
+    private static final BooleanProperty stripImageExtension =
+            PathPrefs.createPersistentPreference(PREFIX + "stripImageExtension", true);
 
     // --- Rendered export preferences ---
 
@@ -454,6 +456,10 @@ public class QuietPreferences {
     public static StringProperty filenameSuffixProperty() { return filenameSuffix; }
     public static String getFilenameSuffix() { return filenameSuffix.get(); }
     public static void setFilenameSuffix(String value) { filenameSuffix.set(value != null ? value : ""); }
+
+    public static BooleanProperty stripImageExtensionProperty() { return stripImageExtension; }
+    public static boolean isStripImageExtension() { return stripImageExtension.get(); }
+    public static void setStripImageExtension(boolean value) { stripImageExtension.set(value); }
 
     // ==================== Rendered ====================
 

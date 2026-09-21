@@ -29,6 +29,7 @@ import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
@@ -44,6 +45,7 @@ import qupath.ext.quiet.advice.AdviceSeverity;
 import qupath.ext.quiet.advice.ImageContext;
 import qupath.ext.quiet.advice.PublicationAdviceChecker;
 import qupath.ext.quiet.export.ExportCategory;
+import qupath.ext.quiet.export.ImageNames;
 import qupath.ext.quiet.preferences.QuietPreferences;
 import qupath.lib.common.ColorTools;
 import qupath.lib.gui.QuPathGUI;
@@ -96,6 +98,7 @@ public class ImageSelectionPane extends VBox {
     // Containers promoted for simple mode toggling
     private HBox prefixSuffixRow;
     private HBox previewRow;
+    private CheckBox stripExtensionCheck;
     private HBox scriptBox;
     private PublicationAdvicePane advicePane;
     private javafx.scene.control.Button adviceButton;
@@ -166,7 +169,17 @@ public class ImageSelectionPane extends VBox {
         filenamePreviewLabel = new Label();
         ThemeColors.textFill(filenamePreviewLabel, ThemeColors.MUTED);
         filenamePreviewLabel.setFont(Font.font("monospace", 11));
-        previewRow = new HBox(5, previewTitleLabel, filenamePreviewLabel);
+        stripExtensionCheck = new CheckBox(resources.getString("step3.label.stripExtension"));
+        stripExtensionCheck.setSelected(QuietPreferences.isStripImageExtension());
+        stripExtensionCheck.setTooltip(createTooltip("tooltip.step3.stripExtension"));
+        // Written through at once: the script buttons on later steps read it.
+        stripExtensionCheck.selectedProperty().addListener((obs, o, n) -> {
+            QuietPreferences.setStripImageExtension(n);
+            updateFilenamePreview();
+        });
+        var previewSpacer = new Region();
+        HBox.setHgrow(previewSpacer, Priority.ALWAYS);
+        previewRow = new HBox(5, previewTitleLabel, filenamePreviewLabel, previewSpacer, stripExtensionCheck);
         previewRow.setAlignment(Pos.CENTER_LEFT);
 
         // Update preview when prefix/suffix change
@@ -409,6 +422,9 @@ public class ImageSelectionPane extends VBox {
             }
         }
 
+        if (isStripImageExtension()) {
+            imageName = ImageNames.stripExtension(imageName);
+        }
         filenamePreviewLabel.setText(prefix + imageName + suffix + ".png");
     }
 
@@ -496,6 +512,10 @@ public class ImageSelectionPane extends VBox {
     public String getFilenamePrefix() {
         String text = prefixField.getText();
         return (text != null) ? text : "";
+    }
+
+    public boolean isStripImageExtension() {
+        return stripExtensionCheck.isSelected();
     }
 
     public String getFilenameSuffix() {
