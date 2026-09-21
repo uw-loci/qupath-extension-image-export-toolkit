@@ -351,7 +351,7 @@ public class RenderedConfigPane extends VBox {
 
         // Mode switching
         modeCombo.valueProperty().addListener((obs, oldMode, newMode) -> updateModeVisibility(newMode));
-        updateModeVisibility(RenderedExportConfig.RenderMode.CLASSIFIER_OVERLAY);
+        updateModeVisibility(RenderedExportConfig.RenderMode.NONE);
 
         // Region type visibility (default hidden)
         updateRegionTypeVisibility(RenderedExportConfig.RegionType.WHOLE_IMAGE);
@@ -370,7 +370,7 @@ public class RenderedConfigPane extends VBox {
         grid.add(modeLabel, 0, row);
         modeCombo = new ComboBox<>(FXCollections.observableArrayList(
                 RenderedExportConfig.RenderMode.values()));
-        modeCombo.setValue(RenderedExportConfig.RenderMode.CLASSIFIER_OVERLAY);
+        modeCombo.setValue(RenderedExportConfig.RenderMode.NONE);
         modeCombo.setConverter(new StringConverter<>() {
             @Override
             public String toString(RenderedExportConfig.RenderMode mode) {
@@ -384,7 +384,7 @@ public class RenderedConfigPane extends VBox {
             }
             @Override
             public RenderedExportConfig.RenderMode fromString(String s) {
-                return RenderedExportConfig.RenderMode.CLASSIFIER_OVERLAY;
+                return RenderedExportConfig.RenderMode.NONE;
             }
         });
         grid.add(modeCombo, 1, row);
@@ -1803,6 +1803,26 @@ public class RenderedConfigPane extends VBox {
         return tip;
     }
 
+    /**
+     * Ring the render-mode dropdown while it still sits on "None", until the
+     * user opens or changes it.
+     */
+    private void installModeHalo() {
+        if (modeCombo.getValue() != RenderedExportConfig.RenderMode.NONE) {
+            return;
+        }
+        var halo = new javafx.scene.effect.DropShadow(
+                javafx.scene.effect.BlurType.GAUSSIAN, javafx.scene.paint.Color.web("#2E9BFF"), 12, 0.6, 0, 0);
+        modeCombo.setEffect(halo);
+        Runnable clear = () -> {
+            if (modeCombo.getEffect() == halo) {
+                modeCombo.setEffect(null);
+            }
+        };
+        modeCombo.showingProperty().addListener((obs, was, showing) -> clear.run());
+        modeCombo.valueProperty().addListener((obs, was, now) -> clear.run());
+    }
+
     private void populateClassifiers() {
         classifierCombo.getItems().clear();
 
@@ -1918,8 +1938,15 @@ public class RenderedConfigPane extends VBox {
 
         String savedMode = QuietPreferences.getRenderedMode();
         try {
-            modeCombo.setValue(RenderedExportConfig.RenderMode.valueOf(savedMode));
+            var mode = RenderedExportConfig.RenderMode.valueOf(savedMode);
+            // A remembered classifier mode with nothing to overlay fails at export time.
+            if (mode == RenderedExportConfig.RenderMode.CLASSIFIER_OVERLAY
+                    && classifierCombo.getItems().isEmpty()) {
+                mode = RenderedExportConfig.RenderMode.NONE;
+            }
+            modeCombo.setValue(mode);
         } catch (IllegalArgumentException e) { /* keep default */ }
+        installModeHalo();
 
         String savedDisplayMode = QuietPreferences.getRenderedDisplayMode();
         try {

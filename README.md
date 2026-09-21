@@ -155,6 +155,7 @@ Produce **publication-ready figures** -- the image as it looks in QuPath, with y
 
 | Option | Description |
 |--------|-------------|
+| **None** (default) | Export the base image with no overlay source; objects, scale bar and labels can still be added. The **Render Mode** dropdown is ringed in blue until you open it, as a reminder that this is where overlays are chosen |
 | **Classifier Overlay** | Render a pixel classifier's output on top of the image at configurable opacity |
 | **Object Overlay** | Render annotation and/or detection objects with fill, outline, and name options |
 | **Density Map Overlay** | Render a saved density map with a configurable colormap (Viridis, Magma, etc.) and optional color scale bar |

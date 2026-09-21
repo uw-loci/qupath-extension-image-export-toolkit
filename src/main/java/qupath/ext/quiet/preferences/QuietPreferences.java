@@ -46,7 +46,7 @@ public class QuietPreferences {
     // --- Rendered export preferences ---
 
     private static final StringProperty renderedMode =
-            PathPrefs.createPersistentPreference(PREFIX + "rendered.mode", "CLASSIFIER_OVERLAY");
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.mode", "NONE");
 
     private static final StringProperty renderedClassifierName =
             PathPrefs.createPersistentPreference(PREFIX + "rendered.classifierName", "");
@@ -459,7 +459,7 @@ public class QuietPreferences {
 
     public static StringProperty renderedModeProperty() { return renderedMode; }
     public static String getRenderedMode() { return renderedMode.get(); }
-    public static void setRenderedMode(String value) { renderedMode.set(value != null ? value : "CLASSIFIER_OVERLAY"); }
+    public static void setRenderedMode(String value) { renderedMode.set(value != null ? value : "NONE"); }
 
     public static StringProperty renderedClassifierNameProperty() { return renderedClassifierName; }
     public static String getRenderedClassifierName() { return renderedClassifierName.get(); }
