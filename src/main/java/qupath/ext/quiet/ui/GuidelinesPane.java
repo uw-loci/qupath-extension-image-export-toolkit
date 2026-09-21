@@ -16,7 +16,6 @@ import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
-import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.util.Duration;
@@ -71,7 +70,7 @@ class GuidelinesPane extends ScrollPane {
         setHbarPolicy(ScrollBarPolicy.NEVER);
         setPrefWidth(PANEL_WIDTH + 20);
         setMaxWidth(PANEL_WIDTH + 20);
-        setStyle("-fx-background-color: #f8f8f8; -fx-border-color: #ddd; "
+        setStyle("-fx-background-color: " + ThemeColors.PANEL_BG + "; -fx-border-color: " + ThemeColors.BORDER + "; "
                 + "-fx-border-width: 0 0 0 1;");
     }
 
@@ -84,15 +83,14 @@ class GuidelinesPane extends ScrollPane {
 
         var subheader = new Label(resources.getString("guidelines.subheader"));
         subheader.setFont(Font.font(null, FontWeight.NORMAL, 10));
-        subheader.setTextFill(Color.GRAY);
+        ThemeColors.textFill(subheader, ThemeColors.MUTED);
         subheader.setWrapText(true);
         content.getChildren().add(subheader);
 
         // QUAREP website link
         var linkLabel = new Label(resources.getString("guidelines.quarepLink"));
         linkLabel.setFont(Font.font(null, FontWeight.NORMAL, 10));
-        linkLabel.setTextFill(Color.rgb(30, 100, 180));
-        linkLabel.setStyle("-fx-underline: true; -fx-cursor: hand;");
+        linkLabel.setStyle("-fx-underline: true; -fx-cursor: hand; -fx-text-fill: " + ThemeColors.INFO + ";");
         linkLabel.setWrapText(true);
         content.getChildren().add(linkLabel);
 
@@ -150,7 +148,7 @@ class GuidelinesPane extends ScrollPane {
         var summaryLabel = new Label(summary.toString());
         summaryLabel.setFont(Font.font(null, FontWeight.NORMAL, 11));
         summaryLabel.setWrapText(true);
-        summaryLabel.setStyle("-fx-background-color: #e8eef4; -fx-padding: 6; "
+        summaryLabel.setStyle("-fx-background-color: " + ThemeColors.INFO_BG + "; -fx-padding: 6; "
                 + "-fx-background-radius: 4;");
         content.getChildren().add(summaryLabel);
 
@@ -539,15 +537,15 @@ class GuidelinesPane extends ScrollPane {
             case NOTE -> "[*]";
             case TIP -> "[>]";
         };
-        Color iconColor = switch (level) {
-            case WARNING -> Color.DARKORANGE;
-            case NOTE -> Color.STEELBLUE;
-            case TIP -> Color.rgb(80, 140, 80);
+        String iconColor = switch (level) {
+            case WARNING -> ThemeColors.WARNING;
+            case NOTE -> ThemeColors.INFO;
+            case TIP -> ThemeColors.SUCCESS;
         };
 
         var icon = new Label(iconText);
         icon.setFont(Font.font("monospace", FontWeight.BOLD, 11));
-        icon.setTextFill(iconColor);
+        ThemeColors.textFill(icon, iconColor);
         icon.setMinWidth(24);
 
         var titleLabel = new Label(title);
@@ -560,7 +558,7 @@ class GuidelinesPane extends ScrollPane {
         if (quarepRef != null && !quarepRef.isBlank()) {
             var refLabel = new Label("[" + quarepRef + "]");
             refLabel.setFont(Font.font(null, FontWeight.NORMAL, 9));
-            refLabel.setTextFill(Color.GRAY);
+            ThemeColors.textFill(refLabel, ThemeColors.MUTED);
             titleRow.getChildren().add(refLabel);
         }
         titleRow.setAlignment(Pos.TOP_LEFT);
@@ -568,7 +566,7 @@ class GuidelinesPane extends ScrollPane {
         var descLabel = new Label(description);
         descLabel.setFont(Font.font(null, FontWeight.NORMAL, 11));
         descLabel.setWrapText(true);
-        descLabel.setTextFill(Color.rgb(60, 60, 60));
+        ThemeColors.textFill(descLabel, ThemeColors.SUBTLE);
         descLabel.setPadding(new Insets(0, 0, 0, 28));
 
         // Tooltip for full text on long descriptions

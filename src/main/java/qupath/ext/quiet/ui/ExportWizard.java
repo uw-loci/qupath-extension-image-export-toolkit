@@ -29,6 +29,7 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.beans.value.ChangeListener;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
@@ -48,6 +49,7 @@ import qupath.lib.analysis.heatmaps.DensityMaps;
 import qupath.lib.analysis.heatmaps.DensityMaps.DensityMapBuilder;
 import qupath.lib.classifiers.pixel.PixelClassifier;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
 
 /**
@@ -71,6 +73,9 @@ public class ExportWizard {
 
     private final QuPathGUI qupath;
     private final Stage stage;
+
+    /** The wizard currently on screen, if any; the wizard is non-modal, so only one is allowed. */
+    private static ExportWizard openWizard;
     private final BorderPane root;
 
     // Wizard steps
@@ -112,7 +117,9 @@ public class ExportWizard {
         this.qupath = qupath;
         this.panelLaunch = panelLaunch;
         this.stage = new Stage();
-        stage.initModality(Modality.WINDOW_MODAL);
+        // Non-modal so the user can still inspect the image (size, pixel
+        // calibration, channels) in the main window while choosing settings.
+        stage.initModality(Modality.NONE);
         stage.initOwner(qupath.getStage());
         stage.setTitle(resources.getString("wizard.title"));
         stage.setMinWidth(1150);
@@ -143,6 +150,49 @@ public class ExportWizard {
 
         var scene = new Scene(root);
         stage.setScene(scene);
+
+        // The image list and output paths belong to the project that was open
+        // when the wizard was built, so a project switch invalidates them.
+        ChangeListener<Project<BufferedImage>> projectListener = (obs, oldProject, newProject) -> {
+            if (currentTask == null || !currentTask.isRunning()) {
+                closeWizard();
+            }
+        };
+        qupath.projectProperty().addListener(projectListener);
+        stage.setOnHidden(e -> {
+            qupath.projectProperty().removeListener(projectListener);
+            if (openWizard == this) {
+                openWizard = null;
+            }
+        });
+    }
+
+    private void closeWizard() {
+        saveAllPreferences();
+        saveWizardSize();
+        imageSelectionPane.closeAdviceDialog();
+        stage.close();
+    }
+
+    /**
+     * Show a wizard in the requested mode, reusing the open one when it is
+     * already in that mode or is busy exporting.
+     */
+    private static void showOrFocus(QuPathGUI qupath, boolean panelLaunch) {
+        var existing = openWizard;
+        if (existing != null && existing.stage.isShowing()) {
+            boolean exporting = existing.currentTask != null && existing.currentTask.isRunning();
+            if (existing.panelLaunch == panelLaunch || exporting) {
+                existing.stage.setIconified(false);
+                existing.stage.toFront();
+                existing.stage.requestFocus();
+                return;
+            }
+            existing.closeWizard();
+        }
+        var wizard = new ExportWizard(qupath, panelLaunch);
+        openWizard = wizard;
+        wizard.stage.show();
     }
 
     /**
@@ -151,8 +201,7 @@ public class ExportWizard {
      * @param qupath the QuPath GUI instance
      */
     public static void showWizard(QuPathGUI qupath) {
-        var wizard = new ExportWizard(qupath, false);
-        wizard.stage.show();
+        showOrFocus(qupath, false);
     }
 
     /**
@@ -163,8 +212,7 @@ public class ExportWizard {
      * @param qupath the QuPath GUI instance
      */
     public static void showPanelWizard(QuPathGUI qupath) {
-        var wizard = new ExportWizard(qupath, true);
-        wizard.stage.show();
+        showOrFocus(qupath, true);
     }
 
     private void buildNavigation() {
@@ -186,9 +234,7 @@ public class ExportWizard {
             if (currentTask != null && currentTask.isRunning()) {
                 currentTask.cancel();
             } else {
-                saveAllPreferences();
-                saveWizardSize();
-                stage.close();
+                closeWizard();
             }
         });
 

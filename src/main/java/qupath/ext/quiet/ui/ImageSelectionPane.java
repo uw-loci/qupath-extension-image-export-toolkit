@@ -30,7 +30,6 @@ import javafx.scene.input.ClipboardContent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
-import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.DirectoryChooser;
@@ -165,7 +164,7 @@ public class ImageSelectionPane extends VBox {
         // Filename preview
         var previewTitleLabel = new Label(resources.getString("step3.label.filenamePreview"));
         filenamePreviewLabel = new Label();
-        filenamePreviewLabel.setTextFill(Color.GRAY);
+        ThemeColors.textFill(filenamePreviewLabel, ThemeColors.MUTED);
         filenamePreviewLabel.setFont(Font.font("monospace", 11));
         previewRow = new HBox(5, previewTitleLabel, filenamePreviewLabel);
         previewRow.setAlignment(Pos.CENTER_LEFT);
@@ -253,9 +252,9 @@ public class ImageSelectionPane extends VBox {
         panelBanner = buildPanelBanner();
         filterFacetSection = buildFilterFacetSection();
         orderHintLabel = new Label(resources.getString("panel.step2.orderHint"));
-        orderHintLabel.setStyle("-fx-text-fill: #555555;");
+        orderHintLabel.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
         gateMessageLabel = new Label(resources.getString("panel.step2.gateMessage"));
-        gateMessageLabel.setStyle("-fx-text-fill: #b36b00; -fx-font-weight: bold;");
+        gateMessageLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-weight: bold;");
         setPanelControlsVisible(false);
 
         getChildren().addAll(
@@ -286,7 +285,7 @@ public class ImageSelectionPane extends VBox {
     private Label buildPanelBanner() {
         var banner = new Label(resources.getString("panel.banner"));
         banner.setMaxWidth(Double.MAX_VALUE);
-        banner.setStyle("-fx-background-color: #e8f0fe; -fx-padding: 6 10 6 10; "
+        banner.setStyle("-fx-background-color: " + ThemeColors.INFO_BG + "; -fx-padding: 6 10 6 10; "
                 + "-fx-font-weight: bold;");
         return banner;
     }

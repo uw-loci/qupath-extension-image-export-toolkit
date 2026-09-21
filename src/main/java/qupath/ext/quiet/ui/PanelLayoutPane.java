@@ -142,7 +142,7 @@ public class PanelLayoutPane extends VBox {
     private void buildUI() {
         var banner = new Label(resources.getString("panel.banner"));
         banner.setMaxWidth(Double.MAX_VALUE);
-        banner.setStyle("-fx-background-color: #e8f0fe; -fx-padding: 6 10 6 10; "
+        banner.setStyle("-fx-background-color: " + ThemeColors.INFO_BG + "; -fx-padding: 6 10 6 10; "
                 + "-fx-font-weight: bold;");
 
         var header = new Label(resources.getString("panel.step4.title"));
@@ -223,7 +223,7 @@ public class PanelLayoutPane extends VBox {
 
         var note = new Label(resources.getString("panel.step4.labelsNote"));
         note.setWrapText(true);
-        note.setStyle("-fx-text-fill: #555555;");
+        note.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
 
         var grid = new GridPane();
         grid.setHgap(10);
@@ -278,7 +278,7 @@ public class PanelLayoutPane extends VBox {
 
         var note = new Label(resources.getString("panel.step4.openPreviewNote"));
         note.setWrapText(true);
-        note.setStyle("-fx-text-fill: #555555;");
+        note.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
 
         var openButton = new Button(resources.getString("panel.step4.openPreviewButton"));
         openButton.setTooltip(tooltip("tooltip.panel.openPreview"));
@@ -315,7 +315,7 @@ public class PanelLayoutPane extends VBox {
 
         var note = new Label(resources.getString("panel.step4.previewNote"));
         note.setWrapText(true);
-        note.setStyle("-fx-text-fill: #555555;");
+        note.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
         var content = new VBox(8, note, layoutPreview);
         content.setPadding(new Insets(10));
         VBox.setVgrow(layoutPreview, Priority.ALWAYS);
@@ -405,7 +405,7 @@ public class PanelLayoutPane extends VBox {
         gridSummaryLabel = new Label();
         gridSummaryLabel.setTooltip(tooltip("tooltip.panel.gridSummary"));
         reseedNoticeLabel = new Label();
-        reseedNoticeLabel.setStyle("-fx-text-fill: #b36b00;");
+        reseedNoticeLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + ";");
         reseedNoticeLabel.setVisible(false);
         reseedNoticeLabel.setManaged(false);
 
@@ -477,7 +477,7 @@ public class PanelLayoutPane extends VBox {
 
         var captionNote = new Label(resources.getString("panel.step4.captionNote"));
         captionNote.setWrapText(true);
-        captionNote.setStyle("-fx-text-fill: #555555;");
+        captionNote.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
 
         var content = new VBox(8, captionNote, showFilenameCheck, positionRow,
                 new Label(resources.getString("panel.step4.metadataFieldsLabel")),
@@ -572,14 +572,14 @@ public class PanelLayoutPane extends VBox {
         estimatedFileSizeLabel.setTooltip(tooltip("tooltip.panel.estimatedFileSize"));
         formatGatingNotice = new Label(resources.getString("panel.step4.formatGatingNotice"));
         formatGatingNotice.setWrapText(true);
-        formatGatingNotice.setStyle("-fx-text-fill: #b36b00;");
+        formatGatingNotice.setStyle("-fx-text-fill: " + ThemeColors.WARNING + ";");
         formatGatingNotice.setVisible(false);
         formatGatingNotice.setManaged(false);
 
         var box = new VBox(4, composedSizeLabel, estimatedFileSizeLabel,
                 formatGatingNotice);
         box.setPadding(new Insets(8));
-        box.setStyle("-fx-border-color: #cccccc; -fx-border-radius: 4;");
+        box.setStyle("-fx-border-color: " + ThemeColors.BORDER + "; -fx-border-radius: 4;");
 
         return new VBox(6, SectionBuilder.createSection(
                 resources.getString("panel.step4.sizeSection"), true, box));
@@ -1032,7 +1032,7 @@ public class PanelLayoutPane extends VBox {
             gridSummaryLabel.setText(String.format(
                     resources.getString("panel.step4.gridSummaryOverflow"),
                     n, rows, cols, capacity, n - capacity));
-            gridSummaryLabel.setStyle("-fx-text-fill: #b36b00; -fx-font-weight: bold;");
+            gridSummaryLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-weight: bold;");
         }
     }
 

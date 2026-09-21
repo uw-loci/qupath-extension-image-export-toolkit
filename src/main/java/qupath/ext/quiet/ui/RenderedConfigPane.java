@@ -246,7 +246,7 @@ public class RenderedConfigPane extends VBox {
         overlayCollisionWarningLabel = new Label();
         overlayCollisionWarningLabel.setWrapText(true);
         overlayCollisionWarningLabel.setMaxWidth(Double.MAX_VALUE);
-        overlayCollisionWarningLabel.setStyle("-fx-text-fill: #b36b00; "
+        overlayCollisionWarningLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + "; "
                 + "-fx-font-style: italic; -fx-font-size: 11;");
         overlayCollisionWarningLabel.setVisible(false);
         overlayCollisionWarningLabel.setManaged(false);
@@ -581,7 +581,7 @@ public class RenderedConfigPane extends VBox {
         dpiNoteLabel = new Label(resources.getString("rendered.label.dpiNote"));
         dpiNoteLabel.setWrapText(true);
         dpiNoteLabel.setMaxWidth(400);
-        dpiNoteLabel.setStyle("-fx-font-size: 11; -fx-text-fill: #666666; -fx-font-style: italic;");
+        dpiNoteLabel.setStyle("-fx-font-size: 11; -fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-style: italic;");
         grid.add(dpiNoteLabel, 1, row);
         row++;
 
@@ -602,7 +602,7 @@ public class RenderedConfigPane extends VBox {
         formatInfoLabel = new Label();
         formatInfoLabel.setWrapText(true);
         formatInfoLabel.setMaxWidth(400);
-        formatInfoLabel.setStyle("-fx-font-size: 11; -fx-text-fill: #666666;");
+        formatInfoLabel.setStyle("-fx-font-size: 11; -fx-text-fill: " + ThemeColors.MUTED + ";");
         grid.add(formatInfoLabel, 1, row);
         row++;
 
@@ -620,7 +620,7 @@ public class RenderedConfigPane extends VBox {
         svgVectorCapNoteLabel = new Label(resources.getString("rendered.label.svgVectorCapNote"));
         svgVectorCapNoteLabel.setWrapText(true);
         svgVectorCapNoteLabel.setMaxWidth(400);
-        svgVectorCapNoteLabel.setStyle("-fx-font-size: 11; -fx-text-fill: #666666; "
+        svgVectorCapNoteLabel.setStyle("-fx-font-size: 11; -fx-text-fill: " + ThemeColors.MUTED + "; "
                 + "-fx-font-style: italic;");
         grid.add(svgVectorCapNoteLabel, 1, row);
         row++;
@@ -789,7 +789,7 @@ public class RenderedConfigPane extends VBox {
 
         scaleBarColorHintLabel = new Label(resources.getString("rendered.scaleBar.colorHint"));
         scaleBarColorHintLabel.setWrapText(true);
-        scaleBarColorHintLabel.setStyle("-fx-font-size: 0.85em; -fx-text-fill: #666666; -fx-font-style: italic;");
+        scaleBarColorHintLabel.setStyle("-fx-font-size: 0.85em; -fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-style: italic;");
         grid.add(scaleBarColorHintLabel, 0, row, 2, 1);
         row++;
 
@@ -889,14 +889,14 @@ public class RenderedConfigPane extends VBox {
         // Inline placeholder reference
         infoLabelPlaceholderRef = new Label(resources.getString("rendered.infoLabel.placeholderRef"));
         infoLabelPlaceholderRef.setWrapText(true);
-        infoLabelPlaceholderRef.setStyle("-fx-font-size: 0.85em; -fx-text-fill: #555555; -fx-font-family: monospace;");
+        infoLabelPlaceholderRef.setStyle("-fx-font-size: 0.85em; -fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-family: monospace;");
         grid.add(infoLabelPlaceholderRef, 0, row, 2, 1);
         row++;
 
         // Live preview
         infoLabelPreviewLabel = new Label();
         infoLabelPreviewLabel.setWrapText(true);
-        infoLabelPreviewLabel.setStyle("-fx-font-size: 0.9em; -fx-background-color: #e8eef4; "
+        infoLabelPreviewLabel.setStyle("-fx-font-size: 0.9em; -fx-background-color: " + ThemeColors.INFO_BG + "; "
                 + "-fx-padding: 6; -fx-background-radius: 4;");
         grid.add(infoLabelPreviewLabel, 0, row, 2, 1);
         row++;
@@ -1011,7 +1011,7 @@ public class RenderedConfigPane extends VBox {
         splitChannelNoteLabel = new Label(resources.getString("rendered.label.splitChannelNote"));
         splitChannelNoteLabel.setWrapText(true);
         splitChannelNoteLabel.setMaxWidth(400);
-        splitChannelNoteLabel.setStyle("-fx-font-size: 11; -fx-text-fill: #666666; -fx-font-style: italic;");
+        splitChannelNoteLabel.setStyle("-fx-font-size: 11; -fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-style: italic;");
         grid.add(splitChannelNoteLabel, 0, row, 2, 1);
         row++;
 
@@ -1129,7 +1129,7 @@ public class RenderedConfigPane extends VBox {
         splitStainsNoteLabel = new Label(resources.getString("rendered.label.splitStainsNote"));
         splitStainsNoteLabel.setWrapText(true);
         splitStainsNoteLabel.setMaxWidth(400);
-        splitStainsNoteLabel.setStyle("-fx-font-size: 11; -fx-text-fill: #666666; "
+        splitStainsNoteLabel.setStyle("-fx-font-size: 11; -fx-text-fill: " + ThemeColors.MUTED + "; "
                 + "-fx-font-style: italic;");
         grid.add(splitStainsNoteLabel, 0, row, 2, 1);
         row++;
@@ -1324,8 +1324,8 @@ public class RenderedConfigPane extends VBox {
         String template = infoLabelTemplateField.getText();
         if (template == null || template.isBlank()) {
             infoLabelPreviewLabel.setText(resources.getString("rendered.infoLabel.preview.empty"));
-            infoLabelPreviewLabel.setStyle("-fx-font-size: 0.9em; -fx-background-color: #e8eef4; "
-                    + "-fx-padding: 6; -fx-background-radius: 4; -fx-text-fill: #888888;");
+            infoLabelPreviewLabel.setStyle("-fx-font-size: 0.9em; -fx-background-color: " + ThemeColors.INFO_BG + "; "
+                    + "-fx-padding: 6; -fx-background-radius: 4; -fx-text-fill: " + ThemeColors.MUTED + ";");
             return;
         }
 
@@ -1394,7 +1394,7 @@ public class RenderedConfigPane extends VBox {
         infoLabelPreviewLabel.setText(sb.toString().trim());
         boolean hasWarnings = !warnings.isEmpty();
         infoLabelPreviewLabel.setStyle("-fx-font-size: 0.9em; -fx-background-color: "
-                + (hasWarnings ? "#fff3cd" : "#e8eef4")
+                + (hasWarnings ? ThemeColors.WARNING_BG : ThemeColors.INFO_BG)
                 + "; -fx-padding: 6; -fx-background-radius: 4;");
     }
 

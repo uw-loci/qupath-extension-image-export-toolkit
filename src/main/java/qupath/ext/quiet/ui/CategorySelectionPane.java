@@ -40,12 +40,12 @@ public class CategorySelectionPane extends VBox {
             ResourceBundle.getBundle("qupath.ext.quiet.ui.strings");
 
     private static final String CARD_STYLE_DEFAULT =
-            "-fx-border-color: #cccccc; -fx-border-radius: 8; -fx-background-radius: 8; " +
-            "-fx-background-color: #f8f8f8; -fx-padding: 15; -fx-cursor: hand;";
+            "-fx-border-color: " + ThemeColors.BORDER + "; -fx-border-radius: 8; -fx-background-radius: 8; " +
+            "-fx-background-color: " + ThemeColors.PANEL_BG + "; -fx-padding: 15; -fx-cursor: hand;";
 
     private static final String CARD_STYLE_SELECTED =
-            "-fx-border-color: #0078d7; -fx-border-width: 2; -fx-border-radius: 8; " +
-            "-fx-background-radius: 8; -fx-background-color: #e8f0fe; -fx-padding: 14; -fx-cursor: hand;";
+            "-fx-border-color: " + ThemeColors.ACCENT + "; -fx-border-width: 2; -fx-border-radius: 8; " +
+            "-fx-background-radius: 8; -fx-background-color: " + ThemeColors.INFO_BG + "; -fx-padding: 14; -fx-cursor: hand;";
 
     /** Drop-shadow focus ring so keyboard focus is visible on a card. */
     private static final String CARD_FOCUS_EFFECT =

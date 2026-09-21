@@ -91,7 +91,7 @@ public class PanelRecipePane extends VBox {
 
         var banner = new Label(resources.getString("panel.banner"));
         banner.setMaxWidth(Double.MAX_VALUE);
-        banner.setStyle("-fx-background-color: #e8f0fe; -fx-padding: 6 10 6 10; "
+        banner.setStyle("-fx-background-color: " + ThemeColors.INFO_BG + "; -fx-padding: 6 10 6 10; "
                 + "-fx-font-weight: bold;");
 
         var header = new Label(resources.getString("panel.step3.title"));
@@ -118,7 +118,7 @@ public class PanelRecipePane extends VBox {
 
         loadedRecipeLabel = new Label(resources.getString("panel.recipe.usingCurrent"));
         loadedRecipeLabel.setTooltip(tooltip("tooltip.panel.loadedRecipe"));
-        loadedRecipeLabel.setStyle("-fx-text-fill: #555555;");
+        loadedRecipeLabel.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
 
         var recipeButtons = new HBox(8, loadButton, saveButton, loadedRecipeLabel);
         recipeButtons.setAlignment(Pos.CENTER_LEFT);

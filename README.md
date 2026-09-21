@@ -598,6 +598,8 @@ Filenames are sanitized using QuPath's `GeneralTools.stripInvalidFilenameChars()
 <details>
 <summary><h2>Preferences</h2></summary>
 
+The wizard window does not block QuPath: while it is open you can still switch images, check an image's pixel dimensions and calibration in the **Image** tab, or adjust brightness/contrast before choosing a downsample. Only one wizard is open at a time -- choosing the menu item again brings the existing window forward -- and the wizard closes itself if you open a different project, since its image list would no longer apply.
+
 All wizard settings are automatically persisted across QuPath sessions. When you reopen the export wizard, your previous configuration (mask type, downsample, format, padding, etc.) is restored.
 
 Preferences are stored in QuPath's standard preference system under the `quiet.*` namespace.

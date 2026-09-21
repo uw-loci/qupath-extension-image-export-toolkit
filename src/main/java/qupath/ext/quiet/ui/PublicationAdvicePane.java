@@ -13,7 +13,6 @@ import javafx.scene.control.TitledPane;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
-import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.Modality;
@@ -66,7 +65,7 @@ class PublicationAdvicePane extends VBox {
 
         if (currentItems.isEmpty()) {
             summaryLabel.setText(resources.getString("advice.noIssues"));
-            summaryLabel.setTextFill(Color.GRAY);
+            ThemeColors.textFill(summaryLabel, ThemeColors.MUTED);
             return;
         }
 
@@ -80,8 +79,8 @@ class PublicationAdvicePane extends VBox {
 
         summaryLabel.setText(String.format(
                 resources.getString("advice.summary"), errors, warnings, info));
-        summaryLabel.setTextFill(errors > 0 ? Color.RED
-                : warnings > 0 ? Color.DARKORANGE : Color.GRAY);
+        ThemeColors.textFill(summaryLabel, errors > 0 ? ThemeColors.ERROR
+                : warnings > 0 ? ThemeColors.WARNING : ThemeColors.MUTED);
 
         for (var item : currentItems) {
             itemsBox.getChildren().add(createItemRow(item));
@@ -150,20 +149,20 @@ class PublicationAdvicePane extends VBox {
     private Node createItemRow(AdviceItem item) {
         // Severity icon
         Label icon = new Label(severityIcon(item.severity()));
-        icon.setTextFill(severityColor(item.severity()));
+        ThemeColors.textFill(icon, severityColor(item.severity()));
         icon.setFont(Font.font("monospace", FontWeight.BOLD, 12));
         icon.setMinWidth(30);
 
         // Title
         Label title = new Label(item.title());
         title.setFont(Font.font(null, FontWeight.BOLD, 12));
-        title.setTextFill(severityColor(item.severity()));
+        ThemeColors.textFill(title, severityColor(item.severity()));
 
         // QUAREP ref
         Label ref = new Label();
         if (item.quarepRef() != null) {
             ref.setText("[" + item.quarepRef() + "]");
-            ref.setTextFill(Color.GRAY);
+            ThemeColors.textFill(ref, ThemeColors.MUTED);
             ref.setFont(Font.font(null, FontWeight.NORMAL, 11));
         }
 
@@ -174,7 +173,7 @@ class PublicationAdvicePane extends VBox {
         var descLabel = new Label(item.description());
         descLabel.setWrapText(true);
         descLabel.setFont(Font.font(null, FontWeight.NORMAL, 11));
-        descLabel.setTextFill(Color.rgb(60, 60, 60));
+        ThemeColors.textFill(descLabel, ThemeColors.SUBTLE);
         descLabel.setPadding(new Insets(0, 0, 0, 30));
 
         var itemBox = new VBox(2, titleRow, descLabel);
@@ -183,7 +182,7 @@ class PublicationAdvicePane extends VBox {
             var actionLabel = new Label("Action: " + item.suggestedAction());
             actionLabel.setWrapText(true);
             actionLabel.setFont(Font.font(null, FontWeight.NORMAL, 11));
-            actionLabel.setTextFill(Color.rgb(40, 100, 40));
+            ThemeColors.textFill(actionLabel, ThemeColors.SUCCESS);
             actionLabel.setPadding(new Insets(0, 0, 0, 30));
             itemBox.getChildren().add(actionLabel);
         }
@@ -191,7 +190,7 @@ class PublicationAdvicePane extends VBox {
         if (item.configSection() != null) {
             var sectionHint = new Label("-> " + formatSectionName(item.configSection()));
             sectionHint.setFont(Font.font(null, FontWeight.BOLD, 10));
-            sectionHint.setTextFill(Color.rgb(100, 100, 160));
+            ThemeColors.textFill(sectionHint, ThemeColors.INFO);
             sectionHint.setPadding(new Insets(0, 0, 0, 30));
             itemBox.getChildren().add(sectionHint);
         }
@@ -219,11 +218,11 @@ class PublicationAdvicePane extends VBox {
         };
     }
 
-    private static Color severityColor(AdviceSeverity severity) {
+    private static String severityColor(AdviceSeverity severity) {
         return switch (severity) {
-            case ERROR -> Color.RED;
-            case WARNING -> Color.DARKORANGE;
-            case INFO -> Color.STEELBLUE;
+            case ERROR -> ThemeColors.ERROR;
+            case WARNING -> ThemeColors.WARNING;
+            case INFO -> ThemeColors.INFO;
         };
     }
 }
