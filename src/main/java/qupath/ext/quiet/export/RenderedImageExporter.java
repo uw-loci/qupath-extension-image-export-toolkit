@@ -8,6 +8,9 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.Shape;
 import java.awt.geom.AffineTransform;
+import java.awt.geom.Ellipse2D;
+import java.awt.geom.Path2D;
+import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
 import java.awt.image.WritableRaster;
 import java.io.File;
@@ -42,6 +45,7 @@ import qupath.lib.common.GeneralTools;
 import qupath.lib.display.ImageDisplay;
 import qupath.lib.display.settings.DisplaySettingUtils;
 import qupath.lib.gui.images.servers.ChannelDisplayTransformServer;
+import qupath.lib.gui.prefs.PathPrefs;
 import qupath.lib.gui.viewer.OverlayOptions;
 import qupath.lib.gui.viewer.PathObjectPainter;
 import qupath.lib.gui.viewer.overlays.HierarchyOverlay;
@@ -601,7 +605,7 @@ public class RenderedImageExporter {
 
         // Info label (resolve template if not pre-resolved)
         String infoText = resolvedInfoLabel;
-        if (infoText == null && config.infoLabel().show() && entryName != null) {
+        if (infoText == null && config.infoLabel().show()) {
             infoText = resolveInfoLabelTemplate(
                     config.infoLabel().text(), entryName, imageData, config);
         }
@@ -849,61 +853,77 @@ public class RenderedImageExporter {
                             o -> o.getPathClass() != null ? o.getPathClass() : PathClass.NULL_CLASS,
                             LinkedHashMap::new, Collectors.toList()));
 
-            double offsetX = -regionX;
-            double offsetY = -regionY;
-            double scale = 1.0 / downsample;
+            AffineTransform tx = new AffineTransform();
+            tx.scale(1.0 / downsample, 1.0 / downsample);
+            tx.translate(-regionX, -regionY);
 
             for (var entry : byClass.entrySet()) {
                 PathClass pathClass = entry.getKey();
                 String className = pathClass == PathClass.NULL_CLASS
                         ? "Unclassified" : pathClass.getName();
 
-                // Begin SVG group
+                // Begin SVG group; always closed, or the document is malformed
                 g2d.setRenderingHint(SVGHints.KEY_BEGIN_GROUP, className);
                 g2d.setRenderingHint(SVGHints.KEY_ELEMENT_TITLE, className);
-
-                for (var obj : entry.getValue()) {
-                    Shape shape = obj.getROI().getShape();
-
-                    // Transform to output coordinates
-                    AffineTransform tx = new AffineTransform();
-                    tx.scale(scale, scale);
-                    tx.translate(offsetX, offsetY);
-                    Shape transformed = tx.createTransformedShape(shape);
-
-                    // Resolve color from object or class
-                    Integer color = obj.getColor();
-                    if (color == null && obj.getPathClass() != null) {
-                        color = obj.getPathClass().getColor();
+                try {
+                    for (var obj : entry.getValue()) {
+                        try {
+                            paintObjectAsSvg(g2d, obj, className, tx, config);
+                        } catch (RuntimeException e) {
+                            logger.warn("Skipping object {} in SVG export: {}", obj.getID(), e.getMessage());
+                        }
                     }
-                    Color awtColor = (color != null)
-                            ? makeAwtColor(color) : Color.YELLOW;
-
-                    // Set element ID for individual selectability
-                    String objId = className + "_" + obj.getID();
-                    g2d.setRenderingHint(SVGHints.KEY_ELEMENT_ID, objId);
-
-                    // Fill with transparency
-                    boolean shouldFill = obj.isAnnotation() && config.overlays().fillAnnotations();
-                    if (shouldFill) {
-                        g2d.setColor(new Color(
-                                awtColor.getRed(), awtColor.getGreen(),
-                                awtColor.getBlue(), 64));
-                        g2d.fill(transformed);
-                    }
-
-                    // Stroke
-                    g2d.setColor(awtColor);
-                    g2d.setStroke(new BasicStroke(1.5f));
-                    g2d.draw(transformed);
+                } finally {
+                    g2d.setRenderingHint(SVGHints.KEY_END_GROUP, "true");
                 }
-
-                // End SVG group
-                g2d.setRenderingHint(SVGHints.KEY_END_GROUP, "true");
             }
         } catch (Exception e) {
             logger.warn("Failed to paint SVG vector objects: {}", e.getMessage());
         }
+    }
+
+    /**
+     * Paint one object as an SVG path. Point ROIs have no shape, so each point
+     * becomes a filled circle of the QuPath point radius, in output pixels.
+     */
+    private static void paintObjectAsSvg(SVGGraphics2D g2d, PathObject obj, String className,
+                                          AffineTransform tx, RenderedExportConfig config) {
+        ROI roi = obj.getROI();
+        Integer color = obj.getColor();
+        if (color == null && obj.getPathClass() != null) {
+            color = obj.getPathClass().getColor();
+        }
+        Color awtColor = (color != null) ? makeAwtColor(color) : Color.YELLOW;
+
+        // Build the geometry BEFORE setting the ID hint, which attaches to the next element
+        Shape transformed;
+        if (roi.isPoint()) {
+            double r = Math.max(1.0, PathPrefs.pointRadiusProperty().get());
+            Path2D points = new Path2D.Double();
+            for (var p : roi.getAllPoints()) {
+                Point2D c = tx.transform(new Point2D.Double(p.getX(), p.getY()), null);
+                points.append(new Ellipse2D.Double(c.getX() - r, c.getY() - r, 2 * r, 2 * r), false);
+            }
+            transformed = points;
+        } else {
+            transformed = tx.createTransformedShape(roi.getShape());
+        }
+
+        // Set element ID for individual selectability
+        g2d.setRenderingHint(SVGHints.KEY_ELEMENT_ID, className + "_" + obj.getID());
+
+        if (roi.isPoint()) {
+            g2d.setColor(awtColor);
+            g2d.fill(transformed);
+            return;
+        }
+        if (obj.isAnnotation() && config.overlays().fillAnnotations()) {
+            g2d.setColor(new Color(awtColor.getRed(), awtColor.getGreen(), awtColor.getBlue(), 64));
+            g2d.fill(transformed);
+        }
+        g2d.setColor(awtColor);
+        g2d.setStroke(new BasicStroke(1.5f));
+        g2d.draw(transformed);
     }
 
     /**
@@ -1276,7 +1296,7 @@ public class RenderedImageExporter {
         maybeDrawPanelLabel(g2d, config, panelLabel,
                 baseImage.getWidth(), baseImage.getHeight());
 
-        String infoText = entryName != null && config.infoLabel().show()
+        String infoText = config.infoLabel().show()
                 ? resolveInfoLabelTemplate(config.infoLabel().text(), entryName, imageData, config)
                 : null;
         maybeDrawChannelLegend(g2d, imageData, config,
@@ -1345,7 +1365,7 @@ public class RenderedImageExporter {
         maybeDrawPanelLabel(g2d, config, panelLabel,
                 baseImage.getWidth(), baseImage.getHeight());
 
-        String infoText = entryName != null && config.infoLabel().show()
+        String infoText = config.infoLabel().show()
                 ? resolveInfoLabelTemplate(config.infoLabel().text(), entryName, imageData, config)
                 : null;
         maybeDrawChannelLegend(g2d, imageData, config,
@@ -1666,7 +1686,7 @@ public class RenderedImageExporter {
         maybeDrawPanelLabel(g2d, config, panelLabel,
                 baseImage.getWidth(), baseImage.getHeight());
 
-        String infoText = entryName != null && config.infoLabel().show()
+        String infoText = config.infoLabel().show()
                 ? resolveInfoLabelTemplate(config.infoLabel().text(), entryName, imageData, config)
                 : null;
         maybeDrawChannelLegend(g2d, imageData, config,
