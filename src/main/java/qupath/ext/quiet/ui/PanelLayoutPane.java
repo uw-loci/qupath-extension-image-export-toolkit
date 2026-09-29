@@ -100,6 +100,18 @@ public class PanelLayoutPane extends VBox {
     private CheckBox labelBoldCheck;
     private ColorPicker labelColorPicker;
 
+    private CheckBox fixedCellSizeCheck;
+    private Spinner<Integer> cellWidthSpinner;
+    private Spinner<Integer> cellHeightSpinner;
+    private CheckBox matchScaleCheck;
+    private ComboBox<PanelExportConfig.ScaleBarMode> scaleBarModeCombo;
+    private ComboBox<ScaleBarRenderer.Position> scaleBarPositionCombo;
+    private Spinner<Double> scaleBarLengthSpinner;
+    private ColorPicker scaleBarColorPicker;
+    private Spinner<Integer> scaleBarFontSizeSpinner;
+    private CheckBox scaleBarBoldCheck;
+    private Label scaleNoticeLabel;
+
     private ComboBox<OutputFormat> formatCombo;
     private TextField outputDirField;
     private TextField filenameField;
@@ -157,6 +169,7 @@ public class PanelLayoutPane extends VBox {
 
         getChildren().addAll(banner, header,
                 buildGridSection(),
+                buildScaleSection(),
                 buildCaptionsSection(),
                 buildLabelsSection(),
                 buildPreviewSection(),
@@ -264,6 +277,144 @@ public class PanelLayoutPane extends VBox {
                 resources.getString("panel.step4.labelsSection"), false, content));
     }
 
+    /** Cell size, same-scale and scale bar controls. */
+    private VBox buildScaleSection() {
+        fixedCellSizeCheck = new CheckBox(resources.getString("panel.step4.fixedCellSize"));
+        fixedCellSizeCheck.setTooltip(tooltip("tooltip.panel.fixedCellSize"));
+        cellWidthSpinner = intSpinner(16, 20000, 800, 50);
+        cellWidthSpinner.setTooltip(tooltip("tooltip.panel.fixedCellSize"));
+        cellHeightSpinner = intSpinner(16, 20000, 800, 50);
+        cellHeightSpinner.setTooltip(tooltip("tooltip.panel.fixedCellSize"));
+
+        matchScaleCheck = new CheckBox(resources.getString("panel.step4.matchScale"));
+        matchScaleCheck.setTooltip(tooltip("tooltip.panel.matchScale"));
+
+        scaleBarModeCombo = new ComboBox<>(FXCollections.observableArrayList(
+                PanelExportConfig.ScaleBarMode.values()));
+        scaleBarModeCombo.setValue(PanelExportConfig.ScaleBarMode.NONE);
+        scaleBarModeCombo.setTooltip(tooltip("tooltip.panel.scaleBarMode"));
+        scaleBarPositionCombo = new ComboBox<>(FXCollections.observableArrayList(
+                ScaleBarRenderer.Position.values()));
+        scaleBarPositionCombo.setValue(ScaleBarRenderer.Position.LOWER_RIGHT);
+        scaleBarPositionCombo.setConverter(positionConverter());
+        scaleBarPositionCombo.setTooltip(tooltip("tooltip.panel.scaleBarPosition"));
+        scaleBarLengthSpinner = new Spinner<>(
+                new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 100000, 0, 10));
+        scaleBarLengthSpinner.setEditable(true);
+        scaleBarLengthSpinner.setPrefWidth(100);
+        scaleBarLengthSpinner.setTooltip(tooltip("tooltip.panel.scaleBarLength"));
+        scaleBarLengthSpinner.focusedProperty().addListener((obs, was, focused) -> {
+            if (!focused) {
+                commitSpinner(scaleBarLengthSpinner);
+            }
+        });
+        scaleBarColorPicker = new ColorPicker(Color.WHITE);
+        scaleBarColorPicker.setTooltip(tooltip("tooltip.panel.scaleBarColor"));
+        scaleBarFontSizeSpinner = intSpinner(0, 200, 0, 2);
+        scaleBarFontSizeSpinner.setTooltip(tooltip("tooltip.panel.scaleBarFontSize"));
+        scaleBarBoldCheck = new CheckBox(resources.getString("panel.step4.labelBold"));
+        scaleBarBoldCheck.setSelected(true);
+
+        scaleNoticeLabel = new Label();
+        scaleNoticeLabel.setWrapText(true);
+        scaleNoticeLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + ";");
+
+        var grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(8);
+        grid.add(fixedCellSizeCheck, 0, 0);
+        grid.add(new javafx.scene.layout.HBox(6, cellWidthSpinner, new Label("x"),
+                cellHeightSpinner, new Label("px")), 1, 0, 3, 1);
+        grid.add(matchScaleCheck, 0, 1, 4, 1);
+        grid.add(new Label(resources.getString("panel.step4.scaleBarModeLabel")), 0, 2);
+        grid.add(scaleBarModeCombo, 1, 2);
+        grid.add(new Label(resources.getString("panel.step4.labelPositionLabel")), 2, 2);
+        grid.add(scaleBarPositionCombo, 3, 2);
+        grid.add(new Label(resources.getString("panel.step4.scaleBarLengthLabel")), 0, 3);
+        grid.add(scaleBarLengthSpinner, 1, 3);
+        grid.add(new Label(resources.getString("panel.step4.labelColorLabel")), 2, 3);
+        grid.add(scaleBarColorPicker, 3, 3);
+        grid.add(new Label(resources.getString("panel.step4.labelFontSizeLabel")), 0, 4);
+        grid.add(scaleBarFontSizeSpinner, 1, 4);
+        grid.add(scaleBarBoldCheck, 2, 4);
+
+        Runnable update = () -> {
+            boolean bar = scaleBarModeCombo.getValue() != PanelExportConfig.ScaleBarMode.NONE;
+            cellWidthSpinner.setDisable(!fixedCellSizeCheck.isSelected());
+            cellHeightSpinner.setDisable(!fixedCellSizeCheck.isSelected());
+            scaleBarPositionCombo.setDisable(!bar);
+            scaleBarLengthSpinner.setDisable(!bar);
+            scaleBarColorPicker.setDisable(!bar);
+            scaleBarFontSizeSpinner.setDisable(!bar);
+            scaleBarBoldCheck.setDisable(!bar);
+            updateScaleNotice();
+            updateSizeFeedback();
+        };
+        fixedCellSizeCheck.selectedProperty().addListener((o, a, b) -> update.run());
+        cellWidthSpinner.valueProperty().addListener((o, a, b) -> update.run());
+        cellHeightSpinner.valueProperty().addListener((o, a, b) -> update.run());
+        matchScaleCheck.selectedProperty().addListener((o, a, b) -> update.run());
+        scaleBarModeCombo.valueProperty().addListener((o, a, b) -> update.run());
+        scaleBarPositionCombo.valueProperty().addListener((o, a, b) -> update.run());
+        scaleBarLengthSpinner.valueProperty().addListener((o, a, b) -> update.run());
+        scaleBarColorPicker.valueProperty().addListener((o, a, b) -> update.run());
+        scaleBarFontSizeSpinner.valueProperty().addListener((o, a, b) -> update.run());
+        scaleBarBoldCheck.selectedProperty().addListener((o, a, b) -> update.run());
+        update.run();
+
+        var note = new Label(resources.getString("panel.step4.scaleNote"));
+        note.setWrapText(true);
+        note.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
+        var content = new VBox(8, note, grid, scaleNoticeLabel);
+        content.setPadding(new Insets(5));
+        return new VBox(6, SectionBuilder.createSection(
+                resources.getString("panel.step4.scaleSection"), true, content));
+    }
+
+    /**
+     * Warn about a recipe scale bar that the montage would resize, or a single bar
+     * on cells that are not at one scale.
+     */
+    private void updateScaleNotice() {
+        if (scaleNoticeLabel == null) {
+            return;
+        }
+        var mode = scaleBarModeCombo.getValue();
+        boolean recipeBar = recipeConfig instanceof qupath.ext.quiet.export.RenderedExportConfig rc
+                && rc.scaleBar().show();
+        String text = "";
+        if (mode == PanelExportConfig.ScaleBarMode.LAST_CELL && !matchScaleCheck.isSelected()) {
+            text = resources.getString("panel.step4.scaleNotice.lastCellNeedsMatch");
+        } else if (recipeBar && mode == PanelExportConfig.ScaleBarMode.NONE) {
+            text = resources.getString("panel.step4.scaleNotice.recipeBar");
+        } else if (recipeBar) {
+            text = resources.getString("panel.step4.scaleNotice.recipeBarReplaced");
+        }
+        scaleNoticeLabel.setText(text);
+        scaleNoticeLabel.setVisible(!text.isEmpty());
+        scaleNoticeLabel.setManaged(!text.isEmpty());
+    }
+
+    private static StringConverter<ScaleBarRenderer.Position> positionConverter() {
+        return new StringConverter<>() {
+            @Override
+            public String toString(ScaleBarRenderer.Position p) {
+                if (p == null) return "";
+                return switch (p) {
+                    case UPPER_LEFT -> resources.getString("panel.label.position.upperLeft");
+                    case UPPER_RIGHT -> resources.getString("panel.label.position.upperRight");
+                    case LOWER_LEFT -> resources.getString("panel.label.position.lowerLeft");
+                    case LOWER_RIGHT -> resources.getString("panel.label.position.lowerRight");
+                };
+            }
+
+            @Override
+            public ScaleBarRenderer.Position fromString(String s) {
+                return ScaleBarRenderer.Position.LOWER_RIGHT;
+            }
+        };
+    }
+
     /**
      * The layout preview section. The interactive {@link PanelLayoutPreview}
      * itself lives in a separate, non-modal window opened by the button here --
@@ -275,6 +426,14 @@ public class PanelLayoutPane extends VBox {
     private VBox buildPreviewSection() {
         layoutPreview = new PanelLayoutPreview();
         layoutPreview.setReorderListener(this::updateSizeFeedback);
+        // The preview reads every image's size; use it over the partial scan estimate
+        layoutPreview.setSizeListener((w, h) -> {
+            if (w != estimatedCellWidth || h != estimatedCellHeight) {
+                estimatedCellWidth = w;
+                estimatedCellHeight = h;
+                updateSizeFeedback();
+            }
+        });
 
         var note = new Label(resources.getString("panel.step4.openPreviewNote"));
         note.setWrapText(true);
@@ -316,7 +475,13 @@ public class PanelLayoutPane extends VBox {
         var note = new Label(resources.getString("panel.step4.previewNote"));
         note.setWrapText(true);
         note.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
-        var content = new VBox(8, note, layoutPreview);
+        var hover = new Label();
+        hover.setWrapText(true);
+        hover.textProperty().bind(javafx.beans.binding.Bindings.when(
+                        layoutPreview.hoverInfoProperty().isEmpty())
+                .then(resources.getString("panel.preview.hoverPrompt"))
+                .otherwise(layoutPreview.hoverInfoProperty()));
+        var content = new VBox(8, note, layoutPreview, hover);
         content.setPadding(new Insets(10));
         VBox.setVgrow(layoutPreview, Priority.ALWAYS);
 
@@ -601,7 +766,7 @@ public class PanelLayoutPane extends VBox {
     }
 
     /** Commit the spinner editor's current text into its value factory. */
-    private static void commitSpinner(Spinner<Integer> spinner) {
+    private static <T> void commitSpinner(Spinner<T> spinner) {
         if (!spinner.isEditable()) {
             return;
         }
@@ -682,6 +847,28 @@ public class PanelLayoutPane extends VBox {
         labelBoldCheck.setSelected(QuietPreferences.isPanelLabelBold());
         labelColorPicker.setValue(parseColor(QuietPreferences.getPanelLabelColor(),
                 Color.WHITE));
+        fixedCellSizeCheck.setSelected(QuietPreferences.isPanelFixedCellSize());
+        cellWidthSpinner.getValueFactory().setValue(QuietPreferences.getPanelCellWidth());
+        cellHeightSpinner.getValueFactory().setValue(QuietPreferences.getPanelCellHeight());
+        matchScaleCheck.setSelected(QuietPreferences.isPanelMatchScale());
+        try {
+            scaleBarModeCombo.setValue(PanelExportConfig.ScaleBarMode.valueOf(
+                    QuietPreferences.getPanelScaleBarMode()));
+        } catch (IllegalArgumentException e) {
+            scaleBarModeCombo.setValue(PanelExportConfig.ScaleBarMode.NONE);
+        }
+        try {
+            scaleBarPositionCombo.setValue(ScaleBarRenderer.Position.valueOf(
+                    QuietPreferences.getPanelScaleBarPosition()));
+        } catch (IllegalArgumentException e) {
+            scaleBarPositionCombo.setValue(ScaleBarRenderer.Position.LOWER_RIGHT);
+        }
+        scaleBarLengthSpinner.getValueFactory().setValue(QuietPreferences.getPanelScaleBarLength());
+        scaleBarColorPicker.setValue(parseColor(QuietPreferences.getPanelScaleBarColor(),
+                Color.WHITE));
+        scaleBarFontSizeSpinner.getValueFactory()
+                .setValue(QuietPreferences.getPanelScaleBarFontSize());
+        scaleBarBoldCheck.setSelected(QuietPreferences.isPanelScaleBarBold());
         filenameField.setText(QuietPreferences.getPanelFilename());
         seededCount = QuietPreferences.getPanelSeededCount();
     }
@@ -717,6 +904,16 @@ public class PanelLayoutPane extends VBox {
         QuietPreferences.setPanelLabelFontSize(labelFontSizeSpinner.getValue());
         QuietPreferences.setPanelLabelBold(labelBoldCheck.isSelected());
         QuietPreferences.setPanelLabelColor(toHex(labelColorPicker.getValue()));
+        QuietPreferences.setPanelFixedCellSize(fixedCellSizeCheck.isSelected());
+        QuietPreferences.setPanelCellWidth(cellWidthSpinner.getValue());
+        QuietPreferences.setPanelCellHeight(cellHeightSpinner.getValue());
+        QuietPreferences.setPanelMatchScale(matchScaleCheck.isSelected());
+        QuietPreferences.setPanelScaleBarMode(scaleBarModeCombo.getValue().name());
+        QuietPreferences.setPanelScaleBarPosition(scaleBarPositionCombo.getValue().name());
+        QuietPreferences.setPanelScaleBarLength(scaleBarLengthSpinner.getValue());
+        QuietPreferences.setPanelScaleBarColor(toHex(scaleBarColorPicker.getValue()));
+        QuietPreferences.setPanelScaleBarFontSize(scaleBarFontSizeSpinner.getValue());
+        QuietPreferences.setPanelScaleBarBold(scaleBarBoldCheck.isSelected());
     }
 
     /**
@@ -759,6 +956,10 @@ public class PanelLayoutPane extends VBox {
 
         var scan = scanSelection();
         rebuildMetadataFieldList(scan.metadataKeys);
+        updateScaleNotice();
+        if (layoutPreview != null) {
+            layoutPreview.setRecipe(recipeConfig);
+        }
         rebuildFormatCombo(recipeCategory);
         // Feed the visual preview. Only reset the preview's entry list when the
         // selection actually changed, so a user's drag-reorder survives a
@@ -979,8 +1180,9 @@ public class PanelLayoutPane extends VBox {
             return;
         }
         int maxCaptionLines = countCaptionLines();
+        int[] cell = probe.resolveCellSize(estimatedCellWidth, estimatedCellHeight);
         long[] size = PanelComposer.computeFigureSize(probe,
-                estimatedCellWidth, estimatedCellHeight, maxCaptionLines);
+                cell[0], cell[1], maxCaptionLines);
         double megapixels = (size[0] * size[1]) / 1_000_000.0;
         composedSizeLabel.setText(String.format(
                 resources.getString("panel.step4.composedSize"),
@@ -1053,8 +1255,9 @@ public class PanelLayoutPane extends VBox {
         } catch (RuntimeException e) {
             return new long[] {0, 0};
         }
+        int[] cell = probe.resolveCellSize(estimatedCellWidth, estimatedCellHeight);
         return PanelComposer.computeFigureSize(probe,
-                estimatedCellWidth, estimatedCellHeight, countCaptionLines());
+                cell[0], cell[1], countCaptionLines());
     }
 
     private int countCaptionLines() {
@@ -1101,7 +1304,17 @@ public class PanelLayoutPane extends VBox {
                         : ScaleBarRenderer.Position.UPPER_LEFT)
                 .panelLabelFontSize(labelFontSizeSpinner.getValue())
                 .panelLabelBold(labelBoldCheck.isSelected())
-                .panelLabelColor(toAwt(labelColorPicker.getValue()));
+                .panelLabelColor(toAwt(labelColorPicker.getValue()))
+                .fixedCellSize(fixedCellSizeCheck.isSelected())
+                .cellWidth(cellWidthSpinner.getValue())
+                .cellHeight(cellHeightSpinner.getValue())
+                .matchScale(matchScaleCheck.isSelected())
+                .scaleBarMode(scaleBarModeCombo.getValue())
+                .scaleBarPosition(scaleBarPositionCombo.getValue())
+                .scaleBarLengthMicrons(scaleBarLengthSpinner.getValue())
+                .scaleBarColor(toAwt(scaleBarColorPicker.getValue()))
+                .scaleBarFontSize(scaleBarFontSizeSpinner.getValue())
+                .scaleBarBold(scaleBarBoldCheck.isSelected());
         return builder;
     }
 

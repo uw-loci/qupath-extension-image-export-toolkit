@@ -463,6 +463,16 @@ QuIET's panel/montage layout follows conventions established by figure-assembly 
 | **Fill (crop)** | Scale the image to completely cover the cell; crop the overflow. Nothing is padded. |
 | **Actual size** | Place the image at its native pixel size, centred in the cell; pad with background if smaller, crop if larger. |
 
+**Cell size, same scale and scale bars** -- The **Cell size and scale bar** section on Step 3 controls how images of different sizes and pixel sizes line up:
+
+- **Fixed cell size** makes every cell the given width x height in pixels. Off (the default), every cell takes the size of the largest rendered image.
+- **Same scale in every cell** draws every image at one microns-per-pixel, so equal distances look equal across the figure. With **Fit**, the physically largest image fits its cell and smaller specimens sit inside theirs at the same scale; with **Fill**, the smallest image covers its cell and larger ones are cropped; with **Actual size**, images are resampled to the finest pixel size. It needs a pixel size on every image -- if one has none, images are fitted individually and the export lists which image lacked it.
+- **Scale bar** draws the bar *after* each image is fitted, inside the visible part of the image (never in the letterbox margin, never cropped off by Fill). **Every cell** puts a bar in each panel; **Last cell only** draws one bar, which describes the whole figure only when *Same scale* is on (the wizard warns otherwise). With Same scale on, every bar has the same length. Set the corner, length in microns (0 = a round length near 15% of the cell width), colour, font size and bold.
+
+A scale bar set in a Rendered recipe is drawn on each image *before* fitting, so it is resized with the image and Fill can crop it. When a montage scale bar is chosen, the recipe's own bar is turned off automatically.
+
+The **Layout preview** window uses the same placement and scale-bar arithmetic as the export, so each cell shows where its image lands, at what scale, and with which bar. Point at a panel to read its image name, microns per figure pixel, visible image size and scale-bar length; enlarge the window to see each cell bigger. (For an Object Crops recipe the thumbnail is the whole image, not the crop.)
+
 **Reading the size estimate** -- Step 3 shows the composed pixel dimensions (from grid x cell size x gutters) and a rough output file-size estimate. The file-size figure is an estimate and varies with image content.
 
 **The generated Groovy script** -- panel mode, like every QuIET category, emits a self-contained script. The panel script holds all cells in memory while composing.
@@ -482,6 +492,10 @@ All panel settings persist across QuPath sessions, like every other QuIET settin
 | `quiet.panel.gutterY` | Vertical spacing between cells (and at the top/bottom edges), pixels |
 | `quiet.panel.backgroundColor` | Panel background and gutter colour |
 | `quiet.panel.cellFitMode` | How images are fitted into cells (Fit / Fill / Actual size) |
+| `quiet.panel.fixedCellSize` / `cellWidth` / `cellHeight` | Fixed cell size in pixels (off = largest image) |
+| `quiet.panel.matchScale` | Draw every image at one microns-per-pixel |
+| `quiet.panel.scaleBar.mode` | `NONE` / `EVERY_CELL` / `LAST_CELL` |
+| `quiet.panel.scaleBar.position` / `lengthMicrons` / `color` / `fontSize` / `bold` | Montage scale bar corner, length (0 = auto), colour, font size (0 = auto), bold |
 | `quiet.panel.showFilenameCaption` | Whether the per-image filename caption is drawn |
 | `quiet.panel.captionPosition` | Caption band above or below the image |
 | `quiet.panel.metadataFields` | Which metadata fields to print, one line each |
@@ -518,6 +532,8 @@ All panel settings persist across QuPath sessions, like every other QuIET settin
 | **Gutter X / Gutter Y** | Horizontal and vertical spacing between cells, in pixels |
 | **Background** | Background colour of the figure and the gutters / caption bands |
 | **Cell fit** | Fit (letterbox), Fill (crop), or Actual size -- aspect ratio always preserved |
+| **Cell size / Same scale** | Optional fixed cell size in pixels; optionally draw every image at one microns-per-pixel |
+| **Scale bar** | Drawn after fitting: none, every cell, or last cell only; corner, length, colour, font size, bold |
 | **Captions** | Optional per-image filename caption plus metadata lines, drawn above or below each panel |
 | **Panel labels** | Optional per-cell label inside the image area: A,B,C / a,b,c / 1,2,3, configurable corner, font size, bold, colour |
 | **Format** | PNG, TIFF, JPEG, OME-TIFF, OME-TIFF Pyramid, SVG -- restricted to OME-TIFF at or above 100 megapixels |

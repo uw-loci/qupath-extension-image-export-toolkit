@@ -29,6 +29,28 @@ public class PanelExportConfig {
         BELOW
     }
 
+    /** Where the montage draws scale bars, after each image is fitted into its cell. */
+    public enum ScaleBarMode {
+        NONE("None"),
+        EVERY_CELL("Every cell"),
+        LAST_CELL("Last cell only");
+
+        private final String displayName;
+
+        ScaleBarMode(String displayName) {
+            this.displayName = displayName;
+        }
+
+        public String getDisplayName() {
+            return displayName;
+        }
+
+        @Override
+        public String toString() {
+            return displayName;
+        }
+    }
+
     private final ExportCategory recipeCategory;
     private final Object recipeConfig;
     private final int rows;
@@ -50,6 +72,16 @@ public class PanelExportConfig {
     private final int panelLabelFontSize;
     private final boolean panelLabelBold;
     private final Color panelLabelColor;
+    private final boolean fixedCellSize;
+    private final int cellWidth;
+    private final int cellHeight;
+    private final boolean matchScale;
+    private final ScaleBarMode scaleBarMode;
+    private final ScaleBarRenderer.Position scaleBarPosition;
+    private final double scaleBarLengthMicrons;
+    private final Color scaleBarColor;
+    private final int scaleBarFontSize;
+    private final boolean scaleBarBold;
 
     private PanelExportConfig(Builder b) {
         this.recipeCategory = b.recipeCategory;
@@ -74,6 +106,16 @@ public class PanelExportConfig {
         this.panelLabelFontSize = b.panelLabelFontSize;
         this.panelLabelBold = b.panelLabelBold;
         this.panelLabelColor = b.panelLabelColor;
+        this.fixedCellSize = b.fixedCellSize;
+        this.cellWidth = b.cellWidth;
+        this.cellHeight = b.cellHeight;
+        this.matchScale = b.matchScale;
+        this.scaleBarMode = b.scaleBarMode;
+        this.scaleBarPosition = b.scaleBarPosition;
+        this.scaleBarLengthMicrons = b.scaleBarLengthMicrons;
+        this.scaleBarColor = b.scaleBarColor;
+        this.scaleBarFontSize = b.scaleBarFontSize;
+        this.scaleBarBold = b.scaleBarBold;
     }
 
     public ExportCategory getRecipeCategory() {
@@ -175,6 +217,65 @@ public class PanelExportConfig {
         return panelLabelColor;
     }
 
+    /** True if every cell is {@link #getCellWidth()} x {@link #getCellHeight()}; false if cells take the largest image's size. */
+    public boolean isFixedCellSize() {
+        return fixedCellSize;
+    }
+
+    public int getCellWidth() {
+        return cellWidth;
+    }
+
+    public int getCellHeight() {
+        return cellHeight;
+    }
+
+    /**
+     * The cell size used for a batch of rendered images.
+     *
+     * @return {width, height}: the fixed size, or the largest rendered image
+     */
+    public int[] resolveCellSize(int largestWidth, int largestHeight) {
+        return fixedCellSize
+                ? new int[] {cellWidth, cellHeight}
+                : new int[] {Math.max(1, largestWidth), Math.max(1, largestHeight)};
+    }
+
+    /** True if every image is drawn at one microns-per-pixel. */
+    public boolean isMatchScale() {
+        return matchScale;
+    }
+
+    public ScaleBarMode getScaleBarMode() {
+        return scaleBarMode;
+    }
+
+    public boolean hasScaleBar() {
+        return scaleBarMode != null && scaleBarMode != ScaleBarMode.NONE;
+    }
+
+    public ScaleBarRenderer.Position getScaleBarPosition() {
+        return scaleBarPosition;
+    }
+
+    /** Scale bar length in microns; {@code 0} means pick one from the cell width. */
+    public double getScaleBarLengthMicrons() {
+        return scaleBarLengthMicrons;
+    }
+
+    public Color getScaleBarColor() {
+        return scaleBarColor;
+    }
+
+    /** Scale bar font size in pixels; {@code 0} means auto-compute from cell size. */
+    public int getScaleBarFontSize() {
+        return scaleBarFontSize;
+    }
+
+    public boolean isScaleBarBold() {
+        return scaleBarBold;
+    }
+
     /** Whether per-cell labels (A,B,C / a,b,c / 1,2,3) should be drawn. */
     public boolean hasPanelLabel() {
         return panelLabelStyle != null
@@ -223,6 +324,42 @@ public class PanelExportConfig {
         return false;
     }
 
+    /** A builder holding every setting of this configuration. */
+    public Builder toBuilder() {
+        return new Builder()
+                .recipeCategory(recipeCategory)
+                .recipeConfig(recipeConfig)
+                .rows(rows)
+                .cols(cols)
+                .gutterX(gutterX)
+                .gutterY(gutterY)
+                .backgroundColor(backgroundColor)
+                .cellFitMode(cellFitMode)
+                .showFilenameCaption(showFilenameCaption)
+                .captionPosition(captionPosition)
+                .metadataFields(metadataFields)
+                .captionFontSize(captionFontSize)
+                .captionColor(captionColor)
+                .format(format)
+                .outputDirectory(outputDirectory)
+                .filename(filename)
+                .panelLabelStyle(panelLabelStyle)
+                .panelLabelPosition(panelLabelPosition)
+                .panelLabelFontSize(panelLabelFontSize)
+                .panelLabelBold(panelLabelBold)
+                .panelLabelColor(panelLabelColor)
+                .fixedCellSize(fixedCellSize)
+                .cellWidth(cellWidth)
+                .cellHeight(cellHeight)
+                .matchScale(matchScale)
+                .scaleBarMode(scaleBarMode)
+                .scaleBarPosition(scaleBarPosition)
+                .scaleBarLengthMicrons(scaleBarLengthMicrons)
+                .scaleBarColor(scaleBarColor)
+                .scaleBarFontSize(scaleBarFontSize)
+                .scaleBarBold(scaleBarBold);
+    }
+
     /**
      * Builder for {@link PanelExportConfig}.
      */
@@ -251,6 +388,16 @@ public class PanelExportConfig {
         private int panelLabelFontSize = 0;
         private boolean panelLabelBold = true;
         private Color panelLabelColor = Color.WHITE;
+        private boolean fixedCellSize = false;
+        private int cellWidth = 800;
+        private int cellHeight = 800;
+        private boolean matchScale = false;
+        private ScaleBarMode scaleBarMode = ScaleBarMode.NONE;
+        private ScaleBarRenderer.Position scaleBarPosition = ScaleBarRenderer.Position.LOWER_RIGHT;
+        private double scaleBarLengthMicrons = 0;
+        private Color scaleBarColor = Color.WHITE;
+        private int scaleBarFontSize = 0;
+        private boolean scaleBarBold = true;
 
         public Builder recipeCategory(ExportCategory c) {
             this.recipeCategory = c;
@@ -357,6 +504,56 @@ public class PanelExportConfig {
             return this;
         }
 
+        public Builder fixedCellSize(boolean fixed) {
+            this.fixedCellSize = fixed;
+            return this;
+        }
+
+        public Builder cellWidth(int w) {
+            this.cellWidth = w;
+            return this;
+        }
+
+        public Builder cellHeight(int h) {
+            this.cellHeight = h;
+            return this;
+        }
+
+        public Builder matchScale(boolean match) {
+            this.matchScale = match;
+            return this;
+        }
+
+        public Builder scaleBarMode(ScaleBarMode mode) {
+            this.scaleBarMode = mode;
+            return this;
+        }
+
+        public Builder scaleBarPosition(ScaleBarRenderer.Position p) {
+            this.scaleBarPosition = p;
+            return this;
+        }
+
+        public Builder scaleBarLengthMicrons(double microns) {
+            this.scaleBarLengthMicrons = microns;
+            return this;
+        }
+
+        public Builder scaleBarColor(Color c) {
+            this.scaleBarColor = c;
+            return this;
+        }
+
+        public Builder scaleBarFontSize(int size) {
+            this.scaleBarFontSize = size;
+            return this;
+        }
+
+        public Builder scaleBarBold(boolean bold) {
+            this.scaleBarBold = bold;
+            return this;
+        }
+
         /**
          * Build the panel export configuration, validating and clamping fields.
          *
@@ -428,6 +625,21 @@ public class PanelExportConfig {
                 panelLabelColor = Color.WHITE;
             }
             panelLabelFontSize = Math.max(0, Math.min(panelLabelFontSize, 200));
+            cellWidth = Math.max(16, Math.min(cellWidth, 20000));
+            cellHeight = Math.max(16, Math.min(cellHeight, 20000));
+            if (scaleBarMode == null) {
+                scaleBarMode = ScaleBarMode.NONE;
+            }
+            if (scaleBarPosition == null) {
+                scaleBarPosition = ScaleBarRenderer.Position.LOWER_RIGHT;
+            }
+            if (scaleBarColor == null) {
+                scaleBarColor = Color.WHITE;
+            }
+            if (!(scaleBarLengthMicrons >= 0) || Double.isInfinite(scaleBarLengthMicrons)) {
+                scaleBarLengthMicrons = 0;
+            }
+            scaleBarFontSize = Math.max(0, Math.min(scaleBarFontSize, 200));
             return new PanelExportConfig(this);
         }
     }

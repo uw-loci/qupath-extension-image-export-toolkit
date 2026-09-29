@@ -419,6 +419,36 @@ public class QuietPreferences {
     private static final StringProperty panelLabelColor =
             PathPrefs.createPersistentPreference(PREFIX + "panel.label.color", "#FFFFFF");
 
+    private static final BooleanProperty panelFixedCellSize =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.fixedCellSize", false);
+
+    private static final IntegerProperty panelCellWidth =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.cellWidth", 800);
+
+    private static final IntegerProperty panelCellHeight =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.cellHeight", 800);
+
+    private static final BooleanProperty panelMatchScale =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.matchScale", false);
+
+    private static final StringProperty panelScaleBarMode =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.scaleBar.mode", "NONE");
+
+    private static final StringProperty panelScaleBarPosition =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.scaleBar.position", "LOWER_RIGHT");
+
+    private static final DoubleProperty panelScaleBarLength =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.scaleBar.lengthMicrons", 0.0);
+
+    private static final StringProperty panelScaleBarColor =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.scaleBar.color", "#FFFFFF");
+
+    private static final IntegerProperty panelScaleBarFontSize =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.scaleBar.fontSize", 0);
+
+    private static final BooleanProperty panelScaleBarBold =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.scaleBar.bold", true);
+
     private QuietPreferences() {
         // Utility class
     }
@@ -938,6 +968,36 @@ public class QuietPreferences {
     public static StringProperty panelLabelColorProperty() { return panelLabelColor; }
     public static String getPanelLabelColor() { return panelLabelColor.get(); }
     public static void setPanelLabelColor(String value) { panelLabelColor.set(value != null ? value : "#FFFFFF"); }
+
+    public static boolean isPanelFixedCellSize() { return panelFixedCellSize.get(); }
+    public static void setPanelFixedCellSize(boolean value) { panelFixedCellSize.set(value); }
+
+    public static int getPanelCellWidth() { return panelCellWidth.get(); }
+    public static void setPanelCellWidth(int value) { panelCellWidth.set(value); }
+
+    public static int getPanelCellHeight() { return panelCellHeight.get(); }
+    public static void setPanelCellHeight(int value) { panelCellHeight.set(value); }
+
+    public static boolean isPanelMatchScale() { return panelMatchScale.get(); }
+    public static void setPanelMatchScale(boolean value) { panelMatchScale.set(value); }
+
+    public static String getPanelScaleBarMode() { return panelScaleBarMode.get(); }
+    public static void setPanelScaleBarMode(String value) { panelScaleBarMode.set(value != null ? value : "NONE"); }
+
+    public static String getPanelScaleBarPosition() { return panelScaleBarPosition.get(); }
+    public static void setPanelScaleBarPosition(String value) { panelScaleBarPosition.set(value != null ? value : "LOWER_RIGHT"); }
+
+    public static double getPanelScaleBarLength() { return panelScaleBarLength.get(); }
+    public static void setPanelScaleBarLength(double value) { panelScaleBarLength.set(value); }
+
+    public static String getPanelScaleBarColor() { return panelScaleBarColor.get(); }
+    public static void setPanelScaleBarColor(String value) { panelScaleBarColor.set(value != null ? value : "#FFFFFF"); }
+
+    public static int getPanelScaleBarFontSize() { return panelScaleBarFontSize.get(); }
+    public static void setPanelScaleBarFontSize(int value) { panelScaleBarFontSize.set(value); }
+
+    public static boolean isPanelScaleBarBold() { return panelScaleBarBold.get(); }
+    public static void setPanelScaleBarBold(boolean value) { panelScaleBarBold.set(value); }
 
     // ==================== Recipe snapshot / restore ====================
 

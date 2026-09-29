@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.ResourceBundle;
 
 import javafx.application.Platform;
+import javafx.beans.property.ReadOnlyStringProperty;
+import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
@@ -21,9 +23,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import qupath.ext.quiet.export.CellFitMode;
+import qupath.ext.quiet.export.ObjectCropConfig;
+import qupath.ext.quiet.export.PanelCellGeometry;
+import qupath.ext.quiet.export.PanelComposer;
 import qupath.ext.quiet.export.PanelExportConfig;
+import qupath.ext.quiet.export.PanelImageExporter;
 import qupath.ext.quiet.export.PanelLabelRenderer;
 import qupath.ext.quiet.export.ScaleBarRenderer;
+import qupath.ext.quiet.export.TextRenderUtils;
 import qupath.lib.projects.ProjectImageEntry;
 
 /**
@@ -67,6 +74,32 @@ public class PanelLayoutPreview extends Pane {
 
     /** FX thumbnails, index-aligned with {@link #entries}; null until loaded. */
     private final List<Image> thumbnails = new ArrayList<>();
+
+    /** Image size and pixel size, index-aligned with {@link #entries}; null until loaded. */
+    private final List<ImageInfo> infos = new ArrayList<>();
+
+    /** Full-resolution size and microns per pixel (NaN if uncalibrated) of a source image. */
+    private record ImageInfo(int width, int height, double pixelSizeMicrons) {
+    }
+
+    /** The recipe each cell is rendered with, for its output size and pixel size. */
+    private Object recipe;
+
+    private final ReadOnlyStringWrapper hoverInfo = new ReadOnlyStringWrapper("");
+
+    /** Called with the largest rendered cell size once image sizes are known. */
+    private java.util.function.BiConsumer<Integer, Integer> sizeListener = (w, h) -> { };
+
+    private boolean fixedCellSize;
+    private int fixedCellWidth;
+    private int fixedCellHeight;
+    private boolean matchScale;
+    private PanelExportConfig.ScaleBarMode scaleBarMode = PanelExportConfig.ScaleBarMode.NONE;
+    private ScaleBarRenderer.Position scaleBarPosition = ScaleBarRenderer.Position.LOWER_RIGHT;
+    private double scaleBarLength;
+    private Color scaleBarColor = Color.WHITE;
+    private int scaleBarFontSize;
+    private boolean scaleBarBold = true;
 
     /** Layout parameters supplied by the owning pane on every redraw. */
     private int rows = 2;
@@ -114,6 +147,32 @@ public class PanelLayoutPreview extends Pane {
         // Recompute the on-screen scale whenever the available width changes.
         widthProperty().addListener((obs, was, now) -> updateDisplaySize());
         installDragHandlers();
+        canvas.setOnMouseMoved(e -> hoverInfo.set(describeCell(cellAt(e.getX(), e.getY()))));
+        canvas.setOnMouseExited(e -> hoverInfo.set(""));
+    }
+
+    /** Text describing the cell under the mouse: image, scale and scale bar. */
+    public ReadOnlyStringProperty hoverInfoProperty() {
+        return hoverInfo.getReadOnlyProperty();
+    }
+
+    /**
+     * Register a callback given the largest rendered cell size {width, height} whenever
+     * image sizes finish loading or the recipe changes.
+     */
+    public void setSizeListener(java.util.function.BiConsumer<Integer, Integer> listener) {
+        this.sizeListener = listener != null ? listener : (w, h) -> { };
+    }
+
+    /**
+     * Set the recipe cells are rendered with; it decides each cell's pixel size.
+     *
+     * @param recipe the recipe config object (may be null)
+     */
+    public void setRecipe(Object recipe) {
+        this.recipe = recipe;
+        notifySize();
+        redraw();
     }
 
     /**
@@ -135,11 +194,13 @@ public class PanelLayoutPreview extends Pane {
     public void setEntries(List<ProjectImageEntry<BufferedImage>> newEntries) {
         entries.clear();
         thumbnails.clear();
+        infos.clear();
         if (newEntries != null) {
             entries.addAll(newEntries);
         }
         for (int i = 0; i < entries.size(); i++) {
             thumbnails.add(null);
+            infos.add(null);
         }
         dragSourceIndex = -1;
         dragHoverIndex = -1;
@@ -191,6 +252,19 @@ public class PanelLayoutPreview extends Pane {
         this.labelPosition = config.getPanelLabelPosition() != null
                 ? config.getPanelLabelPosition() : ScaleBarRenderer.Position.UPPER_LEFT;
         this.labelFontSize = Math.max(0, config.getPanelLabelFontSize());
+        this.fixedCellSize = config.isFixedCellSize();
+        this.fixedCellWidth = config.getCellWidth();
+        this.fixedCellHeight = config.getCellHeight();
+        this.matchScale = config.isMatchScale();
+        this.scaleBarMode = config.getScaleBarMode();
+        this.scaleBarPosition = config.getScaleBarPosition();
+        this.scaleBarLength = config.getScaleBarLengthMicrons();
+        this.scaleBarFontSize = config.getScaleBarFontSize();
+        this.scaleBarBold = config.isScaleBarBold();
+        var barAwt = config.getScaleBarColor();
+        if (barAwt != null) {
+            this.scaleBarColor = Color.rgb(barAwt.getRed(), barAwt.getGreen(), barAwt.getBlue());
+        }
         this.labelBold = config.isPanelLabelBold();
         var labelAwt = config.getPanelLabelColor();
         if (labelAwt != null) {
@@ -214,6 +288,7 @@ public class PanelLayoutPreview extends Pane {
         Thread loader = new Thread(() -> {
             for (int i = 0; i < limit; i++) {
                 ProjectImageEntry<BufferedImage> entry = snapshot.get(i);
+                ImageInfo info = readInfo(entry);
                 Image fxImage = null;
                 try {
                     BufferedImage thumb = entry.getThumbnail();
@@ -232,6 +307,8 @@ public class PanelLayoutPreview extends Pane {
                     if (index < entries.size() && index < snapshot.size()
                             && entries.get(index) == snapshot.get(index)) {
                         thumbnails.set(index, loaded);
+                        infos.set(index, info);
+                        notifySize();
                         redraw();
                     }
                 });
@@ -239,6 +316,147 @@ public class PanelLayoutPreview extends Pane {
         }, "quiet-panel-preview-thumbnails");
         loader.setDaemon(true);
         loader.start();
+    }
+
+    /**
+     * Read an image's size and pixel size from its server builder, without loading
+     * its objects. A zero size if the server cannot be built.
+     */
+    private static ImageInfo readInfo(ProjectImageEntry<BufferedImage> entry) {
+        try (var server = entry.getServerBuilder().build()) {
+            var cal = server.getPixelCalibration();
+            double px = cal.hasPixelSizeMicrons() ? cal.getAveragedPixelSizeMicrons() : Double.NaN;
+            return new ImageInfo(server.getWidth(), server.getHeight(), px);
+        } catch (Exception e) {
+            logger.debug("Failed to read size of {}: {}", entry.getImageName(), e.getMessage());
+            return new ImageInfo(0, 0, Double.NaN);
+        }
+    }
+
+    /** Rendered size {w, h} and microns per rendered pixel of cell {@code idx}, or null. */
+    private double[] renderedCell(int idx) {
+        ImageInfo info = idx < infos.size() ? infos.get(idx) : null;
+        if (info == null || info.width() <= 0 || info.height() <= 0) {
+            return null;
+        }
+        double ds = Math.max(1e-6, PanelImageExporter.recipeDownsample(recipe, info.pixelSizeMicrons()));
+        double um = info.pixelSizeMicrons() * ds;
+        if (recipe instanceof ObjectCropConfig occ) {
+            // One crop per image, not the whole image
+            double side = occ.getCropSize() + 2.0 * occ.getPadding();
+            return new double[] {side, side, um};
+        }
+        return new double[] {Math.ceil(info.width() / ds), Math.ceil(info.height() / ds), um};
+    }
+
+    /** Report the largest rendered cell size once every image's size is known. */
+    private void notifySize() {
+        int n = Math.min(entries.size(), MAX_THUMBNAILS);
+        int w = 0;
+        int h = 0;
+        for (int i = 0; i < n; i++) {
+            if (infos.get(i) == null) {
+                return; // still loading
+            }
+            double[] cell = renderedCell(i);
+            if (cell == null) {
+                continue;
+            }
+            w = Math.max(w, (int) cell[0]);
+            h = Math.max(h, (int) cell[1]);
+        }
+        if (w > 0 && h > 0) {
+            sizeListener.accept(w, h);
+        }
+    }
+
+    /** The cell size in figure pixels: the fixed size, or the largest rendered image. */
+    private int[] cellSize() {
+        if (fixedCellSize) {
+            return new int[] {fixedCellWidth, fixedCellHeight};
+        }
+        return new int[] {cellWidth, cellHeight};
+    }
+
+    /** Microns per figure pixel shared by every placed cell, or NaN. */
+    private double commonMicrons(int filled, int cw, int ch) {
+        if (!matchScale || filled == 0) {
+            return Double.NaN;
+        }
+        double[] w = new double[filled];
+        double[] h = new double[filled];
+        double[] um = new double[filled];
+        for (int i = 0; i < filled; i++) {
+            double[] cell = renderedCell(i);
+            if (cell == null) {
+                return Double.NaN;
+            }
+            w[i] = cell[0];
+            h[i] = cell[1];
+            um[i] = cell[2];
+        }
+        return PanelCellGeometry.commonMicronsPerPixel(cellFitMode, cw, ch, w, h, um);
+    }
+
+    /** Where cell {@code idx}'s image lands, in figure pixels relative to the cell. */
+    private PanelCellGeometry.Placement placement(int idx, int cw, int ch, double common) {
+        double[] cell = renderedCell(idx);
+        Image img = idx < thumbnails.size() ? thumbnails.get(idx) : null;
+        if (cell == null) {
+            if (img == null) {
+                return null;
+            }
+            cell = new double[] {img.getWidth(), img.getHeight(), Double.NaN};
+        }
+        return PanelCellGeometry.place(cellFitMode, cw, ch, cell[0], cell[1], cell[2], common);
+    }
+
+    /** The bar length shared by every cell when they are at one scale, else the requested length. */
+    private double sharedBarLength(int cw, int ch, double common) {
+        if (common > 0) {
+            double len = ScaleBarRenderer.resolveLengthMicrons(cw, ch, common, scaleBarLength);
+            return len > 0 ? len : 0;
+        }
+        return scaleBarLength;
+    }
+
+    private String describeCell(int idx) {
+        if (idx < 0 || idx >= entries.size() || idx >= rows * cols) {
+            return "";
+        }
+        int filled = Math.min(entries.size(), rows * cols);
+        int[] cs = cellSize();
+        double common = commonMicrons(filled, cs[0], cs[1]);
+        var p = placement(idx, cs[0], cs[1], common);
+        var sb = new StringBuilder(entries.get(idx).getImageName());
+        if (p == null) {
+            return sb.append(" -- loading...").toString();
+        }
+        if (p.micronsPerPixel() > 0) {
+            sb.append(String.format(" -- %.3f um per figure pixel", p.micronsPerPixel()));
+            if (matchScale && !(common > 0)) {
+                sb.append(" (not matched yet)");
+            }
+        } else {
+            sb.append(" -- no pixel size");
+        }
+        int[] v = p.visible(cs[0], cs[1]);
+        if (v[2] < cs[0] || v[3] < cs[1]) {
+            sb.append(String.format("; image %d x %d px of a %d x %d cell", v[2], v[3], cs[0], cs[1]));
+        }
+        if (PanelComposer.showsScaleBar(toConfigMode(), idx, filled) && p.micronsPerPixel() > 0) {
+            double len = ScaleBarRenderer.resolveLengthMicrons(v[2], v[3], p.micronsPerPixel(),
+                    sharedBarLength(cs[0], cs[1], common));
+            if (len > 0) {
+                sb.append("; scale bar ").append(ScaleBarRenderer.formatLabel(len));
+            }
+        }
+        return sb.toString();
+    }
+
+    /** A minimal config carrying the scale bar mode, for {@link PanelComposer#showsScaleBar}. */
+    private PanelExportConfig toConfigMode() {
+        return new PanelExportConfig.Builder().scaleBarMode(scaleBarMode).buildForLayout();
     }
 
     // ------------------------------------------------------------------
@@ -250,8 +468,9 @@ public class PanelLayoutPreview extends Pane {
      * mapped so the longer side is {@value #LOGICAL_BOUND} px.
      */
     private void recomputeLogicalSize() {
-        int slotHeight = cellHeight + captionBandHeight();
-        double figW = (double) cols * cellWidth + (double) (cols + 1) * gutterX;
+        int[] cs = cellSize();
+        int slotHeight = cs[1] + captionBandHeight();
+        double figW = (double) cols * cs[0] + (double) (cols + 1) * gutterX;
         double figH = (double) rows * slotHeight + (double) (rows + 1) * gutterY;
         if (figW <= 0 || figH <= 0) {
             logicalWidth = LOGICAL_BOUND;
@@ -284,11 +503,14 @@ public class PanelLayoutPreview extends Pane {
         }
         double scale = available / logicalWidth;
         double displayHeight = logicalHeight * scale;
-        if (displayHeight > MAX_DISPLAY_HEIGHT) {
-            scale = MAX_DISPLAY_HEIGHT / logicalHeight;
+        // Grow with the window it sits in, so a bigger window shows each cell bigger
+        double maxHeight = getHeight() > 0 ? Math.max(120, getHeight()) : MAX_DISPLAY_HEIGHT;
+        if (displayHeight > maxHeight) {
+            scale = maxHeight / logicalHeight;
         }
-        double displayW = logicalWidth * scale;
-        double displayH = logicalHeight * scale;
+        // Whole pixels: a fractional edge row is never cleared and keeps the previous drawing
+        double displayW = Math.floor(logicalWidth * scale);
+        double displayH = Math.floor(logicalHeight * scale);
         canvas.setWidth(displayW);
         canvas.setHeight(displayH);
         // Centre the canvas in the available width.
@@ -350,13 +572,14 @@ public class PanelLayoutPreview extends Pane {
 
         // Logical-to-screen scale: logicalWidth maps to canvas width.
         double s = w / logicalWidth;
+        int[] cs = cellSize();
         double figScale = (LOGICAL_BOUND / Math.max(
-                (double) cols * cellWidth + (double) (cols + 1) * gutterX,
-                (double) rows * (cellHeight + captionBandHeight())
+                (double) cols * cs[0] + (double) (cols + 1) * gutterX,
+                (double) rows * (cs[1] + captionBandHeight())
                         + (double) (rows + 1) * gutterY));
 
-        double cellW = cellWidth * figScale * s;
-        double cellH = cellHeight * figScale * s;
+        double cellW = cs[0] * figScale * s;
+        double cellH = cs[1] * figScale * s;
         double gx = gutterX * figScale * s;
         double gy = gutterY * figScale * s;
         double band = captionBandHeight() * figScale * s;
@@ -364,6 +587,9 @@ public class PanelLayoutPreview extends Pane {
 
         int capacity = rows * cols;
         int filled = Math.min(entries.size(), capacity);
+        double common = commonMicrons(filled, cs[0], cs[1]);
+        double barLength = sharedBarLength(cs[0], cs[1], common);
+        double k = figScale * s;
 
         for (int idx = 0; idx < capacity; idx++) {
             int row = idx / cols;
@@ -374,7 +600,12 @@ public class PanelLayoutPreview extends Pane {
             double captionY = captionAbove ? slotY : slotY + cellH;
 
             if (idx < filled) {
-                drawCellImage(gc, idx, slotX, imageAreaY, cellW, cellH);
+                var placement = placement(idx, cs[0], cs[1], common);
+                drawCellImage(gc, idx, slotX, imageAreaY, cellW, cellH, placement, k);
+                if (placement != null
+                        && PanelComposer.showsScaleBar(toConfigMode(), idx, filled)) {
+                    drawScaleBar(gc, slotX, imageAreaY, cs, placement, barLength, k);
+                }
                 if (band > 0) {
                     drawCaptionBars(gc, slotX, captionY, cellW, band);
                 }
@@ -405,59 +636,103 @@ public class PanelLayoutPreview extends Pane {
     }
 
     /**
-     * Draw one cell's thumbnail into its image-area rectangle, applying the
-     * selected {@link CellFitMode}. Falls back to a neutral placeholder block
-     * when the thumbnail has not loaded yet.
+     * Draw one cell's thumbnail at its placement, clipped to the cell. Falls back to a
+     * neutral placeholder block when the thumbnail has not loaded yet.
+     *
+     * @param k figure pixels to screen pixels
      */
     private void drawCellImage(GraphicsContext gc, int idx,
                                double areaX, double areaY,
-                               double areaW, double areaH) {
+                               double areaW, double areaH,
+                               PanelCellGeometry.Placement placement, double k) {
         if (areaW <= 0 || areaH <= 0) {
             return;
         }
         Image img = idx < thumbnails.size() ? thumbnails.get(idx) : null;
-        if (img == null) {
+        if (img == null || placement == null) {
             // Placeholder for a not-yet-loaded (or unreadable) thumbnail.
             gc.setFill(Color.gray(0.88));
             gc.fillRect(areaX, areaY, areaW, areaH);
-            return;
-        }
-        double imgW = img.getWidth();
-        double imgH = img.getHeight();
-        if (imgW <= 0 || imgH <= 0) {
             return;
         }
         gc.save();
         gc.beginPath();
         gc.rect(areaX, areaY, areaW, areaH);
         gc.clip();
-        switch (cellFitMode) {
-            case FIT_LETTERBOX -> {
-                double scale = Math.min(areaW / imgW, areaH / imgH);
-                double drawW = imgW * scale;
-                double drawH = imgH * scale;
-                gc.drawImage(img, areaX + (areaW - drawW) / 2,
-                        areaY + (areaH - drawH) / 2, drawW, drawH);
-            }
-            case FILL_CROP -> {
-                double scale = Math.max(areaW / imgW, areaH / imgH);
-                double drawW = imgW * scale;
-                double drawH = imgH * scale;
-                gc.drawImage(img, areaX + (areaW - drawW) / 2,
-                        areaY + (areaH - drawH) / 2, drawW, drawH);
-            }
-            case ACTUAL_SIZE -> {
-                // The preview cell size is the on-screen mapping of the figure
-                // cell; "actual size" maps the figure cell pixels to the cell
-                // box, so the thumbnail is shown filling the box centred.
-                double scale = Math.min(areaW / imgW, areaH / imgH);
-                double drawW = imgW * scale;
-                double drawH = imgH * scale;
-                gc.drawImage(img, areaX + (areaW - drawW) / 2,
-                        areaY + (areaH - drawH) / 2, drawW, drawH);
-            }
-            default -> gc.drawImage(img, areaX, areaY, areaW, areaH);
+        gc.drawImage(img, areaX + placement.x() * k, areaY + placement.y() * k,
+                placement.width() * k, placement.height() * k);
+        gc.restore();
+    }
+
+    /**
+     * Draw a cell's scale bar with the same length, thickness, margin and font size
+     * {@link ScaleBarRenderer} uses, scaled to the screen.
+     */
+    private void drawScaleBar(GraphicsContext gc, double areaX, double areaY, int[] cs,
+                              PanelCellGeometry.Placement placement, double lengthMicrons,
+                              double k) {
+        double um = placement.micronsPerPixel();
+        if (!(um > 0)) {
+            return;
         }
+        int[] v = placement.visible(cs[0], cs[1]);
+        int vw = v[2];
+        int vh = v[3];
+        double len = ScaleBarRenderer.resolveLengthMicrons(vw, vh, um, lengthMicrons);
+        if (!(len > 0)) {
+            return;
+        }
+        int barPx = (int) Math.round(len / um);
+        int barH = ScaleBarRenderer.barHeight(vh);
+        int margin = ScaleBarRenderer.margin(vw, vh);
+        int font = TextRenderUtils.resolveFontSize(scaleBarFontSize, Math.min(vw, vh));
+        double ascent = font * 0.75;
+        double bx;
+        double by;
+        switch (scaleBarPosition) {
+            case LOWER_LEFT -> {
+                bx = margin;
+                by = vh - margin - barH;
+            }
+            case UPPER_RIGHT -> {
+                bx = vw - margin - barPx;
+                by = margin + ascent + 4;
+            }
+            case UPPER_LEFT -> {
+                bx = margin;
+                by = margin + ascent + 4;
+            }
+            default -> {
+                bx = vw - margin - barPx;
+                by = vh - margin - barH;
+            }
+        }
+        double ox = areaX + v[0] * k;
+        double oy = areaY + v[1] * k;
+        double lum = 0.299 * scaleBarColor.getRed() + 0.587 * scaleBarColor.getGreen()
+                + 0.114 * scaleBarColor.getBlue();
+        Color outline = lum > 0.5 ? Color.BLACK : Color.WHITE;
+
+        gc.save();
+        gc.beginPath();
+        gc.rect(ox, oy, vw * k, vh * k);
+        gc.clip();
+        gc.setFill(outline);
+        gc.fillRect(ox + (bx - 1) * k, oy + (by - 1) * k, (barPx + 2) * k, (barH + 2) * k);
+        gc.setFill(scaleBarColor);
+        gc.fillRect(ox + bx * k, oy + by * k, barPx * k, barH * k);
+        double fontPx = Math.max(6, font * k);
+        gc.setFont(Font.font("System", scaleBarBold ? FontWeight.BOLD : FontWeight.NORMAL, fontPx));
+        gc.setTextAlign(TextAlignment.CENTER);
+        gc.setTextBaseline(javafx.geometry.VPos.BASELINE);
+        String label = ScaleBarRenderer.formatLabel(len);
+        double tx = ox + (bx + barPx / 2.0) * k;
+        double ty = oy + (by - 4) * k;
+        gc.setLineWidth(Math.max(1.0, fontPx * 0.12));
+        gc.setStroke(outline);
+        gc.strokeText(label, tx, ty);
+        gc.setFill(scaleBarColor);
+        gc.fillText(label, tx, ty);
         gc.restore();
     }
 
@@ -475,7 +750,8 @@ public class PanelLayoutPreview extends Pane {
         if (text == null || text.isEmpty() || areaW <= 0 || areaH <= 0) {
             return;
         }
-        int minFigureDim = Math.min(cellWidth, cellHeight);
+        int[] cs = cellSize();
+        int minFigureDim = Math.min(cs[0], cs[1]);
         double fontPx;
         if (labelFontSize > 0) {
             fontPx = labelFontSize * figureToScreen;
@@ -593,6 +869,7 @@ public class PanelLayoutPreview extends Pane {
                 // Swap -- predictable and order-stable.
                 java.util.Collections.swap(entries, dragSourceIndex, target);
                 java.util.Collections.swap(thumbnails, dragSourceIndex, target);
+                java.util.Collections.swap(infos, dragSourceIndex, target);
                 logger.debug("Panel preview: swapped cells {} and {}",
                         dragSourceIndex, target);
                 dragSourceIndex = -1;
@@ -623,12 +900,13 @@ public class PanelLayoutPreview extends Pane {
             return -1;
         }
         double s = w / logicalWidth;
+        int[] cs = cellSize();
         double figScale = LOGICAL_BOUND / Math.max(
-                (double) cols * cellWidth + (double) (cols + 1) * gutterX,
-                (double) rows * (cellHeight + captionBandHeight())
+                (double) cols * cs[0] + (double) (cols + 1) * gutterX,
+                (double) rows * (cs[1] + captionBandHeight())
                         + (double) (rows + 1) * gutterY);
-        double cellW = cellWidth * figScale * s;
-        double cellH = cellHeight * figScale * s;
+        double cellW = cs[0] * figScale * s;
+        double cellH = cs[1] * figScale * s;
         double gx = gutterX * figScale * s;
         double gy = gutterY * figScale * s;
         double band = captionBandHeight() * figScale * s;

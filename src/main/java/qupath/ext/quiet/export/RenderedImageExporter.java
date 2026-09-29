@@ -1131,6 +1131,23 @@ public class RenderedImageExporter {
      */
     private static RenderedExportConfig buildPreviewConfig(RenderedExportConfig config,
                                                             double previewDownsample) {
+        return copyForRender(config).downsample(previewDownsample).build();
+    }
+
+    /**
+     * A copy of {@code config} with its scale bar turned off, for a montage that draws
+     * its own scale bars after fitting each image.
+     */
+    static RenderedExportConfig withoutScaleBar(RenderedExportConfig config) {
+        var sb = config.scaleBar();
+        return copyForRender(config)
+                .scaleBar(new RenderedExportConfig.ScaleBarConfig(false, sb.position(),
+                        sb.colorHex(), sb.fontSize(), sb.bold(), sb.backgroundBox()))
+                .build();
+    }
+
+    /** A builder carrying every setting that affects rendering. */
+    private static RenderedExportConfig.Builder copyForRender(RenderedExportConfig config) {
         return new RenderedExportConfig.Builder()
                 // Core fields
                 .regionType(config.getRegionType())
@@ -1141,7 +1158,7 @@ public class RenderedImageExporter {
                 .capturedDisplaySettings(config.getCapturedDisplaySettings())
                 .displayPresetName(config.getDisplayPresetName())
                 .overlayOpacity(config.getOverlayOpacity())
-                .downsample(previewDownsample)
+                .downsample(config.getDownsample())
                 .targetDpi(config.getTargetDpi())
                 .format(config.getFormat())
                 .outputDirectory(config.getOutputDirectory())
@@ -1156,8 +1173,7 @@ public class RenderedImageExporter {
                 .infoLabel(config.infoLabel())
                 .splitChannel(config.splitChannel())
                 .splitStains(config.splitStains())
-                .inset(config.inset())
-                .build();
+                .inset(config.inset());
     }
 
     /**

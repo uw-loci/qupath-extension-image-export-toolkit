@@ -59,6 +59,21 @@ public class ScaleBarRenderer {
                                      double pixelSizeMicrons, Position position,
                                      Color barColor, int fontSize, boolean boldText,
                                      boolean backgroundBox) {
+        drawScaleBar(g2d, imageWidth, imageHeight, pixelSizeMicrons, position,
+                barColor, fontSize, boldText, backgroundBox, 0);
+    }
+
+    /**
+     * As {@link #drawScaleBar(Graphics2D, int, int, double, Position, Color, int, boolean, boolean)},
+     * with a requested bar length.
+     *
+     * @param lengthMicrons bar length in microns; 0 = pick a "nice" length (~15% of the width).
+     *                      Shortened if it does not fit.
+     */
+    public static void drawScaleBar(Graphics2D g2d, int imageWidth, int imageHeight,
+                                     double pixelSizeMicrons, Position position,
+                                     Color barColor, int fontSize, boolean boldText,
+                                     boolean backgroundBox, double lengthMicrons) {
         if (pixelSizeMicrons <= 0 || imageWidth <= 0 || imageHeight <= 0) {
             return;
         }
@@ -74,41 +89,18 @@ public class ScaleBarRenderer {
             g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
                     RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 
-            // Compute physical image width
-            double imagePhysicalWidth = imageWidth * pixelSizeMicrons;
-
-            // Pick a "nice" bar length targeting ~15% of image width
-            double targetLength = imagePhysicalWidth * 0.15;
-            double barLengthMicrons = pickNiceLength(targetLength);
-
-            // Convert back to pixels
-            int barLengthPx = (int) Math.round(barLengthMicrons / pixelSizeMicrons);
-            if (barLengthPx < 2) {
+            double barLengthMicrons = resolveLengthMicrons(
+                    imageWidth, imageHeight, pixelSizeMicrons, lengthMicrons);
+            if (!(barLengthMicrons > 0)) {
                 return; // too small to draw
             }
+            int barLengthPx = (int) Math.round(barLengthMicrons / pixelSizeMicrons);
 
             // Sizing
-            int barHeight = Math.max(4, imageHeight / 150);
+            int barHeight = barHeight(imageHeight);
             int minDim = Math.min(imageWidth, imageHeight);
             int effectiveFontSize = TextRenderUtils.resolveFontSize(fontSize, minDim);
-            int margin = Math.max(10, minDim / 40);
-
-            // If the chosen bar length plus a left+right margin exceeds the
-            // image width, step the "nice" length down until it fits. This
-            // protects against tiny exported regions (e.g. a small annotation
-            // crop) where the 15%-of-width default lands outside the image.
-            int maxBarPx = Math.max(2, imageWidth - 2 * margin);
-            while (barLengthPx > maxBarPx) {
-                double shrunkMicrons = pickShorterNiceLength(barLengthMicrons);
-                if (!(shrunkMicrons < barLengthMicrons)) {
-                    barLengthPx = maxBarPx;
-                    barLengthMicrons = barLengthPx * pixelSizeMicrons;
-                    break;
-                }
-                barLengthMicrons = shrunkMicrons;
-                barLengthPx = (int) Math.round(barLengthMicrons / pixelSizeMicrons);
-                if (barLengthPx < 2) return;
-            }
+            int margin = margin(imageWidth, imageHeight);
 
             // Format label: >=1000 um -> mm, else um (ASCII-only)
             String label = formatLabel(barLengthMicrons);
@@ -196,6 +188,54 @@ public class ScaleBarRenderer {
     }
 
     /**
+     * The bar length that {@link #drawScaleBar} draws for an image.
+     *
+     * @param lengthMicrons requested length; 0 = a "nice" length near 15% of the width
+     * @return the length in microns, shortened to fit inside the margins, or NaN if the
+     *         bar would be under 2 pixels
+     */
+    public static double resolveLengthMicrons(int imageWidth, int imageHeight,
+                                              double pixelSizeMicrons, double lengthMicrons) {
+        if (pixelSizeMicrons <= 0 || imageWidth <= 0 || imageHeight <= 0) {
+            return Double.NaN;
+        }
+        double barLengthMicrons = lengthMicrons > 0
+                ? lengthMicrons
+                : pickNiceLength(imageWidth * pixelSizeMicrons * 0.15);
+        int barLengthPx = (int) Math.round(barLengthMicrons / pixelSizeMicrons);
+        if (barLengthPx < 2) {
+            return Double.NaN;
+        }
+        // If the chosen bar length plus a left+right margin exceeds the
+        // image width, step the "nice" length down until it fits. This
+        // protects against tiny exported regions (e.g. a small annotation
+        // crop) where the 15%-of-width default lands outside the image.
+        int maxBarPx = Math.max(2, imageWidth - 2 * margin(imageWidth, imageHeight));
+        while (barLengthPx > maxBarPx) {
+            double shrunkMicrons = pickShorterNiceLength(barLengthMicrons);
+            if (!(shrunkMicrons < barLengthMicrons)) {
+                return maxBarPx * pixelSizeMicrons;
+            }
+            barLengthMicrons = shrunkMicrons;
+            barLengthPx = (int) Math.round(barLengthMicrons / pixelSizeMicrons);
+            if (barLengthPx < 2) {
+                return Double.NaN;
+            }
+        }
+        return barLengthMicrons;
+    }
+
+    /** Distance of the bar from the image edges, in pixels. */
+    public static int margin(int imageWidth, int imageHeight) {
+        return Math.max(10, Math.min(imageWidth, imageHeight) / 40);
+    }
+
+    /** Bar thickness in pixels. */
+    public static int barHeight(int imageHeight) {
+        return Math.max(4, imageHeight / 150);
+    }
+
+    /**
      * Pick the closest "nice" bar length to the target.
      */
     private static double pickNiceLength(double targetMicrons) {
@@ -230,7 +270,7 @@ public class ScaleBarRenderer {
      * Format the bar length as a human-readable label.
      * Uses mm for lengths >= 1000 um, otherwise um. ASCII-only.
      */
-    private static String formatLabel(double microns) {
+    public static String formatLabel(double microns) {
         if (microns >= 1000) {
             double mm = microns / 1000.0;
             if (isWholeNumber(mm)) {

@@ -227,6 +227,17 @@ public class ExportMetadataWriter {
                     + config.getGutterY() + " px");
             pw.println("Background: " + toHex(config.getBackgroundColor()));
             pw.println("Cell fit: " + config.getCellFitMode().name());
+            pw.println("Cell size: " + (config.isFixedCellSize()
+                    ? config.getCellWidth() + " x " + config.getCellHeight() + " px"
+                    : "largest image"));
+            pw.println("Same scale in every cell: " + (config.isMatchScale() ? "yes" : "no"));
+            pw.println("Scale bar: " + config.getScaleBarMode().name()
+                    + (config.hasScaleBar()
+                            ? " (" + config.getScaleBarPosition().name() + ", length "
+                                    + (config.getScaleBarLengthMicrons() > 0
+                                            ? config.getScaleBarLengthMicrons() + " um"
+                                            : "auto") + ")"
+                            : ""));
             pw.println();
 
             pw.println("Captions");

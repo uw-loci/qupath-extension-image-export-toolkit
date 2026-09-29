@@ -51,6 +51,16 @@ final class PanelScriptGenerator {
         appendLine(sb, "def gutterY = " + config.getGutterY() + "  // pixels");
         appendLine(sb, "def backgroundColor = " + quote(toHex(config.getBackgroundColor())));
         appendLine(sb, "def cellFitMode = " + quote(config.getCellFitMode().name()));
+        appendLine(sb, "def cellSize = " + (config.isFixedCellSize()
+                ? "[" + config.getCellWidth() + ", " + config.getCellHeight() + "]  // pixels"
+                : "null  // largest image"));
+        appendLine(sb, "def sameScaleInEveryCell = " + config.isMatchScale());
+        appendLine(sb, "def scaleBarMode = " + quote(config.getScaleBarMode().name()));
+        appendLine(sb, "def scaleBarPosition = " + quote(config.getScaleBarPosition().name()));
+        appendLine(sb, "def scaleBarLengthMicrons = " + config.getScaleBarLengthMicrons() + "  // 0 = auto");
+        appendLine(sb, "def scaleBarColor = " + quote(toHex(config.getScaleBarColor())));
+        appendLine(sb, "def scaleBarFontSize = " + config.getScaleBarFontSize() + "  // 0 = auto");
+        appendLine(sb, "def scaleBarBold = " + config.isScaleBarBold());
         appendLine(sb, "def outputFormat = " + quote(config.getFormat().name()));
         appendLine(sb, "def outputFile = " + quote(
                 new java.io.File(config.getOutputDirectory(),

@@ -145,6 +145,14 @@ public final class PanelImageExporter {
         List<RenderedCell> rendered = new ArrayList<>();
         List<String> errors = new ArrayList<>();
         int skipped = 0;
+        PanelExportConfig renderConfig = config;
+        if (config.hasScaleBar()
+                && config.getRecipeConfig() instanceof RenderedExportConfig rc
+                && rc.scaleBar().show()) {
+            // The montage draws its own bars after fitting; the recipe's would be resized with each image
+            logger.info("Panel scale bar is on; the recipe's own scale bar is turned off");
+            renderConfig = withRecipe(config, RenderedImageExporter.withoutScaleBar(rc));
+        }
 
         // Phase 1 -- render each image to a BufferedImage via the recipe.
         for (int i = 0; i < total; i++) {
@@ -162,10 +170,11 @@ public final class PanelImageExporter {
             ImageData<BufferedImage> imageData = null;
             try {
                 imageData = entry.readImageData();
-                BufferedImage cellImage = renderCell(imageData, config,
+                BufferedImage cellImage = renderCell(imageData, renderConfig,
                         classifier, densityBuilder, name);
                 Map<String, String> metadata = readMetadata(entry, imageData);
-                rendered.add(new RenderedCell(name, cellImage, metadata));
+                rendered.add(new RenderedCell(name, cellImage, metadata,
+                        micronsPerPixel(imageData, config.getRecipeConfig())));
             } catch (IOException e) {
                 skipped++;
                 errors.add(name + ": " + e.getMessage());
@@ -199,16 +208,33 @@ public final class PanelImageExporter {
             progress.onProgress(1, 2, "Composing figure");
         }
 
-        int cellWidth = 0;
-        int cellHeight = 0;
+        int largestWidth = 0;
+        int largestHeight = 0;
         int maxCaptionLines = 0;
         List<PanelComposer.Cell> cells = new ArrayList<>();
+        List<String> uncalibrated = new ArrayList<>();
         for (RenderedCell rc : rendered) {
-            cellWidth = Math.max(cellWidth, rc.image.getWidth());
-            cellHeight = Math.max(cellHeight, rc.image.getHeight());
+            largestWidth = Math.max(largestWidth, rc.image.getWidth());
+            largestHeight = Math.max(largestHeight, rc.image.getHeight());
             List<String> lines = CaptionRenderer.resolveLines(config, rc.name, rc.metadata);
             maxCaptionLines = Math.max(maxCaptionLines, lines.size());
-            cells.add(new PanelComposer.Cell(rc.image, lines));
+            cells.add(new PanelComposer.Cell(rc.image, lines, rc.micronsPerPixel));
+            if (!(rc.micronsPerPixel > 0)) {
+                uncalibrated.add(rc.name);
+            }
+        }
+        int[] cellSize = config.resolveCellSize(largestWidth, largestHeight);
+        int cellWidth = cellSize[0];
+        int cellHeight = cellSize[1];
+        if (!uncalibrated.isEmpty() && (config.isMatchScale() || config.hasScaleBar())) {
+            String names = String.join(", ", uncalibrated);
+            if (config.isMatchScale()) {
+                errors.add("Same scale not applied -- no pixel size for: " + names);
+            }
+            if (config.hasScaleBar()) {
+                errors.add("No scale bar -- no pixel size for: " + names);
+            }
+            logger.warn("Panel images without a pixel size: {}", names);
         }
 
         int composedCellCount = cells.size();
@@ -308,6 +334,47 @@ public final class PanelImageExporter {
             case TILED, PANEL -> throw new IOException(
                     "unsupported recipe category: " + config.getRecipeCategory());
         };
+    }
+
+    /**
+     * Microns per pixel of the image a recipe renders for this image.
+     *
+     * @return NaN if the image has no pixel size
+     */
+    static double micronsPerPixel(ImageData<BufferedImage> imageData, Object recipe) {
+        var cal = imageData.getServer().getPixelCalibration();
+        if (!cal.hasPixelSizeMicrons()) {
+            return Double.NaN;
+        }
+        double px = cal.getAveragedPixelSizeMicrons();
+        return px * recipeDownsample(recipe, px);
+    }
+
+    /**
+     * The downsample a recipe renders at.
+     *
+     * @param pixelSizeMicrons the image's pixel size, for a DPI-driven Rendered recipe; NaN if unknown
+     */
+    public static double recipeDownsample(Object recipe, double pixelSizeMicrons) {
+        if (recipe instanceof RenderedExportConfig rc) {
+            return rc.getTargetDpi() > 0 && pixelSizeMicrons > 0
+                    ? rc.computeEffectiveDownsample(pixelSizeMicrons) : rc.getDownsample();
+        }
+        if (recipe instanceof RawExportConfig raw) {
+            return raw.getDownsample();
+        }
+        if (recipe instanceof MaskExportConfig mc) {
+            return mc.getDownsample();
+        }
+        if (recipe instanceof ObjectCropConfig occ) {
+            return occ.getDownsample();
+        }
+        return 1.0;
+    }
+
+    /** A copy of {@code config} rendering with {@code recipe} instead. */
+    private static PanelExportConfig withRecipe(PanelExportConfig config, Object recipe) {
+        return config.toBuilder().recipeConfig(recipe).build();
     }
 
     /**
@@ -437,6 +504,6 @@ public final class PanelImageExporter {
      * One image rendered to a cell, with resolved metadata.
      */
     private record RenderedCell(String name, BufferedImage image,
-                                Map<String, String> metadata) {
+                                Map<String, String> metadata, double micronsPerPixel) {
     }
 }
