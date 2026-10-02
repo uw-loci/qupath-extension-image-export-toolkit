@@ -169,6 +169,8 @@ Produce **publication-ready figures** -- the image as it looks in QuPath, with y
 | **Downsample** | Resolution factor (1x = full resolution, 4x = quarter, etc.) |
 | **Format** | PNG, TIFF, JPEG, OME-TIFF, OME-TIFF Pyramid, SVG |
 
+**Preview Current Image** renders the open image with the current settings in a separate window. While that window is open it updates as you change any setting -- scale bar, panel and info labels, color legend, display settings, overlays -- usually within a second, so you can place and size labels without clicking Preview again. A line under the image says *Updating...* while it redraws. The preview of a split-channel export shows the first visible channel; the preview of an annotation-region export shows the first matching annotation.
+
 <details>
 <summary><b>Display Settings</b></summary>
 

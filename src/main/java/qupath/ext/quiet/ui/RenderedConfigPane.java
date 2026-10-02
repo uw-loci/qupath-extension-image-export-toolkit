@@ -11,6 +11,7 @@ import org.controlsfx.control.CheckComboBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.embed.swing.SwingFXUtils;
@@ -40,6 +41,7 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 import javafx.util.StringConverter;
 
 import qupath.ext.quiet.export.ClassNames;
@@ -215,6 +217,14 @@ public class RenderedConfigPane extends VBox {
     // Simple mode state
     private boolean simpleMode;
 
+    // Live preview: one window, re-rendered when a setting changes while it is open
+    private Stage previewStage;
+    private ImageView previewView;
+    private Label previewStatus;
+    private boolean previewRendering;
+    private boolean previewDirty;
+    private final PauseTransition previewDebounce = new PauseTransition(Duration.millis(300));
+
     public RenderedConfigPane(QuPathGUI qupath) {
         this.qupath = qupath;
         setSpacing(10);
@@ -224,6 +234,42 @@ public class RenderedConfigPane extends VBox {
         populatePresets();
         populateDensityMaps();
         restorePreferences();
+        previewDebounce.setOnFinished(e -> refreshPreview());
+        watchForLivePreview(this);
+    }
+
+    /** Re-render the open preview when any setting control below {@code node} changes. */
+    private void watchForLivePreview(javafx.scene.Node node) {
+        javafx.beans.InvalidationListener changed = o -> requestLivePreview();
+        if (node instanceof TitledPane tp) {
+            if (tp.getContent() != null) {
+                watchForLivePreview(tp.getContent());
+            }
+        } else if (node instanceof CheckBox c) {
+            c.selectedProperty().addListener(changed);
+        } else if (node instanceof ComboBox<?> c) {
+            c.valueProperty().addListener(changed);
+        } else if (node instanceof ColorPicker c) {
+            c.valueProperty().addListener(changed);
+        } else if (node instanceof Spinner<?> c) {
+            c.valueProperty().addListener(changed);
+        } else if (node instanceof Slider c) {
+            c.valueProperty().addListener(changed);
+        } else if (node instanceof TextField c) {
+            c.textProperty().addListener(changed);
+        } else if (node instanceof CheckComboBox<?> c) {
+            c.getCheckModel().getCheckedItems().addListener(changed);
+        } else if (node instanceof javafx.scene.layout.Pane pane) {
+            for (var child : pane.getChildren()) {
+                watchForLivePreview(child);
+            }
+        }
+    }
+
+    private void requestLivePreview() {
+        if (previewStage != null && previewStage.isShowing()) {
+            previewDebounce.playFromStart();
+        }
     }
 
     private void buildUI() {
@@ -2401,8 +2447,64 @@ public class RenderedConfigPane extends VBox {
     }
 
     private void handlePreview() {
+        if (previewStage != null && previewStage.isShowing()) {
+            previewStage.toFront();
+            refreshPreview();
+            return;
+        }
+        var progressStage = new Stage();
+        progressStage.setTitle("Rendering Preview...");
+        var progressIndicator = new ProgressIndicator(-1);
+        progressIndicator.setPrefSize(80, 80);
+        var progressPane = new StackPane(progressIndicator);
+        progressPane.setPadding(new Insets(20));
+        progressStage.setScene(new Scene(progressPane));
+        progressStage.setResizable(false);
+        progressStage.show();
+        renderPreviewAsync(preview -> {
+            progressStage.close();
+            showPreviewWindow(preview);
+        }, message -> progressStage.close());
+    }
+
+    /** Re-render the open preview window with the current settings. */
+    private void refreshPreview() {
+        if (previewStage == null || !previewStage.isShowing()) {
+            return;
+        }
+        if (previewRendering) {
+            // One render at a time; the latest settings are rendered when this one finishes
+            previewDirty = true;
+            return;
+        }
+        previewStatus.setText("Updating...");
+        renderPreviewAsync(preview -> {
+            if (previewView != null) {
+                previewView.setImage(SwingFXUtils.toFXImage(preview, null));
+            }
+            if (previewStatus != null) {
+                previewStatus.setText(LIVE_PREVIEW_HINT);
+            }
+        }, message -> {
+            if (previewStatus != null) {
+                previewStatus.setText(message);
+            }
+        });
+    }
+
+    private static final String LIVE_PREVIEW_HINT = "Updates as you change the export settings.";
+
+    /**
+     * Render the preview on a background thread with the current settings.
+     *
+     * @param onDone called on the FX thread with the rendered image
+     * @param onFail called on the FX thread with a short reason
+     */
+    private void renderPreviewAsync(java.util.function.Consumer<BufferedImage> onDone,
+                                    java.util.function.Consumer<String> onFail) {
         var viewer = qupath.getViewer();
         if (viewer == null || viewer.getImageData() == null) {
+            onFail.accept("No image is open.");
             return;
         }
 
@@ -2416,6 +2518,7 @@ public class RenderedConfigPane extends VBox {
             config = buildConfig(tempDir);
         } catch (Exception e) {
             logger.error("Failed to build config for preview", e);
+            onFail.accept("Preview failed: " + e.getMessage());
             return;
         }
 
@@ -2428,6 +2531,7 @@ public class RenderedConfigPane extends VBox {
                 classifier = getActiveOverlayClassifier(qupath);
                 if (classifier == null) {
                     logger.warn("No active pixel classification overlay found for preview");
+                    onFail.accept("No active pixel classification overlay.");
                     return;
                 }
             } else if (classifierName != null && !classifierName.isBlank()) {
@@ -2437,17 +2541,20 @@ public class RenderedConfigPane extends VBox {
                         classifier = project.getPixelClassifiers().get(classifierName);
                     } catch (Exception e) {
                         logger.error("Failed to load classifier for preview: {}", classifierName, e);
+                        onFail.accept("Could not load classifier " + classifierName + ".");
                         return;
                     }
                 }
             } else {
                 logger.warn("No classifier selected for preview");
+                onFail.accept("No classifier selected.");
                 return;
             }
         } else if (config.getRenderMode() == RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY) {
             String dmName = config.overlays().densityMapName();
             if (dmName == null || dmName.isBlank()) {
                 logger.warn("No density map selected for preview");
+                onFail.accept("No density map selected.");
                 return;
             }
             var project = qupath.getProject();
@@ -2458,21 +2565,11 @@ public class RenderedConfigPane extends VBox {
                     densityBuilder = dmResources.get(dmName);
                 } catch (Exception e) {
                     logger.error("Failed to load density map for preview: {}", dmName, e);
+                    onFail.accept("Could not load density map " + dmName + ".");
                     return;
                 }
             }
         }
-
-        // Show progress indicator
-        var progressStage = new Stage();
-        progressStage.setTitle("Rendering Preview...");
-        var progressIndicator = new ProgressIndicator(-1);
-        progressIndicator.setPrefSize(80, 80);
-        var progressPane = new StackPane(progressIndicator);
-        progressPane.setPadding(new Insets(20));
-        progressStage.setScene(new Scene(progressPane));
-        progressStage.setResizable(false);
-        progressStage.show();
 
         final PixelClassifier finalClassifier = classifier;
         final DensityMapBuilder finalDensityBuilder = densityBuilder;
@@ -2485,19 +2582,31 @@ public class RenderedConfigPane extends VBox {
         int maxPreviewDim = (int) Math.max(800, Math.min(4000,
                 Math.max(previewBounds.getWidth(), previewBounds.getHeight()) / 2.0));
 
+        previewRendering = true;
         Thread previewThread = new Thread(() -> {
+            BufferedImage preview = null;
+            String failure = null;
             try {
-                BufferedImage preview = RenderedImageExporter.renderPreview(
+                preview = RenderedImageExporter.renderPreview(
                         imageData, finalClassifier, finalDensityBuilder, config, maxPreviewDim);
-
-                Platform.runLater(() -> {
-                    progressStage.close();
-                    showPreviewWindow(preview);
-                });
             } catch (Exception e) {
                 logger.error("Preview rendering failed", e);
-                Platform.runLater(progressStage::close);
+                failure = "Preview failed: " + e.getMessage();
             }
+            final BufferedImage result = preview;
+            final String reason = failure;
+            Platform.runLater(() -> {
+                previewRendering = false;
+                if (result != null) {
+                    onDone.accept(result);
+                } else {
+                    onFail.accept(reason);
+                }
+                if (previewDirty) {
+                    previewDirty = false;
+                    refreshPreview();
+                }
+            });
         });
         previewThread.setDaemon(true);
         previewThread.setName("quiet-preview");
@@ -2525,13 +2634,24 @@ public class RenderedConfigPane extends VBox {
         imageView.setFitWidth(fitW);
         imageView.setFitHeight(fitH);
 
-        var pane = new StackPane(imageView);
+        var status = new Label(LIVE_PREVIEW_HINT);
+        status.setStyle("-fx-font-size: 0.85em; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        var pane = new VBox(5, new StackPane(imageView), status);
         pane.setPadding(new Insets(5));
 
         var stage = new Stage();
         stage.setTitle("Export Preview");
         stage.setScene(new Scene(pane));
         stage.setResizable(true);
+        stage.setOnHidden(e -> {
+            previewDebounce.stop();
+            previewStage = null;
+            previewView = null;
+            previewStatus = null;
+        });
+        previewStage = stage;
+        previewView = imageView;
+        previewStatus = status;
         stage.show();
     }
 
