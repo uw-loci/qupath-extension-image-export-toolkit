@@ -202,7 +202,7 @@ When "All annotations" is selected, each annotation's bounding box is exported a
 <details>
 <summary><b>Scale Bar</b></summary>
 
-Rendered exports can optionally include a burned-in scale bar with text label. The scale bar automatically picks a "nice" length (e.g., 50 um, 200 um, 1 mm) targeting roughly 15% of the image width, and formats the label with appropriate units.
+Rendered exports can optionally include a burned-in scale bar with text label. The scale bar automatically picks a "nice" length (e.g., 50 µm, 200 µm, 1 mm) targeting roughly 15% of the image width, and formats the label with appropriate units.
 
 | Option | Values |
 |--------|--------|
@@ -272,7 +272,7 @@ Add a per-image metadata text stamp to exported images. The template is resolved
 | Placeholder | Resolves to |
 |-------------|-------------|
 | `{imageName}` | The project image entry name |
-| `{pixelSize}` | Pixel calibration (e.g., "0.500 um/px") or "uncalibrated" |
+| `{pixelSize}` | Pixel calibration (e.g., "0.500 µm/px") or "uncalibrated" |
 | `{date}` | Current date (YYYY-MM-DD) |
 | `{time}` | Current time (HH:MM) |
 | `{classifier}` | Classifier name (empty if no classifier overlay selected) |

@@ -268,7 +268,8 @@ public class ScaleBarRenderer {
 
     /**
      * Format the bar length as a human-readable label.
-     * Uses mm for lengths >= 1000 um, otherwise um. ASCII-only.
+     * Uses mm for lengths >= 1000 um, otherwise the micro sign (U+00B5, in every
+     * platform's sans-serif font and in cp1252), written as an escape to keep the source ASCII.
      */
     public static String formatLabel(double microns) {
         if (microns >= 1000) {
@@ -279,12 +280,12 @@ public class ScaleBarRenderer {
             return String.format("%.1f mm", mm);
         }
         if (isWholeNumber(microns)) {
-            return String.format("%d um", (int) microns);
+            return String.format("%d \u00B5m", (int) microns);
         }
         if (microns >= 1) {
-            return String.format("%.1f um", microns);
+            return String.format("%.1f \u00B5m", microns);
         }
-        return String.format("%.2f um", microns);
+        return String.format("%.2f \u00B5m", microns);
     }
 
     private static boolean isWholeNumber(double value) {

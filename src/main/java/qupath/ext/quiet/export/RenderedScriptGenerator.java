@@ -253,7 +253,7 @@ class RenderedScriptGenerator {
         appendLine(sb, "        barPx = (int) Math.round(barUm / pxSize)");
         appendLine(sb, "        if (barPx < 2) return");
         appendLine(sb, "    }");
-        appendLine(sb, "    String label = barUm >= 1000 ? String.format('%d mm', (int)(barUm / 1000)) : (barUm == Math.floor(barUm) ? String.format('%d um', (int)barUm) : String.format('%.1f um', barUm))");
+        appendLine(sb, "    String label = barUm >= 1000 ? String.format('%d mm', (int)(barUm / 1000)) : (barUm == Math.floor(barUm) ? String.format('%d \\u00B5m', (int)barUm) : String.format('%.1f \\u00B5m', barUm))");
         appendLine(sb, "    int fontStyle = bold ? Font.BOLD : Font.PLAIN");
         appendLine(sb, "    g2d.setFont(new Font(Font.SANS_SERIF, fontStyle, fontSize))");
         appendLine(sb, "    def fm = g2d.getFontMetrics()");
@@ -600,7 +600,7 @@ class RenderedScriptGenerator {
         appendLine(sb, "            def infoText = infoLabelTemplate");
         appendLine(sb, "            infoText = infoText.replace('{imageName}', imageName ?: '')");
         appendLine(sb, "            def cal = imageData.getServer().getPixelCalibration()");
-        appendLine(sb, "            def pxStr = cal.hasPixelSizeMicrons() ? String.format('%.3f um/px', cal.getAveragedPixelSizeMicrons()) : 'uncalibrated'");
+        appendLine(sb, "            def pxStr = cal.hasPixelSizeMicrons() ? String.format('%.3f \\u00B5m/px', cal.getAveragedPixelSizeMicrons()) : 'uncalibrated'");
         appendLine(sb, "            infoText = infoText.replace('{pixelSize}', pxStr)");
         appendLine(sb, "            infoText = infoText.replace('{date}', java.time.LocalDate.now().toString())");
         appendLine(sb, "            infoText = infoText.replace('{time}', java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern('HH:mm')))");
@@ -620,7 +620,7 @@ class RenderedScriptGenerator {
         appendLine(sb, "            def infoText = infoLabelTemplate");
         appendLine(sb, "            infoText = infoText.replace('{imageName}', imageName ?: '')");
         appendLine(sb, "            def cal = imageData.getServer().getPixelCalibration()");
-        appendLine(sb, "            def pxStr = cal.hasPixelSizeMicrons() ? String.format('%.3f um/px', cal.getAveragedPixelSizeMicrons()) : 'uncalibrated'");
+        appendLine(sb, "            def pxStr = cal.hasPixelSizeMicrons() ? String.format('%.3f \\u00B5m/px', cal.getAveragedPixelSizeMicrons()) : 'uncalibrated'");
         appendLine(sb, "            infoText = infoText.replace('{pixelSize}', pxStr)");
         appendLine(sb, "            infoText = infoText.replace('{date}', java.time.LocalDate.now().toString())");
         appendLine(sb, "            infoText = infoText.replace('{time}', java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern('HH:mm')))");
@@ -640,7 +640,7 @@ class RenderedScriptGenerator {
         appendLine(sb, "                def infoText = infoLabelTemplate");
         appendLine(sb, "                infoText = infoText.replace('{imageName}', imageName ?: '')");
         appendLine(sb, "                def cal = imageData.getServer().getPixelCalibration()");
-        appendLine(sb, "                def pxStr = cal.hasPixelSizeMicrons() ? String.format('%.3f um/px', cal.getAveragedPixelSizeMicrons()) : 'uncalibrated'");
+        appendLine(sb, "                def pxStr = cal.hasPixelSizeMicrons() ? String.format('%.3f \\u00B5m/px', cal.getAveragedPixelSizeMicrons()) : 'uncalibrated'");
         appendLine(sb, "                infoText = infoText.replace('{pixelSize}', pxStr)");
         appendLine(sb, "                infoText = infoText.replace('{date}', java.time.LocalDate.now().toString())");
         appendLine(sb, "                infoText = infoText.replace('{time}', java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern('HH:mm')))");

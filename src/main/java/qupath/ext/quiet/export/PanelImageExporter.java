@@ -407,7 +407,7 @@ public final class PanelImageExporter {
             var cal = server.getPixelCalibration();
             if (cal.hasPixelSizeMicrons()) {
                 map.putIfAbsent("pixelSize",
-                        String.format("%.4f um/px", cal.getAveragedPixelSizeMicrons()));
+                        String.format("%.4f \u00B5m/px", cal.getAveragedPixelSizeMicrons()));
             }
             if (imageData.getImageType() != null) {
                 map.putIfAbsent("imageType", imageData.getImageType().name());

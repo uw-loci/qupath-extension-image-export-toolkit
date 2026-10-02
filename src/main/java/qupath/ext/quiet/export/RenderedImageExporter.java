@@ -2234,7 +2234,7 @@ public class RenderedImageExporter {
         var server = imageData.getServer();
         var cal = server.getPixelCalibration();
         if (cal.hasPixelSizeMicrons()) {
-            String pxSize = String.format("%.3f um/px", cal.getAveragedPixelSizeMicrons());
+            String pxSize = String.format("%.3f \u00B5m/px", cal.getAveragedPixelSizeMicrons());
             result = result.replace("{pixelSize}", pxSize);
         } else {
             result = result.replace("{pixelSize}", "uncalibrated");

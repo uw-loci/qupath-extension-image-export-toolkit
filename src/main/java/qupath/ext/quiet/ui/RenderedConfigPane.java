@@ -1389,7 +1389,7 @@ public class RenderedConfigPane extends VBox {
             var cal = server.getPixelCalibration();
             if (cal.hasPixelSizeMicrons()) {
                 resolved = resolved.replace("{pixelSize}",
-                        String.format("%.3f um/px", cal.getAveragedPixelSizeMicrons()));
+                        String.format("%.3f \u00B5m/px", cal.getAveragedPixelSizeMicrons()));
             } else {
                 resolved = resolved.replace("{pixelSize}", "uncalibrated");
                 warnings.add("{pixelSize} -> uncalibrated");
@@ -1399,7 +1399,7 @@ public class RenderedConfigPane extends VBox {
         } else {
             // No image open -- show example values
             resolved = resolved.replace("{imageName}", "(no image open)");
-            resolved = resolved.replace("{pixelSize}", "0.500 um/px");
+            resolved = resolved.replace("{pixelSize}", "0.500 \u00B5m/px");
             resolved = resolved.replace("{width}", "1920");
             resolved = resolved.replace("{height}", "1080");
             warnings.add("No image open -- showing example values");
