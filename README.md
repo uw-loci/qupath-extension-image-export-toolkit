@@ -178,7 +178,7 @@ By default, rendered exports apply per-image brightness/contrast and channel vis
 
 | Mode | Description |
 |------|-------------|
-| **Per-Image Saved Settings** (default) | Each image uses its own saved display settings from the QuPath project. If you used "Apply to similar images" in the B&C dialog, all images will already share the same settings. |
+| **Per-Image Saved Settings** (default) | Each image uses its own saved display settings from the QuPath project. If you used "Apply to similar images" in the B&C dialog, all images will already share the same settings. Changes made in Brightness & Contrast reach the export only after the image is saved (**File > Save**); to export exactly what is on screen without saving, use **Current Viewer Settings**. |
 | **Current Viewer Settings** | Captures the display settings from the currently open image and applies them uniformly to all exported images. Requires an image to be open. |
 | **Saved Preset** | Loads a named B&C preset saved in the project (via the Brightness & Contrast dialog's save button) and applies it to all images. |
 | **Raw (No Adjustments)** | Exports raw pixel data with no display transforms. This was the only behavior prior to v0.2.1. |
@@ -291,11 +291,11 @@ For multi-channel fluorescence images, the rendered export can emit one panel pe
 | Option | Values |
 |--------|--------|
 | **Split channels (individual + merge)** | Enable/disable. When on, each exported image produces one file per visible channel plus a merged file. |
-| **Individual channels as grayscale** | Render each channel panel as grayscale (best intensity contrast for quantitative comparison). |
-| **Individual channels in pseudocolor** | Render each channel panel in its LUT color (helps readers identify channels across multi-panel figures). |
+| **Individual channels as grayscale** | Render each channel panel as grayscale (best intensity contrast for quantitative comparison). The channel's display minimum maps to black and its maximum to white, exactly as in the viewer's grayscale mode. |
+| **Individual channels in pseudocolor** | Render each channel panel in its LUT color, with its display minimum and maximum, so it looks as it does in the viewer with only that channel on (helps readers identify channels across multi-panel figures). |
 | **Color border on channel panels** | Draw a colored border around each channel panel matching that channel's LUT color. |
 | **Channel color legend swatch** | Draw a small colored rectangle with the channel name on each individual channel panel, so the channel is identifiable even in grayscale. |
-| **Show channel/stain legend** | Draw a full channel/stain legend on the exported image (available for all rendered exports, not only split-channel). |
+| **Show channel/stain legend** | Draw a full channel/stain legend on the exported image (available for all rendered exports, not only split-channel). It lists the visible channels in their display colors. In a split-channel export the merged file gets the full legend and each channel file gets its own swatch. |
 
 </details>
 

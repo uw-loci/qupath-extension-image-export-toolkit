@@ -42,6 +42,9 @@ import qupath.lib.color.ColorDeconvolutionStains;
 import qupath.lib.color.ColorMaps;
 import qupath.lib.color.StainVector;
 import qupath.lib.common.GeneralTools;
+import qupath.lib.display.ChannelDisplayInfo;
+import qupath.lib.display.ChannelDisplayMode;
+import qupath.lib.display.DirectServerChannelInfo;
 import qupath.lib.display.ImageDisplay;
 import qupath.lib.display.settings.DisplaySettingUtils;
 import qupath.lib.gui.images.servers.ChannelDisplayTransformServer;
@@ -1424,38 +1427,23 @@ public class RenderedImageExporter {
         double previewDownsample = Math.max(config.getDownsample(),
                 longestSide / Math.max(1, maxDimension));
 
-        var singleChannel = List.of(channels.get(0));
-        var chServer = ChannelDisplayTransformServer.createColorTransformServer(
-                baseServer, singleChannel);
+        var channel = channels.get(0);
         try {
-            RegionRequest request = RegionRequest.createInstance(
-                    chServer.getPath(), previewDownsample,
-                    0, 0, chServer.getWidth(), chServer.getHeight());
-            BufferedImage chImage = chServer.readRegion(request);
-
-            // Channel color, used for border and legend swatch.
-            int channelColor = 0xFFFFFF;
-            var serverChannels = baseServer.getMetadata().getChannels();
-            if (!serverChannels.isEmpty()) {
-                channelColor = serverChannels.get(0).getColor();
-            }
-            if (config.splitChannel().grayscale()) {
-                chImage = convertToGrayscale(chImage);
-            }
-            BufferedImage result = new BufferedImage(
-                    chImage.getWidth(), chImage.getHeight(),
-                    BufferedImage.TYPE_INT_RGB);
+            BufferedImage raw = baseServer.readRegion(RegionRequest.createInstance(
+                    baseServer.getPath(), previewDownsample,
+                    0, 0, baseServer.getWidth(), baseServer.getHeight()));
+            BufferedImage result = renderSingleChannel(raw, channel,
+                    config.splitChannel().grayscale());
+            int channelColor = channelColor(channel);
             Graphics2D g2d = result.createGraphics();
             try {
-                g2d.drawImage(chImage, 0, 0, null);
                 if (config.splitChannel().colorBorder()) {
                     drawChannelColorBorder(g2d, result.getWidth(), result.getHeight(),
                             channelColor);
                 }
-                if (config.splitChannel().colorLegend()) {
-                    String chName = channels.get(0).getName();
+                if (wantChannelSwatch(config)) {
                     drawChannelColorLegend(g2d, result.getWidth(), result.getHeight(),
-                            channelColor, chName,
+                            channelColor, channelLegendName(channel, baseServer),
                             config.splitChannel().colorLegendPosition());
                 }
                 maybeDrawScaleBar(g2d, imageData, config,
@@ -1467,9 +1455,46 @@ public class RenderedImageExporter {
         } catch (Exception e) {
             logger.warn("Failed to render split-channel preview: {}", e.getMessage());
             return null;
-        } finally {
-            closeQuietly(chServer, "preview");
         }
+    }
+
+    /**
+     * Render one channel the way the viewer shows it: the channel's own
+     * min/max and color, or its min/max mapped to gray.
+     */
+    static BufferedImage renderSingleChannel(BufferedImage raw, ChannelDisplayInfo channel,
+                                             boolean grayscale) {
+        return ImageDisplay.applyTransforms(raw, null, List.of(channel),
+                grayscale ? ChannelDisplayMode.GRAYSCALE : ChannelDisplayMode.COLOR);
+    }
+
+    /** The channel's display color as packed RGB, white if it has none. */
+    static int channelColor(ChannelDisplayInfo channel) {
+        Integer color = channel.getColor();
+        return color == null ? 0xFFFFFF : color & 0xFFFFFF;
+    }
+
+    /**
+     * The channel name for a legend: the server's channel name, without the
+     * " (C1)" suffix QuPath adds to display names.
+     */
+    static String channelLegendName(ChannelDisplayInfo channel,
+                                    ImageServer<BufferedImage> server) {
+        if (channel instanceof DirectServerChannelInfo direct) {
+            int c = direct.getChannel();
+            if (c >= 0 && c < server.nChannels()) {
+                String name = server.getChannel(c).getName();
+                if (name != null && !name.isBlank()) {
+                    return name;
+                }
+            }
+        }
+        return channel.getName();
+    }
+
+    /** Per-channel panels carry a swatch when either legend option is on. */
+    private static boolean wantChannelSwatch(RenderedExportConfig config) {
+        return config.splitChannel().colorLegend() || config.isShowChannelLegend();
     }
 
     /**
@@ -1917,65 +1942,45 @@ public class RenderedImageExporter {
             logger.error("Failed to export merge panel for {}: {}", entryName, e.getMessage());
         }
 
-        // 2. Per-channel panels
+        // 2. Per-channel panels, each rendered through the viewer's own display
+        //    transform so its min/max and color match what the viewer shows.
+        BufferedImage raw;
+        try {
+            raw = baseServer.readRegion(RegionRequest.createInstance(
+                    baseServer.getPath(), downsample,
+                    0, 0, baseServer.getWidth(), baseServer.getHeight()));
+        } catch (Exception e) {
+            logger.error("Failed to read {} for split-channel export: {}", entryName, e.getMessage());
+            return filesExported;
+        }
         for (int ch = 0; ch < channels.size(); ch++) {
+            var channel = channels.get(ch);
             try {
-                var singleChannel = List.of(channels.get(ch));
-                var chServer = ChannelDisplayTransformServer.createColorTransformServer(
-                        baseServer, singleChannel);
+                BufferedImage result = renderSingleChannel(raw, channel,
+                        config.splitChannel().grayscale());
+                int channelColor = channelColor(channel);
+                String legendName = channelLegendName(channel, baseServer);
 
-                RegionRequest request = RegionRequest.createInstance(
-                        chServer.getPath(), downsample,
-                        0, 0, chServer.getWidth(), chServer.getHeight());
-                BufferedImage chImage = chServer.readRegion(request);
-
-                // Get channel color (packed RGB from QuPath channel info)
-                int channelColor = 0xFFFFFF; // default white
-                var serverChannels = baseServer.getMetadata().getChannels();
-                if (ch < serverChannels.size()) {
-                    channelColor = serverChannels.get(ch).getColor();
-                }
-
-                // Grayscale conversion (default)
-                if (config.splitChannel().grayscale()) {
-                    chImage = convertToGrayscale(chImage);
-                }
-
-                // Wrap in RGB for drawing decorations
-                BufferedImage result = new BufferedImage(
-                        chImage.getWidth(), chImage.getHeight(),
-                        BufferedImage.TYPE_INT_RGB);
                 Graphics2D g2d = result.createGraphics();
-                g2d.drawImage(chImage, 0, 0, null);
-
-                // Optional color border
                 if (config.splitChannel().colorBorder()) {
                     drawChannelColorBorder(g2d, result.getWidth(), result.getHeight(),
                             channelColor);
                 }
-
-                // Optional color legend swatch
-                if (config.splitChannel().colorLegend()) {
-                    String chName = channels.get(ch).getName();
+                if (wantChannelSwatch(config)) {
                     drawChannelColorLegend(g2d, result.getWidth(), result.getHeight(),
-                            channelColor, chName,
+                            channelColor, legendName,
                             config.splitChannel().colorLegendPosition());
                 }
-
-                // Scale bar on per-channel panels too
                 maybeDrawScaleBar(g2d, imageData, config,
                         result.getWidth(), result.getHeight());
-
                 g2d.dispose();
 
-                String chName = channels.get(ch).getName();
+                String chName = channel.getName();
                 String chFilename = config.buildSplitChannelFilename(entryName, ch, chName);
                 File chFile = new File(outDir, chFilename);
                 writePanelImage(result, chFile, config);
                 logger.info("Exported channel {}: {}", chName, chFile.getAbsolutePath());
                 filesExported++;
-
-                closeQuietly(chServer, entryName);
             } catch (Exception e) {
                 logger.error("Failed to export channel {} for {}: {}",
                         ch, entryName, e.getMessage());
@@ -2294,32 +2299,23 @@ public class RenderedImageExporter {
             }
         }
 
-        // If no stains, use channel colors (fluorescence). Limit to the
-        // channels that are currently visible in the resolved ImageDisplay --
-        // the legend should match what the export actually shows, not list
-        // every channel in the image.
+        // Fluorescence: the visible channels, in the display's colors. (Matching
+        // display names against server names never worked: QuPath appends
+        // " (C1)" to display names, so no channel matched and no legend drew.)
         if (entries.isEmpty()) {
             ImageDisplay display = resolveImageDisplay(imageData, config);
-            java.util.Set<String> visibleNames = null;
             if (display != null && display.selectedChannels() != null) {
-                visibleNames = new java.util.LinkedHashSet<>();
                 for (var ch : display.selectedChannels()) {
-                    if (ch != null && ch.getName() != null) {
-                        visibleNames.add(ch.getName());
+                    if (ch == null) {
+                        continue;
                     }
+                    int packed = channelColor(ch);
+                    entries.add(new int[]{
+                            (packed >> 16) & 0xFF,
+                            (packed >> 8) & 0xFF,
+                            packed & 0xFF});
+                    names.add(channelLegendName(ch, server));
                 }
-            }
-            var channels = server.getMetadata().getChannels();
-            for (var ch : channels) {
-                if (visibleNames != null && !visibleNames.contains(ch.getName())) {
-                    continue;
-                }
-                int packed = ch.getColor();
-                entries.add(new int[]{
-                        (packed >> 16) & 0xFF,
-                        (packed >> 8) & 0xFF,
-                        packed & 0xFF});
-                names.add(ch.getName());
             }
         }
 

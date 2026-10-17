@@ -64,6 +64,8 @@ class RenderedScriptGenerator {
      */
     private static void emitDisplayImports(StringBuilder sb, DisplaySettingsMode mode) {
         if (mode == DisplaySettingsMode.RAW) return;
+        appendLine(sb, "import qupath.lib.display.ChannelDisplayMode");
+        appendLine(sb, "import qupath.lib.display.DirectServerChannelInfo");
         appendLine(sb, "import qupath.lib.display.ImageDisplay");
         appendLine(sb, "import qupath.lib.display.settings.DisplaySettingUtils");
         appendLine(sb, "import qupath.lib.gui.images.servers.ChannelDisplayTransformServer");
@@ -989,7 +991,8 @@ class RenderedScriptGenerator {
         appendLine(sb, "def splitChannels = true");
         appendLine(sb, "def splitChannelsGrayscale = " + config.splitChannel().grayscale());
         appendLine(sb, "def splitChannelColorBorder = " + config.splitChannel().colorBorder());
-        appendLine(sb, "def channelColorLegend = " + config.splitChannel().colorLegend());
+        appendLine(sb, "def channelColorLegend = "
+                + (config.splitChannel().colorLegend() || config.isShowChannelLegend()));
     }
 
     /**
@@ -1029,13 +1032,24 @@ class RenderedScriptGenerator {
     private static void emitSplitChannelHelperFunctions(StringBuilder sb, RenderedExportConfig config) {
         if (!config.splitChannel().enabled()) return;
 
-        appendLine(sb, "// Convert image to grayscale");
-        appendLine(sb, "def convertToGrayscale(BufferedImage src) {");
-        appendLine(sb, "    def gray = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_BYTE_GRAY)");
-        appendLine(sb, "    def g = gray.createGraphics()");
-        appendLine(sb, "    g.drawImage(src, 0, 0, null)");
-        appendLine(sb, "    g.dispose()");
-        appendLine(sb, "    return gray");
+        appendLine(sb, "// Render one channel as the viewer shows it: its min/max, in its color or in gray");
+        appendLine(sb, "def renderChannel(BufferedImage raw, def channel, boolean grayscale) {");
+        appendLine(sb, "    return ImageDisplay.applyTransforms(raw, null, [channel],");
+        appendLine(sb, "            grayscale ? ChannelDisplayMode.GRAYSCALE : ChannelDisplayMode.COLOR)");
+        appendLine(sb, "}");
+        appendLine(sb, "");
+        appendLine(sb, "def channelColor(def channel) {");
+        appendLine(sb, "    def c = channel.getColor()");
+        appendLine(sb, "    return c == null ? 0xFFFFFF : (c & 0xFFFFFF)");
+        appendLine(sb, "}");
+        appendLine(sb, "");
+        appendLine(sb, "// Server channel name, without the ' (C1)' suffix of display names");
+        appendLine(sb, "def channelLegendName(def channel, def server) {");
+        appendLine(sb, "    if (channel instanceof DirectServerChannelInfo) {");
+        appendLine(sb, "        def name = server.getChannel(channel.getChannel()).getName()");
+        appendLine(sb, "        if (name != null && !name.isBlank()) return name");
+        appendLine(sb, "    }");
+        appendLine(sb, "    return channel.getName()");
         appendLine(sb, "}");
         appendLine(sb, "");
 
@@ -1084,27 +1098,20 @@ class RenderedScriptGenerator {
         appendLine(sb, "");
         appendLine(sb, "        // --- Per-channel split export ---");
         appendLine(sb, "        def splitChannelList = display.selectedChannels()");
-        appendLine(sb, "        def chMetadata = baseServer.getMetadata().getChannels()");
+        appendLine(sb, "        def chRaw = baseServer.readRegion(RegionRequest.createInstance(baseServer.getPath(), downsample, 0, 0, baseServer.getWidth(), baseServer.getHeight()))");
         appendLine(sb, "        for (int ch = 0; ch < splitChannelList.size(); ch++) {");
-        appendLine(sb, "            def singleCh = [splitChannelList[ch]]");
-        appendLine(sb, "            def chServer = ChannelDisplayTransformServer.createColorTransformServer(baseServer, singleCh)");
-        appendLine(sb, "            def chRequest = RegionRequest.createInstance(chServer.getPath(), downsample, 0, 0, chServer.getWidth(), chServer.getHeight())");
-        appendLine(sb, "            def chImg = chServer.readRegion(chRequest)");
-        appendLine(sb, "            if (splitChannelsGrayscale) { chImg = convertToGrayscale(chImg) }");
-        appendLine(sb, "            def chResult = new BufferedImage(chImg.getWidth(), chImg.getHeight(), BufferedImage.TYPE_INT_RGB)");
+        appendLine(sb, "            def channel = splitChannelList[ch]");
+        appendLine(sb, "            def chResult = renderChannel(chRaw, channel, splitChannelsGrayscale)");
         appendLine(sb, "            def chG2d = chResult.createGraphics()");
-        appendLine(sb, "            chG2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)");
-        appendLine(sb, "            chG2d.drawImage(chImg, 0, 0, null)");
-        appendLine(sb, "            def chColor = chMetadata[ch].getColor()");
+        appendLine(sb, "            def chColor = channelColor(channel)");
         appendLine(sb, "            if (splitChannelColorBorder) { drawChannelColorBorder(chG2d, chResult.getWidth(), chResult.getHeight(), chColor) }");
-        appendLine(sb, "            if (channelColorLegend) { drawChannelColorLegend(chG2d, chResult.getWidth(), chResult.getHeight(), chMetadata[ch].getName(), chColor) }");
+        appendLine(sb, "            if (channelColorLegend) { drawChannelColorLegend(chG2d, chResult.getWidth(), chResult.getHeight(), channelLegendName(channel, baseServer), chColor) }");
         appendLine(sb, "            chG2d.dispose()");
-        appendLine(sb, "            def chName = GeneralTools.stripInvalidFilenameChars(chMetadata[ch].getName())");
+        appendLine(sb, "            def chName = GeneralTools.stripInvalidFilenameChars(channel.getName())");
         appendLine(sb, "            if (chName == null || chName.isBlank()) chName = 'ch' + ch");
         appendLine(sb, "            def chPath = new File(outDir, sanitized + '_Ch' + (ch + 1) + '_' + chName + '.' + outputFormat).getAbsolutePath()");
         appendLine(sb, "            ImageWriterTools.writeImage(chResult, chPath)");
         appendLine(sb, "            println \"    Channel ${ch + 1}: ${chPath}\"");
-        appendLine(sb, "            chServer.close()");
         appendLine(sb, "        }");
     }
 
@@ -1118,27 +1125,20 @@ class RenderedScriptGenerator {
         appendLine(sb, "");
         appendLine(sb, "            // --- Per-channel split export ---");
         appendLine(sb, "            def splitChannelList = display.selectedChannels()");
-        appendLine(sb, "            def chMetadata = baseServer.getMetadata().getChannels()");
+        appendLine(sb, "            def chRaw = baseServer.readRegion(RegionRequest.createInstance(baseServer.getPath(), downsample, ax, ay, aw, ah))");
         appendLine(sb, "            for (int ch = 0; ch < splitChannelList.size(); ch++) {");
-        appendLine(sb, "                def singleCh = [splitChannelList[ch]]");
-        appendLine(sb, "                def chServer = ChannelDisplayTransformServer.createColorTransformServer(baseServer, singleCh)");
-        appendLine(sb, "                def chRequest = RegionRequest.createInstance(chServer.getPath(), downsample, ax, ay, aw, ah)");
-        appendLine(sb, "                def chImg = chServer.readRegion(chRequest)");
-        appendLine(sb, "                if (splitChannelsGrayscale) { chImg = convertToGrayscale(chImg) }");
-        appendLine(sb, "                def chResult = new BufferedImage(chImg.getWidth(), chImg.getHeight(), BufferedImage.TYPE_INT_RGB)");
+        appendLine(sb, "                def channel = splitChannelList[ch]");
+        appendLine(sb, "                def chResult = renderChannel(chRaw, channel, splitChannelsGrayscale)");
         appendLine(sb, "                def chG2d = chResult.createGraphics()");
-        appendLine(sb, "                chG2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)");
-        appendLine(sb, "                chG2d.drawImage(chImg, 0, 0, null)");
-        appendLine(sb, "                def chColor = chMetadata[ch].getColor()");
+        appendLine(sb, "                def chColor = channelColor(channel)");
         appendLine(sb, "                if (splitChannelColorBorder) { drawChannelColorBorder(chG2d, chResult.getWidth(), chResult.getHeight(), chColor) }");
-        appendLine(sb, "                if (channelColorLegend) { drawChannelColorLegend(chG2d, chResult.getWidth(), chResult.getHeight(), chMetadata[ch].getName(), chColor) }");
+        appendLine(sb, "                if (channelColorLegend) { drawChannelColorLegend(chG2d, chResult.getWidth(), chResult.getHeight(), channelLegendName(channel, baseServer), chColor) }");
         appendLine(sb, "                chG2d.dispose()");
-        appendLine(sb, "                def chName = GeneralTools.stripInvalidFilenameChars(chMetadata[ch].getName())");
+        appendLine(sb, "                def chName = GeneralTools.stripInvalidFilenameChars(channel.getName())");
         appendLine(sb, "                if (chName == null || chName.isBlank()) chName = 'ch' + ch");
         appendLine(sb, "                def chPath = new File(outDir, sanitized + suffix + '_Ch' + (ch + 1) + '_' + chName + '.' + outputFormat).getAbsolutePath()");
         appendLine(sb, "                ImageWriterTools.writeImage(chResult, chPath)");
         appendLine(sb, "                println \"      Channel ${ch + 1}: ${chPath}\"");
-        appendLine(sb, "                chServer.close()");
         appendLine(sb, "            }");
     }
 
