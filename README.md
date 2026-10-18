@@ -19,7 +19,7 @@ A guided wizard walks you from "I have an annotated project" to finished files: 
 
 </div>
 
-![Rendered export example with QUAREP guidelines panel](documentation/images/RenderedImageExport.png)
+![Configure Export - Rendered Image on Windows, with Image Settings and Split Channel Export open beside the QUAREP-LiMi guidelines panel, which reports 8 fluorescence images scanned](documentation/images/RenderedImageExport.png)
 
 ## Requirements
 
@@ -151,7 +151,7 @@ produce clearer, more reproducible microscopy figures.
 
 Produce **publication-ready figures** -- the image as it looks in QuPath, with your annotations, classifier results, or density map composited on top. Add a scale bar, panel letter (A, B, C...), per-image info stamp, and split multi-channel fluorescence into individual + merged panels in one batch. This is the export you want for papers, posters, slide decks, and figures shared for review.
 
-![Rendered export configuration with QUAREP guidelines panel](documentation/images/RenderedImageExport.png)
+![Rendered export configuration: Image Settings and Split Channel Export open beside the QUAREP-LiMi guidelines panel](documentation/images/RenderedImageExport.png)
 
 | Option | Description |
 |--------|-------------|
@@ -416,7 +416,7 @@ Panel / Montage has its own menu item -- **Extensions > QuIET > Panel / Montage 
 2. **Step 2 -- Recipe.** Choose how a single image should be exported. The recipe can be any of QuIET's single-image categories (Rendered, Raw, Mask); the same recipe is applied to every image. You can accept the pre-filled settings and continue, or adjust them. Optionally **Save recipe...** to a `.json` file, or **Load recipe...** to reuse one.
 3. **Step 3 -- Layout, captions and output.** Set the grid (rows x columns), the gutter spacing, the background colour, the cell-fit mode and optional captions, then choose the output format and export. Click **Open layout preview...** for a separate, resizable, always-on-top window that shows the montage with thumbnails -- drag any image onto another to swap their positions and rearrange the figure.
 
-![Panel / Montage Step 3 Layout, captions and output, showing the grid layout controls, output settings, and size estimate beside the separate Panel Layout Preview window of composed image thumbnails](documentation/images/panel-montage-layout-preview.png)
+![Panel / Montage Step 3 Layout, captions and output, set to a 2 x 4 grid with Same scale in every cell and a scale bar on every cell, beside the separate Panel Layout Preview window showing the eight thumbnails, each with its 200 µm scale bar](documentation/images/panel-montage-layout-preview.png)
 
 The first time you open Panel / Montage Export, a short one-time introduction explains how recipes work; you can dismiss it permanently with "Do not show this message again."
 
