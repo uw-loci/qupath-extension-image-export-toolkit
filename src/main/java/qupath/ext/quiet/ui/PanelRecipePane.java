@@ -261,15 +261,6 @@ public class PanelRecipePane extends VBox {
     }
 
     /**
-     * The density-map name selected on the embedded Rendered recipe pane, or
-     * {@code null} when the recipe category is not RENDERED.
-     */
-    public String getRenderedDensityMapName() {
-        return recipeCategory == ExportCategory.RENDERED
-                ? renderedConfigPane.getDensityMapName() : null;
-    }
-
-    /**
      * Save the current recipe settings to a JSON file chosen by the user.
      */
     private void saveRecipe() {

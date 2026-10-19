@@ -36,6 +36,7 @@ import javafx.stage.Stage;
 import qupath.ext.quiet.export.BatchExportTask;
 import qupath.ext.quiet.export.ExportCategory;
 import qupath.ext.quiet.export.ExportResult;
+import qupath.ext.quiet.export.MapOverlaySource;
 import qupath.ext.quiet.export.MaskExportConfig;
 import qupath.ext.quiet.export.ObjectCropConfig;
 import qupath.ext.quiet.export.OutputFormat;
@@ -46,8 +47,6 @@ import qupath.ext.quiet.preferences.QuietPreferences;
 import qupath.ext.quiet.export.ImageNames;
 import qupath.ext.quiet.export.ScriptGenerator;
 import qupath.fx.dialogs.Dialogs;
-import qupath.lib.analysis.heatmaps.DensityMaps;
-import qupath.lib.analysis.heatmaps.DensityMaps.DensityMapBuilder;
 import qupath.lib.classifiers.pixel.PixelClassifier;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
@@ -601,7 +600,7 @@ public class ExportWizard {
         }
 
         PixelClassifier classifier = null;
-        DensityMapBuilder densityBuilder = null;
+        MapOverlaySource mapSource = null;
 
         if (config.getRenderMode() == RenderedExportConfig.RenderMode.CLASSIFIER_OVERLAY) {
             String classifierName = renderedConfigPane.getClassifierName();
@@ -632,22 +631,8 @@ public class ExportWizard {
                 }
             }
         } else if (config.getRenderMode() == RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY) {
-            String dmName = renderedConfigPane.getDensityMapName();
-            if (dmName == null || dmName.isEmpty()) {
-                Dialogs.showWarningNotification(
-                        resources.getString("name"),
-                        resources.getString("error.noDensityMap"));
-                return;
-            }
-            try {
-                var dmResources = qupath.getProject().getResources(
-                        DensityMaps.PROJECT_LOCATION, DensityMapBuilder.class, "json");
-                densityBuilder = dmResources.get(dmName);
-            } catch (Exception e) {
-                logger.error("Failed to load density map: {}", dmName, e);
-                Dialogs.showErrorMessage(
-                        resources.getString("error.title"),
-                        String.format(resources.getString("error.densityMapLoad"), dmName));
+            mapSource = resolveMapSource(config, imageSelectionPane.getSelectedEntries());
+            if (mapSource == null) {
                 return;
             }
         }
@@ -664,7 +649,7 @@ public class ExportWizard {
 
         currentTask = BatchExportTask.forRendered(
                 imageSelectionPane.getSelectedEntries(), config, classifier,
-                densityBuilder, workflowScript, exportGeoJson, prefix, suffix,
+                mapSource, workflowScript, exportGeoJson, prefix, suffix,
                 channelsConsistent);
         lastExportDirectory = outputDir;
         runTask();
@@ -813,7 +798,7 @@ public class ExportWizard {
             // CLASSIFIER_OVERLAY or DENSITY_MAP_OVERLAY recipe renders its
             // overlay in every cell. Fails loudly if resolution is impossible.
             PixelClassifier classifier = null;
-            DensityMapBuilder densityBuilder = null;
+            MapOverlaySource mapSource = null;
             if (recipeCategory == ExportCategory.RENDERED
                     && recipeConfig instanceof RenderedExportConfig rc) {
                 if (rc.getRenderMode()
@@ -824,8 +809,11 @@ public class ExportWizard {
                     }
                 } else if (rc.getRenderMode()
                         == RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY) {
-                    densityBuilder = resolvePanelDensityMap();
-                    if (densityBuilder == null) {
+                    mapSource = resolveMapSource(rc,
+                            panelLayoutPane.getOrderedEntries().isEmpty()
+                                    ? imageSelectionPane.getSelectedEntries()
+                                    : panelLayoutPane.getOrderedEntries());
+                    if (mapSource == null) {
                         return false;
                     }
                 }
@@ -849,7 +837,7 @@ public class ExportWizard {
             }
 
             currentTask = BatchExportTask.forPanel(
-                    orderedEntries, panelConfig, classifier, densityBuilder,
+                    orderedEntries, panelConfig, classifier, mapSource,
                     workflowScript);
             lastExportDirectory = outputDir;
             runTask();
@@ -911,36 +899,45 @@ public class ExportWizard {
     }
 
     /**
-     * Resolve the density-map builder for a DENSITY_MAP_OVERLAY panel recipe.
-     * Returns null (after showing a clear message) if it cannot be resolved.
+     * Resolve the map overlay source for a DENSITY_MAP_OVERLAY export, checking that the
+     * images have maps. Returns null, after telling the user why, if the export should not run.
      */
-    private DensityMapBuilder resolvePanelDensityMap() {
-        String dmName = panelRecipePane.getRenderedDensityMapName();
-        if (dmName == null || dmName.isEmpty()) {
-            Dialogs.showWarningNotification(
-                    resources.getString("name"),
-                    resources.getString("error.noDensityMap"));
-            return null;
-        }
+    private MapOverlaySource resolveMapSource(RenderedExportConfig config,
+                                              List<ProjectImageEntry<BufferedImage>> entries) {
+        MapOverlaySource source;
         try {
-            var dmResources = qupath.getProject().getResources(
-                    DensityMaps.PROJECT_LOCATION, DensityMapBuilder.class, "json");
-            DensityMapBuilder builder = dmResources.get(dmName);
-            if (builder == null) {
-                Dialogs.showErrorMessage(
-                        resources.getString("error.title"),
-                        String.format(resources.getString("error.densityMapLoad"),
-                                dmName));
-            }
-            return builder;
+            source = MapOverlaySource.forConfig(qupath.getProject(), config);
         } catch (Exception e) {
-            logger.error("Failed to load density map: {}", dmName, e);
-            Dialogs.showErrorMessage(
-                    resources.getString("error.title"),
-                    String.format(resources.getString("error.densityMapLoad"),
-                            dmName));
+            logger.error("Failed to resolve the map overlay: {}", e.getMessage(), e);
+            Dialogs.showErrorMessage(resources.getString("error.title"),
+                    String.format(resources.getString("error.densityMapLoad"), e.getMessage()));
             return null;
         }
+        if (!(source instanceof MapOverlaySource.ImageFileSource files) || entries == null) {
+            return source;
+        }
+        List<String> missing = new ArrayList<>();
+        for (var entry : entries) {
+            try {
+                files.findFile(entry);
+            } catch (IllegalArgumentException e) {
+                missing.add(entry.getImageName() + ": " + e.getMessage());
+            }
+        }
+        if (missing.isEmpty()) {
+            return source;
+        }
+        String list = String.join("\n", missing.subList(0, Math.min(8, missing.size())))
+                + (missing.size() > 8 ? "\n..." : "");
+        if (missing.size() == entries.size()) {
+            Dialogs.showErrorMessage(resources.getString("error.title"),
+                    String.format(resources.getString("error.noMapFiles"), list));
+            return null;
+        }
+        boolean go = Dialogs.showConfirmDialog(resources.getString("title.missingMapFiles"),
+                String.format(resources.getString("confirm.someMapFilesMissing"),
+                        missing.size(), entries.size(), list));
+        return go ? source : null;
     }
 
     /**

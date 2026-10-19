@@ -355,4 +355,71 @@ class RenderedExportConfigTest {
 
         assertEquals(OutputFormat.SVG, config.getFormat());
     }
+
+    private static RenderedExportConfig.MapOverlayConfig fileMap(RenderedExportConfig.MapRangeMode mode,
+                                                                 String pattern, double min, double max) {
+        return new RenderedExportConfig.MapOverlayConfig(RenderedExportConfig.MapSource.IMAGE_FILE,
+                pattern, "Signal density", mode, min, max, 1, 99, false, "Signal");
+    }
+
+    @Test
+    void testMapFileOverlayNeedsAPatternNotADensityMapName() {
+        var ok = new RenderedExportConfig.Builder()
+                .renderMode(RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY)
+                .mapOverlay(fileMap(RenderedExportConfig.MapRangeMode.PER_IMAGE, "{image}.tif", 0, 1))
+                .outputDirectory(tempDir)
+                .build();
+        assertEquals(RenderedExportConfig.MapSource.IMAGE_FILE, ok.mapOverlay().source());
+
+        assertThrows(IllegalArgumentException.class, () -> new RenderedExportConfig.Builder()
+                .renderMode(RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY)
+                .mapOverlay(fileMap(RenderedExportConfig.MapRangeMode.PER_IMAGE, " ", 0, 1))
+                .outputDirectory(tempDir)
+                .build());
+    }
+
+    @Test
+    void testFixedMapRangeMustBeIncreasing() {
+        assertThrows(IllegalArgumentException.class, () -> new RenderedExportConfig.Builder()
+                .renderMode(RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY)
+                .mapOverlay(fileMap(RenderedExportConfig.MapRangeMode.FIXED, "{image}.tif", 1, 1))
+                .outputDirectory(tempDir)
+                .build());
+    }
+
+    @Test
+    void testDensityMapDefaultsKeepPerImageRange() {
+        var config = new RenderedExportConfig.Builder()
+                .renderMode(RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY)
+                .densityMapName("cells")
+                .outputDirectory(tempDir)
+                .build();
+        assertEquals(RenderedExportConfig.MapSource.PROJECT_DENSITY_MAP, config.mapOverlay().source());
+        assertEquals(RenderedExportConfig.MapRangeMode.PER_IMAGE, config.mapOverlay().rangeMode());
+        assertFalse(config.mapOverlay().hasKnownRange());
+    }
+
+    @Test
+    void testBuilderFromCopiesEverySetting() {
+        var config = new RenderedExportConfig.Builder()
+                .renderMode(RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY)
+                .mapOverlay(fileMap(RenderedExportConfig.MapRangeMode.SHARED, "{image}.tif", 0, 1)
+                        .withResolvedRange(0.2, 0.8))
+                .showChannelLegend(true)
+                .svgMaxVectorDetections(17)
+                .targetDpi(300)
+                .addToWorkflow(false)
+                .outputDirectory(tempDir)
+                .build();
+        var copy = RenderedExportConfig.Builder.from(config).build();
+        assertEquals(config.mapOverlay(), copy.mapOverlay());
+        assertTrue(copy.mapOverlay().hasKnownRange());
+        assertTrue(copy.isShowChannelLegend());
+        assertEquals(17, copy.getSvgMaxVectorDetections());
+        assertEquals(300, copy.getTargetDpi());
+        assertFalse(copy.isAddToWorkflow());
+        assertEquals(config.overlays(), copy.overlays());
+        assertEquals(config.colorScaleBar(), copy.colorScaleBar());
+        assertEquals(config.inset(), copy.inset());
+    }
 }

@@ -14,9 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javafx.concurrent.Task;
-import qupath.lib.analysis.heatmaps.DensityMaps.DensityMapBuilder;
 import qupath.lib.classifiers.pixel.PixelClassifier;
-import qupath.lib.display.settings.ImageDisplaySettings;
 import qupath.lib.images.ImageData;
 import qupath.lib.images.servers.ImageServer;
 import qupath.lib.images.servers.PixelCalibration;
@@ -44,7 +42,7 @@ public class BatchExportTask extends Task<ExportResult> {
     private final ObjectCropConfig objectCropConfig;
     private final PanelExportConfig panelConfig;
     private final PixelClassifier classifier;
-    private final DensityMapBuilder densityBuilder;
+    private final MapOverlaySource mapSource;
     private final String workflowScript;
     private final boolean exportGeoJson;
     private final File outputDirectory;
@@ -63,14 +61,14 @@ public class BatchExportTask extends Task<ExportResult> {
     public static BatchExportTask forRendered(List<ProjectImageEntry<BufferedImage>> entries,
                                               RenderedExportConfig config,
                                               PixelClassifier classifier,
-                                              DensityMapBuilder densityBuilder,
+                                              MapOverlaySource mapSource,
                                               String workflowScript,
                                               boolean exportGeoJson,
                                               String filenamePrefix,
                                               String filenameSuffix,
                                               boolean channelsConsistent) {
         return new BatchExportTask(entries, ExportCategory.RENDERED,
-                config, null, null, null, null, null, classifier, densityBuilder,
+                config, null, null, null, null, null, classifier, mapSource,
                 workflowScript, exportGeoJson, config.getOutputDirectory(),
                 filenamePrefix, filenameSuffix, channelsConsistent);
     }
@@ -82,16 +80,16 @@ public class BatchExportTask extends Task<ExportResult> {
      *
      * @param classifier     the pixel classifier for a CLASSIFIER_OVERLAY
      *                       rendered recipe (null otherwise)
-     * @param densityBuilder the density-map builder for a DENSITY_MAP_OVERLAY
+     * @param mapSource      the map overlay source for a DENSITY_MAP_OVERLAY
      *                       rendered recipe (null otherwise)
      */
     public static BatchExportTask forPanel(List<ProjectImageEntry<BufferedImage>> entries,
                                            PanelExportConfig config,
                                            PixelClassifier classifier,
-                                           DensityMapBuilder densityBuilder,
+                                           MapOverlaySource mapSource,
                                            String workflowScript) {
         return new BatchExportTask(entries, ExportCategory.PANEL,
-                null, null, null, null, null, config, classifier, densityBuilder,
+                null, null, null, null, null, config, classifier, mapSource,
                 workflowScript, false, config.getOutputDirectory(), "", "", true);
     }
 
@@ -164,7 +162,7 @@ public class BatchExportTask extends Task<ExportResult> {
                             ObjectCropConfig objectCropConfig,
                             PanelExportConfig panelConfig,
                             PixelClassifier classifier,
-                            DensityMapBuilder densityBuilder,
+                            MapOverlaySource mapSource,
                             String workflowScript,
                             boolean exportGeoJson,
                             File outputDirectory,
@@ -180,7 +178,7 @@ public class BatchExportTask extends Task<ExportResult> {
         this.objectCropConfig = objectCropConfig;
         this.panelConfig = panelConfig;
         this.classifier = classifier;
-        this.densityBuilder = densityBuilder;
+        this.mapSource = mapSource;
         this.workflowScript = workflowScript;
         this.exportGeoJson = exportGeoJson;
         this.outputDirectory = outputDirectory;
@@ -233,10 +231,28 @@ public class BatchExportTask extends Task<ExportResult> {
                 var settings = GlobalDisplayRangeScanner.buildDisplaySettings(
                         ranges, entries.get(0));
                 if (settings != null) {
-                    effectiveConfig = rebuildWithMatchedSettings(renderedConfig, settings);
+                    effectiveConfig = RenderedExportConfig.Builder.from(renderedConfig)
+                            .capturedDisplaySettings(settings)
+                            .build();
                     logger.info("Global matched display ranges computed for {} channels",
                             ranges.size());
                 }
+            }
+        }
+
+        // One map color range for every image (SHARED range mode)
+        if (effectiveConfig != null && category == ExportCategory.RENDERED) {
+            effectiveConfig = MapRangeScanner.resolve(entries, mapSource, effectiveConfig,
+                    (i, t) -> {
+                        updateMessage(String.format(
+                                "Scanning map %d of %d for the shared range...", i + 1, t));
+                        updateProgress(i, t + total);
+                    },
+                    this::isCancelled);
+            var map = effectiveConfig.mapOverlay();
+            if (map.rangeResolved()) {
+                logger.info("Map overlay range for all images: {} to {}",
+                        map.rangeMin(), map.rangeMax());
             }
         }
 
@@ -356,7 +372,7 @@ public class BatchExportTask extends Task<ExportResult> {
         PanelImageExporter.CancelCheck cancel = this::isCancelled;
         try {
             var result = PanelImageExporter.exportPanel(entries, panelConfig,
-                    classifier, densityBuilder, listener, cancel);
+                    classifier, mapSource, listener, cancel);
             updateProgress(1, 1);
             updateMessage("Panel export complete");
             // Write the provenance sidecar next to the composed figure so the
@@ -415,7 +431,7 @@ public class BatchExportTask extends Task<ExportResult> {
         // Split-channel dispatch
         if (config.splitChannel().enabled()) {
             RenderedImageExporter.exportSplitChannels(
-                    imageData, classifier, densityBuilder, config, entryName, panelIndex);
+                    imageData, classifier, mapSource, config, entryName, panelIndex);
             return;
         }
 
@@ -430,7 +446,7 @@ public class BatchExportTask extends Task<ExportResult> {
 
         if (config.getRegionType() == RenderedExportConfig.RegionType.ALL_ANNOTATIONS) {
             RenderedImageExporter.exportPerAnnotation(
-                    imageData, classifier, densityBuilder, config, entryName, panelIndex);
+                    imageData, classifier, mapSource, config, entryName, panelIndex);
         } else {
             switch (config.getRenderMode()) {
                 case OBJECT_OVERLAY, NONE ->
@@ -438,7 +454,7 @@ public class BatchExportTask extends Task<ExportResult> {
                             imageData, config, entryName, panelIndex);
                 case DENSITY_MAP_OVERLAY ->
                     RenderedImageExporter.exportWithDensityMap(
-                            imageData, densityBuilder, config, entryName, panelIndex);
+                            imageData, mapSource, config, entryName, panelIndex);
                 case CLASSIFIER_OVERLAY -> {
                     if (!classifier.supportsImage(imageData)) {
                         throw new IllegalArgumentException(
@@ -521,7 +537,8 @@ public class BatchExportTask extends Task<ExportResult> {
                 case RENDERED -> ExportMetadataWriter.writeExportInfo(
                         List.copyOf(channelGroups.values()),
                         renderedConfig.getDownsample(), category,
-                        renderedConfig, null, outputDirectory,
+                        effectiveConfig != null ? effectiveConfig : renderedConfig,
+                        null, outputDirectory,
                         channelsConsistent);
                 case RAW -> ExportMetadataWriter.writeExportInfo(
                         List.copyOf(channelGroups.values()),
@@ -556,40 +573,6 @@ public class BatchExportTask extends Task<ExportResult> {
             case OBJECT_CROPS -> objectCropConfig != null && objectCropConfig.isAddToWorkflow();
             case PANEL -> false;
         };
-    }
-
-    /**
-     * Rebuild a config with computed global-matched display settings injected.
-     * All other fields are copied from the original config.
-     */
-    private static RenderedExportConfig rebuildWithMatchedSettings(
-            RenderedExportConfig original, ImageDisplaySettings settings) {
-        return new RenderedExportConfig.Builder()
-                // Core fields
-                .regionType(original.getRegionType())
-                .selectedClassifications(original.getSelectedClassifications())
-                .paddingPixels(original.getPaddingPixels())
-                .renderMode(original.getRenderMode())
-                .displaySettingsMode(original.getDisplaySettingsMode())
-                .capturedDisplaySettings(settings) // inject computed settings
-                .displayPresetName(original.getDisplayPresetName())
-                .overlayOpacity(original.getOverlayOpacity())
-                .downsample(original.getDownsample())
-                .targetDpi(original.getTargetDpi())
-                .format(original.getFormat())
-                .outputDirectory(original.getOutputDirectory())
-                .addToWorkflow(original.isAddToWorkflow())
-                .matchedDisplayPercentile(original.getMatchedDisplayPercentile())
-                // Sub-configs copied wholesale
-                .overlays(original.overlays())
-                .scaleBar(original.scaleBar())
-                .colorScaleBar(original.colorScaleBar())
-                .panelLabel(original.panelLabel())
-                .infoLabel(original.infoLabel())
-                .splitChannel(original.splitChannel())
-                .splitStains(original.splitStains())
-                .inset(original.inset())
-                .build();
     }
 
     private void addWorkflowStep(ImageData<BufferedImage> imageData,

@@ -15,7 +15,6 @@ import org.jfree.svg.SVGGraphics2D;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import qupath.lib.analysis.heatmaps.DensityMaps.DensityMapBuilder;
 import qupath.lib.classifiers.pixel.PixelClassifier;
 import qupath.lib.images.ImageData;
 import qupath.lib.images.servers.ImageServer;
@@ -127,7 +126,7 @@ public final class PanelImageExporter {
      * @param config         the panel export configuration
      * @param classifier     the pixel classifier for a CLASSIFIER_OVERLAY
      *                       rendered recipe (null otherwise)
-     * @param densityBuilder the density-map builder for a DENSITY_MAP_OVERLAY
+     * @param mapSource      the map overlay source for a DENSITY_MAP_OVERLAY
      *                       rendered recipe (null otherwise)
      * @param progress       progress callback (may be null)
      * @param cancel         cancellation probe (may be null)
@@ -138,7 +137,7 @@ public final class PanelImageExporter {
     public static PanelResult exportPanel(List<ProjectImageEntry<BufferedImage>> entries,
                                           PanelExportConfig config,
                                           PixelClassifier classifier,
-                                          DensityMapBuilder densityBuilder,
+                                          MapOverlaySource mapSource,
                                           ProgressListener progress,
                                           CancelCheck cancel) throws IOException {
         int total = entries.size();
@@ -152,6 +151,19 @@ public final class PanelImageExporter {
             // The montage draws its own bars after fitting; the recipe's would be resized with each image
             logger.info("Panel scale bar is on; the recipe's own scale bar is turned off");
             renderConfig = withRecipe(config, RenderedImageExporter.withoutScaleBar(rc));
+        }
+        if (renderConfig.getRecipeConfig() instanceof RenderedExportConfig rc
+                && rc.mapOverlay().rangeMode() == RenderedExportConfig.MapRangeMode.SHARED) {
+            // Every cell is drawn on one map range, computed over all the panel's images
+            var resolved = MapRangeScanner.resolve(entries, mapSource, rc,
+                    (i, t) -> {
+                        if (progress != null) {
+                            progress.onProgress(i, t, String.format(
+                                    "Scanning map %d of %d for the shared range", i + 1, t));
+                        }
+                    },
+                    cancel == null ? null : cancel::isCancelled);
+            renderConfig = withRecipe(renderConfig, resolved);
         }
 
         // Phase 1 -- render each image to a BufferedImage via the recipe.
@@ -171,7 +183,7 @@ public final class PanelImageExporter {
             try {
                 imageData = entry.readImageData();
                 BufferedImage cellImage = renderCell(imageData, renderConfig,
-                        classifier, densityBuilder, name);
+                        classifier, mapSource, name);
                 Map<String, String> metadata = readMetadata(entry, imageData);
                 rendered.add(new RenderedCell(name, cellImage, metadata,
                         micronsPerPixel(imageData, config.getRecipeConfig())));
@@ -279,14 +291,14 @@ public final class PanelImageExporter {
      * exporter.
      * <p>
      * For a RENDERED recipe in CLASSIFIER_OVERLAY or DENSITY_MAP_OVERLAY mode
-     * the resolved {@code classifier} / {@code densityBuilder} must be non-null
+     * the resolved {@code classifier} / {@code mapSource} must be non-null
      * and applicable -- the panel never silently falls back to a plain
      * object-overlay render that would drop the recipe's headline content.
      */
     private static BufferedImage renderCell(ImageData<BufferedImage> imageData,
                                             PanelExportConfig config,
                                             PixelClassifier classifier,
-                                            DensityMapBuilder densityBuilder,
+                                            MapOverlaySource mapSource,
                                             String entryName) throws IOException {
         Object recipe = config.getRecipeConfig();
         return switch (config.getRecipeCategory()) {
@@ -306,12 +318,12 @@ public final class PanelImageExporter {
                     }
                 } else if (rc.getRenderMode()
                         == RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY
-                        && densityBuilder == null) {
-                    throw new IOException("the recipe renders a density map but"
-                            + " no density map is available");
+                        && mapSource == null) {
+                    throw new IOException("the recipe renders a map overlay but"
+                            + " no map source is available");
                 }
                 yield RenderedImageExporter.renderToImage(imageData, classifier,
-                        densityBuilder, rc, entryName);
+                        mapSource, rc, entryName);
             }
             case RAW -> {
                 if (!(recipe instanceof RawExportConfig rawc)) {

@@ -93,6 +93,73 @@ public class RenderedExportConfig {
     ) {}
 
     /**
+     * Where the values of a map overlay come from.
+     */
+    public enum MapSource {
+        /** A density map saved in the project (QuPath's Analyze &gt; Density maps). */
+        PROJECT_DENSITY_MAP,
+        /** One image file per project image, found by a file-name pattern. */
+        IMAGE_FILE
+    }
+
+    /**
+     * How the color range of a map overlay is chosen.
+     */
+    public enum MapRangeMode {
+        /** Each exported image or region is stretched to its own minimum and maximum. */
+        PER_IMAGE,
+        /** One range entered by hand, used for every image. */
+        FIXED,
+        /** One range from percentiles of the values pooled over every exported image. */
+        SHARED
+    }
+
+    /**
+     * Map overlay source and color range, used in DENSITY_MAP_OVERLAY mode.
+     *
+     * @param source         where the map comes from
+     * @param filePattern    file pattern for {@link MapSource#IMAGE_FILE}, see {@link MapFilePattern}
+     * @param channel        channel name in the map file; blank for the first channel
+     * @param rangeMode      how the color range is chosen
+     * @param rangeMin       lower end of the range for FIXED, or for SHARED once resolved
+     * @param rangeMax       upper end of the range for FIXED, or for SHARED once resolved
+     * @param lowPercentile  lower percentile for SHARED (0-100)
+     * @param highPercentile upper percentile for SHARED (0-100)
+     * @param rangeResolved  true once a SHARED range has been computed over the exported images
+     * @param label          title drawn above the color scale bar; blank for none
+     */
+    public record MapOverlayConfig(
+            MapSource source,
+            String filePattern,
+            String channel,
+            MapRangeMode rangeMode,
+            double rangeMin,
+            double rangeMax,
+            double lowPercentile,
+            double highPercentile,
+            boolean rangeResolved,
+            String label
+    ) {
+        /** Project density map, each image on its own range: the behavior before map files. */
+        public static MapOverlayConfig defaults() {
+            return new MapOverlayConfig(MapSource.PROJECT_DENSITY_MAP, "", "",
+                    MapRangeMode.PER_IMAGE, 0.0, 1.0, 1.0, 99.0, false, "");
+        }
+
+        /** True when every image is drawn with the same range, known before rendering. */
+        public boolean hasKnownRange() {
+            return rangeMode == MapRangeMode.FIXED
+                    || (rangeMode == MapRangeMode.SHARED && rangeResolved);
+        }
+
+        /** A copy holding a computed SHARED range. */
+        public MapOverlayConfig withResolvedRange(double min, double max) {
+            return new MapOverlayConfig(source, filePattern, channel, rangeMode,
+                    min, max, lowPercentile, highPercentile, true, label);
+        }
+    }
+
+    /**
      * Reusable text label configuration, used for both panel labels
      * and info labels.
      */
@@ -205,6 +272,7 @@ public class RenderedExportConfig {
     private final ObjectOverlayConfig overlays;
     private final ScaleBarConfig scaleBar;
     private final ColorScaleBarConfig colorScaleBar;
+    private final MapOverlayConfig mapOverlay;
     private final TextLabelConfig panelLabel;
     private final TextLabelConfig infoLabel;
     private final SplitChannelConfig splitChannel;
@@ -256,6 +324,7 @@ public class RenderedExportConfig {
                 builder.colorScaleBarPosition,
                 builder.colorScaleBarFontSize,
                 builder.colorScaleBarBoldText);
+        this.mapOverlay = builder.mapOverlay;
         this.panelLabel = new TextLabelConfig(
                 builder.showPanelLabel,
                 builder.panelLabelText,
@@ -423,6 +492,11 @@ public class RenderedExportConfig {
         return colorScaleBar;
     }
 
+    /** Map overlay source and color range (DENSITY_MAP_OVERLAY mode). */
+    public MapOverlayConfig mapOverlay() {
+        return mapOverlay;
+    }
+
     public TextLabelConfig panelLabel() {
         return panelLabel;
     }
@@ -553,6 +627,41 @@ public class RenderedExportConfig {
      */
     public static class Builder {
 
+        /**
+         * A builder holding every setting of {@code config}.
+         *
+         * @param config the configuration to copy
+         * @return a builder that builds an equal configuration
+         */
+        public static Builder from(RenderedExportConfig config) {
+            return new Builder()
+                    .regionType(config.getRegionType())
+                    .selectedClassifications(config.getSelectedClassifications())
+                    .paddingPixels(config.getPaddingPixels())
+                    .renderMode(config.getRenderMode())
+                    .displaySettingsMode(config.getDisplaySettingsMode())
+                    .capturedDisplaySettings(config.getCapturedDisplaySettings())
+                    .displayPresetName(config.getDisplayPresetName())
+                    .overlayOpacity(config.getOverlayOpacity())
+                    .downsample(config.getDownsample())
+                    .targetDpi(config.getTargetDpi())
+                    .format(config.getFormat())
+                    .outputDirectory(config.getOutputDirectory())
+                    .addToWorkflow(config.isAddToWorkflow())
+                    .matchedDisplayPercentile(config.getMatchedDisplayPercentile())
+                    .showChannelLegend(config.isShowChannelLegend())
+                    .svgMaxVectorDetections(config.getSvgMaxVectorDetections())
+                    .overlays(config.overlays())
+                    .mapOverlay(config.mapOverlay())
+                    .scaleBar(config.scaleBar())
+                    .colorScaleBar(config.colorScaleBar())
+                    .panelLabel(config.panelLabel())
+                    .infoLabel(config.infoLabel())
+                    .splitChannel(config.splitChannel())
+                    .splitStains(config.splitStains())
+                    .inset(config.inset());
+        }
+
         // -- Core fields --
         private RegionType regionType = RegionType.WHOLE_IMAGE;
         private List<String> selectedClassifications = null;
@@ -593,6 +702,9 @@ public class RenderedExportConfig {
         private ScaleBarRenderer.Position colorScaleBarPosition = ScaleBarRenderer.Position.LOWER_RIGHT;
         private int colorScaleBarFontSize = 0;
         private boolean colorScaleBarBoldText = true;
+
+        // -- Map overlay --
+        private MapOverlayConfig mapOverlay = MapOverlayConfig.defaults();
 
         // -- Panel label fields --
         private boolean showPanelLabel = false;
@@ -834,6 +946,12 @@ public class RenderedExportConfig {
 
         public Builder colorScaleBarBoldText(boolean bold) {
             this.colorScaleBarBoldText = bold;
+            return this;
+        }
+
+        /** Sets the map overlay source and color range. */
+        public Builder mapOverlay(MapOverlayConfig cfg) {
+            this.mapOverlay = cfg != null ? cfg : MapOverlayConfig.defaults();
             return this;
         }
 
@@ -1095,9 +1213,24 @@ public class RenderedExportConfig {
                             "At least one object type (annotations or detections) must be selected");
                 }
             } else if (renderMode == RenderMode.DENSITY_MAP_OVERLAY) {
-                if (densityMapName == null || densityMapName.isBlank()) {
+                if (mapOverlay.source() == MapSource.IMAGE_FILE) {
+                    if (mapOverlay.filePattern() == null || mapOverlay.filePattern().isBlank()) {
+                        throw new IllegalArgumentException(
+                                "A map file pattern is required for a map file overlay");
+                    }
+                } else if (densityMapName == null || densityMapName.isBlank()) {
                     throw new IllegalArgumentException(
                             "Density map name is required for density map overlay mode");
+                }
+                if (mapOverlay.rangeMode() == MapRangeMode.FIXED
+                        && !(mapOverlay.rangeMax() > mapOverlay.rangeMin())) {
+                    throw new IllegalArgumentException(
+                            "The map range maximum must be greater than the minimum");
+                }
+                if (mapOverlay.rangeMode() == MapRangeMode.SHARED
+                        && !(mapOverlay.highPercentile() > mapOverlay.lowPercentile())) {
+                    throw new IllegalArgumentException(
+                            "The upper percentile must be greater than the lower percentile");
                 }
             }
             if (outputDirectory == null) {

@@ -46,6 +46,24 @@ public class ColorScaleBarRenderer {
                                           double minValue, double maxValue,
                                           ScaleBarRenderer.Position position,
                                           int fontSize, boolean boldText) {
+        drawColorScaleBar(g2d, imageWidth, imageHeight, colorMap, minValue, maxValue,
+                position, fontSize, boldText, null);
+    }
+
+    /**
+     * Draw a color scale bar with tick labels and an optional title.
+     *
+     * @param title text drawn beside the bar's far end (above for a lower corner,
+     *              below for an upper corner); null or blank for none
+     * @see #drawColorScaleBar(Graphics2D, int, int, ColorMaps.ColorMap, double, double,
+     *      ScaleBarRenderer.Position, int, boolean)
+     */
+    public static void drawColorScaleBar(Graphics2D g2d, int imageWidth, int imageHeight,
+                                          ColorMaps.ColorMap colorMap,
+                                          double minValue, double maxValue,
+                                          ScaleBarRenderer.Position position,
+                                          int fontSize, boolean boldText,
+                                          String title) {
         if (imageWidth <= 0 || imageHeight <= 0 || colorMap == null) {
             return;
         }
@@ -121,6 +139,28 @@ public class ColorScaleBarRenderer {
                     break;
             }
 
+            // Title: above a bar in a lower corner, below one in an upper corner
+            boolean hasTitle = title != null && !title.isBlank();
+            int titleY = 0;
+            int titleX = 0;
+            if (hasTitle) {
+                int titleGap = Math.max(4, textHeight / 2);
+                int titleWidth = fm.stringWidth(title);
+                boolean upper = position == ScaleBarRenderer.Position.UPPER_LEFT
+                        || position == ScaleBarRenderer.Position.UPPER_RIGHT;
+                boolean right = position == ScaleBarRenderer.Position.UPPER_RIGHT
+                        || position == ScaleBarRenderer.Position.LOWER_RIGHT
+                        || position == null;
+                if (upper) {
+                    titleY = barY + barHeight + titleGap + textHeight;
+                } else {
+                    barY -= textHeight + titleGap;
+                    titleY = barY - titleGap;
+                }
+                titleX = right ? barX + totalWidth - titleWidth : barX;
+                titleX = Math.max(margin, Math.min(titleX, imageWidth - margin - titleWidth));
+            }
+
             // Draw gradient bar line by line (top = max, bottom = min)
             double range = maxValue - minValue;
             for (int row = 0; row < barHeight; row++) {
@@ -158,6 +198,11 @@ public class ColorScaleBarRenderer {
                 labelY = Math.max(barY + textHeight, Math.min(labelY, barY + barHeight));
 
                 TextRenderUtils.drawOutlinedText(g2d, tickLabels[i], labelX, labelY,
+                        labelPrimary, labelOutline);
+            }
+
+            if (hasTitle) {
+                TextRenderUtils.drawOutlinedText(g2d, title, titleX, titleY,
                         labelPrimary, labelOutline);
             }
 

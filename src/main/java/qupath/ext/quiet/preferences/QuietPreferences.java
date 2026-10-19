@@ -117,6 +117,27 @@ public class QuietPreferences {
     private static final StringProperty renderedColormapName =
             PathPrefs.createPersistentPreference(PREFIX + "rendered.colormapName", "Viridis");
 
+    // --- Rendered map overlay source and range ---
+
+    private static final StringProperty renderedMapSource =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.mapSource", "PROJECT_DENSITY_MAP");
+    private static final StringProperty renderedMapFilePattern =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.mapFilePattern", "");
+    private static final StringProperty renderedMapChannel =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.mapChannel", "");
+    private static final StringProperty renderedMapRangeMode =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.mapRangeMode", "PER_IMAGE");
+    private static final DoubleProperty renderedMapRangeMin =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.mapRangeMin", 0.0);
+    private static final DoubleProperty renderedMapRangeMax =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.mapRangeMax", 1.0);
+    private static final DoubleProperty renderedMapLowPercentile =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.mapLowPercentile", 1.0);
+    private static final DoubleProperty renderedMapHighPercentile =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.mapHighPercentile", 99.0);
+    private static final StringProperty renderedMapLabel =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.mapLabel", "");
+
     private static final BooleanProperty renderedShowColorScaleBar =
             PathPrefs.createPersistentPreference(PREFIX + "rendered.showColorScaleBar", false);
 
@@ -585,6 +606,25 @@ public class QuietPreferences {
     public static String getRenderedColormapName() { return renderedColormapName.get(); }
     public static void setRenderedColormapName(String value) { renderedColormapName.set(value != null ? value : "Viridis"); }
 
+    public static String getRenderedMapSource() { return renderedMapSource.get(); }
+    public static void setRenderedMapSource(String value) { renderedMapSource.set(value != null ? value : "PROJECT_DENSITY_MAP"); }
+    public static String getRenderedMapFilePattern() { return renderedMapFilePattern.get(); }
+    public static void setRenderedMapFilePattern(String value) { renderedMapFilePattern.set(value != null ? value : ""); }
+    public static String getRenderedMapChannel() { return renderedMapChannel.get(); }
+    public static void setRenderedMapChannel(String value) { renderedMapChannel.set(value != null ? value : ""); }
+    public static String getRenderedMapRangeMode() { return renderedMapRangeMode.get(); }
+    public static void setRenderedMapRangeMode(String value) { renderedMapRangeMode.set(value != null ? value : "PER_IMAGE"); }
+    public static double getRenderedMapRangeMin() { return renderedMapRangeMin.get(); }
+    public static void setRenderedMapRangeMin(double value) { renderedMapRangeMin.set(value); }
+    public static double getRenderedMapRangeMax() { return renderedMapRangeMax.get(); }
+    public static void setRenderedMapRangeMax(double value) { renderedMapRangeMax.set(value); }
+    public static double getRenderedMapLowPercentile() { return renderedMapLowPercentile.get(); }
+    public static void setRenderedMapLowPercentile(double value) { renderedMapLowPercentile.set(value); }
+    public static double getRenderedMapHighPercentile() { return renderedMapHighPercentile.get(); }
+    public static void setRenderedMapHighPercentile(double value) { renderedMapHighPercentile.set(value); }
+    public static String getRenderedMapLabel() { return renderedMapLabel.get(); }
+    public static void setRenderedMapLabel(String value) { renderedMapLabel.set(value != null ? value : ""); }
+
     public static BooleanProperty renderedShowColorScaleBarProperty() { return renderedShowColorScaleBar; }
     public static boolean isRenderedShowColorScaleBar() { return renderedShowColorScaleBar.get(); }
     public static void setRenderedShowColorScaleBar(boolean value) { renderedShowColorScaleBar.set(value); }
@@ -1033,6 +1073,15 @@ public class QuietPreferences {
                 map.put(PREFIX + "rendered.padding", renderedPadding);
                 map.put(PREFIX + "rendered.densityMapName", renderedDensityMapName);
                 map.put(PREFIX + "rendered.colormapName", renderedColormapName);
+                map.put(PREFIX + "rendered.mapSource", renderedMapSource);
+                map.put(PREFIX + "rendered.mapFilePattern", renderedMapFilePattern);
+                map.put(PREFIX + "rendered.mapChannel", renderedMapChannel);
+                map.put(PREFIX + "rendered.mapRangeMode", renderedMapRangeMode);
+                map.put(PREFIX + "rendered.mapRangeMin", renderedMapRangeMin);
+                map.put(PREFIX + "rendered.mapRangeMax", renderedMapRangeMax);
+                map.put(PREFIX + "rendered.mapLowPercentile", renderedMapLowPercentile);
+                map.put(PREFIX + "rendered.mapHighPercentile", renderedMapHighPercentile);
+                map.put(PREFIX + "rendered.mapLabel", renderedMapLabel);
                 map.put(PREFIX + "rendered.showColorScaleBar", renderedShowColorScaleBar);
                 map.put(PREFIX + "rendered.colorScaleBarPosition", renderedColorScaleBarPosition);
                 map.put(PREFIX + "rendered.colorScaleBarFontSize", renderedColorScaleBarFontSize);

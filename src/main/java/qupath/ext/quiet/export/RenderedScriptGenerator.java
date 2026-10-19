@@ -366,7 +366,7 @@ class RenderedScriptGenerator {
      */
     private static void emitColorScaleBarFunction(StringBuilder sb) {
         appendLine(sb, "// Color scale bar drawing function");
-        appendLine(sb, "def drawColorScaleBar(Graphics2D g2d, int imgW, int imgH, colorMap, double minVal, double maxVal, String pos, int fSize, boolean bold) {");
+        appendLine(sb, "def drawColorScaleBar(Graphics2D g2d, int imgW, int imgH, colorMap, double minVal, double maxVal, String pos, int fSize, boolean bold, String title) {");
         appendLine(sb, "    if (imgW <= 0 || imgH <= 0) return");
         appendLine(sb, "    int minDim = Math.min(imgW, imgH)");
         appendLine(sb, "    int fontSize = fSize > 0 ? Math.max(4, Math.min(fSize, 200)) : Math.max(12, minDim / 50)");
@@ -397,6 +397,22 @@ class RenderedScriptGenerator {
         appendLine(sb, "        case 'UPPER_LEFT': bx = margin; by = margin; break");
         appendLine(sb, "        default: bx = imgW - margin - totalW; by = imgH - margin - barH; break");
         appendLine(sb, "    }");
+        appendLine(sb, "    boolean hasTitle = title != null && !title.isBlank()");
+        appendLine(sb, "    int titleX = 0, titleY = 0");
+        appendLine(sb, "    if (hasTitle) {");
+        appendLine(sb, "        int titleGap = Math.max(4, (int) (th / 2))");
+        appendLine(sb, "        int titleW = fm.stringWidth(title)");
+        appendLine(sb, "        boolean upper = pos == 'UPPER_LEFT' || pos == 'UPPER_RIGHT'");
+        appendLine(sb, "        boolean right = !(pos == 'UPPER_LEFT' || pos == 'LOWER_LEFT')");
+        appendLine(sb, "        if (upper) {");
+        appendLine(sb, "            titleY = by + barH + titleGap + th");
+        appendLine(sb, "        } else {");
+        appendLine(sb, "            by -= th + titleGap");
+        appendLine(sb, "            titleY = by - titleGap");
+        appendLine(sb, "        }");
+        appendLine(sb, "        titleX = right ? bx + totalW - titleW : bx");
+        appendLine(sb, "        titleX = Math.max(margin, Math.min(titleX, imgW - margin - titleW))");
+        appendLine(sb, "    }");
         appendLine(sb, "    double range = maxVal - minVal");
         appendLine(sb, "    for (int row = 0; row < barH; row++) {");
         appendLine(sb, "        double t = 1.0 - (double) row / Math.max(1, barH - 1)");
@@ -424,6 +440,16 @@ class RenderedScriptGenerator {
         appendLine(sb, "        g2d.setColor(Color.WHITE)");
         appendLine(sb, "        g2d.drawString(lbl, lx, ly)");
         appendLine(sb, "    }");
+        appendLine(sb, "    if (hasTitle) {");
+        appendLine(sb, "        g2d.setColor(Color.BLACK)");
+        appendLine(sb, "        for (int dx = -1; dx <= 1; dx++) {");
+        appendLine(sb, "            for (int dy = -1; dy <= 1; dy++) {");
+        appendLine(sb, "                if (dx != 0 || dy != 0) g2d.drawString(title, titleX + dx, titleY + dy)");
+        appendLine(sb, "            }");
+        appendLine(sb, "        }");
+        appendLine(sb, "        g2d.setColor(Color.WHITE)");
+        appendLine(sb, "        g2d.drawString(title, titleX, titleY)");
+        appendLine(sb, "    }");
         appendLine(sb, "}");
         appendLine(sb, "");
     }
@@ -434,34 +460,45 @@ class RenderedScriptGenerator {
     private static void emitColorScaleBarDrawing(StringBuilder sb) {
         appendLine(sb, "        if (showColorScaleBar) {");
         appendLine(sb, "            g2d.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, 1.0f))");
-        appendLine(sb, "            drawColorScaleBar(g2d, outW, outH, colorMap, densityMin, densityMax, colorScaleBarPosition, colorScaleBarFontSize, colorScaleBarBoldText)");
+        appendLine(sb, "            drawColorScaleBar(g2d, outW, outH, colorMap, densityMin, densityMax, colorScaleBarPosition, colorScaleBarFontSize, colorScaleBarBoldText, colorScaleBarTitle)");
         appendLine(sb, "        }");
     }
 
     /**
-     * Emit a self-contained colorizeDensityMap Groovy function.
+     * Emit the map overlay source and color range variables.
      */
-    private static void emitColorizeDensityMapFunction(StringBuilder sb) {
-        appendLine(sb, "// Colorize density map using color map");
-        appendLine(sb, "def colorizeDensityMap(BufferedImage densityImg, colorMap, double minV, double maxV) {");
-        appendLine(sb, "    int w = densityImg.getWidth()");
-        appendLine(sb, "    int h = densityImg.getHeight()");
-        appendLine(sb, "    def raster = densityImg.getRaster()");
-        appendLine(sb, "    def colorized = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)");
-        appendLine(sb, "    for (int y = 0; y < h; y++) {");
-        appendLine(sb, "        for (int x = 0; x < w; x++) {");
-        appendLine(sb, "            double val = raster.getSampleDouble(x, y, 0)");
-        appendLine(sb, "            if (Double.isNaN(val)) {");
-        appendLine(sb, "                colorized.setRGB(x, y, 0x00000000)");
-        appendLine(sb, "            } else {");
-        appendLine(sb, "                int rgb = colorMap.getColor(val, minV, maxV)");
-        appendLine(sb, "                colorized.setRGB(x, y, 0xFF000000 | (rgb & 0x00FFFFFF))");
-        appendLine(sb, "            }");
-        appendLine(sb, "        }");
-        appendLine(sb, "    }");
-        appendLine(sb, "    return colorized");
-        appendLine(sb, "}");
-        appendLine(sb, "");
+    private static void emitMapOverlayConfig(StringBuilder sb, RenderedExportConfig config) {
+        var map = config.mapOverlay();
+        appendLine(sb, "// Map source: 'PROJECT_DENSITY_MAP' (densityMapName) or 'IMAGE_FILE' (mapFilePattern)");
+        appendLine(sb, "def mapSource = " + quote(map.source().name()));
+        appendLine(sb, "def densityMapName = " + quote(config.overlays().densityMapName()));
+        appendLine(sb, "// Tokens: {project} {imageDir} {image} {imageBase} {imageSafe}, each may take :N to cut to N characters");
+        appendLine(sb, "def mapFilePattern = " + quote(map.filePattern()));
+        appendLine(sb, "def mapChannel = " + quote(map.channel()) + "  // blank = first channel");
+        appendLine(sb, "// Color range: 'PER_IMAGE' (own min to max), 'FIXED' (mapRangeMin to mapRangeMax),");
+        appendLine(sb, "// or 'SHARED' (percentiles of every image's values, scanned before the export)");
+        appendLine(sb, "def mapRangeMode = " + quote(map.rangeMode().name()));
+        appendLine(sb, "def mapRangeMin = " + map.rangeMin() + "d");
+        appendLine(sb, "def mapRangeMax = " + map.rangeMax() + "d");
+        appendLine(sb, "def mapLowPercentile = " + map.lowPercentile() + "d");
+        appendLine(sb, "def mapHighPercentile = " + map.highPercentile() + "d");
+        appendLine(sb, "def mapRangeResolved = false");
+        appendLine(sb, "def colorScaleBarTitle = " + quote(map.label()));
+    }
+
+    /**
+     * Emit the self-contained map overlay helper functions (map file lookup,
+     * strip reading of one channel, color range, coloring, shared range scan).
+     */
+    private static void emitMapOverlayHelpers(StringBuilder sb) {
+        try (var in = RenderedScriptGenerator.class.getResourceAsStream("map-overlay-helpers.groovy")) {
+            if (in == null) {
+                throw new IllegalStateException("map-overlay-helpers.groovy is missing from the jar");
+            }
+            sb.append(new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("Cannot read map-overlay-helpers.groovy", e);
+        }
     }
 
     // ------------------------------------------------------------------
@@ -1169,6 +1206,8 @@ class RenderedScriptGenerator {
         // Imports
         appendLine(sb, "import qupath.lib.analysis.heatmaps.DensityMaps");
         appendLine(sb, "import qupath.lib.color.ColorMaps");
+        appendLine(sb, "import qupath.lib.common.GeneralTools");
+        appendLine(sb, "import qupath.lib.images.servers.ImageServers");
         appendLine(sb, "import qupath.lib.gui.viewer.OverlayOptions");
         appendLine(sb, "import qupath.lib.gui.viewer.PathObjectPainter");
         appendLine(sb, "import qupath.lib.images.writers.ImageWriterTools");
@@ -1195,7 +1234,7 @@ class RenderedScriptGenerator {
 
         // Configuration parameters
         appendLine(sb, "// ========== CONFIGURATION (modify as needed) ==========");
-        appendLine(sb, "def densityMapName = " + quote(config.overlays().densityMapName()));
+        emitMapOverlayConfig(sb, config);
         appendLine(sb, "def colormapName = " + quote(config.overlays().colormapName()));
         emitRegionTypeConfig(sb, config);
         emitDisplayConfig(sb, config);
@@ -1225,13 +1264,16 @@ class RenderedScriptGenerator {
         appendLine(sb, "    return");
         appendLine(sb, "}");
         appendLine(sb, "");
-        appendLine(sb, "// Load density map builder from project resources");
-        appendLine(sb, "def densityResources = project.getResources(");
-        appendLine(sb, "        DensityMaps.PROJECT_LOCATION, DensityMaps.DensityMapBuilder.class, \"json\")");
-        appendLine(sb, "def densityBuilder = densityResources.get(densityMapName)");
-        appendLine(sb, "if (densityBuilder == null) {");
-        appendLine(sb, "    println \"ERROR: Density map not found: ${densityMapName}\"");
-        appendLine(sb, "    return");
+        appendLine(sb, "// Load the density map builder from project resources (project density maps only)");
+        appendLine(sb, "def densityBuilder = null");
+        appendLine(sb, "if (mapSource != 'IMAGE_FILE') {");
+        appendLine(sb, "    def densityResources = project.getResources(");
+        appendLine(sb, "            DensityMaps.PROJECT_LOCATION, DensityMaps.DensityMapBuilder.class, \"json\")");
+        appendLine(sb, "    densityBuilder = densityResources.get(densityMapName)");
+        appendLine(sb, "    if (densityBuilder == null) {");
+        appendLine(sb, "        println \"ERROR: Density map not found: ${densityMapName}\"");
+        appendLine(sb, "        return");
+        appendLine(sb, "    }");
         appendLine(sb, "}");
         appendLine(sb, "");
         appendLine(sb, "// Resolve color map");
@@ -1256,7 +1298,7 @@ class RenderedScriptGenerator {
         appendLine(sb, "");
 
         // Helper functions (before the main loop)
-        emitColorizeDensityMapFunction(sb);
+        emitMapOverlayHelpers(sb);
         if (config.scaleBar().show()) {
             emitScaleBarFunction(sb);
         }
@@ -1280,6 +1322,21 @@ class RenderedScriptGenerator {
         appendLine(sb, "");
         appendLine(sb, "int succeeded = 0");
         appendLine(sb, "int failed = 0");
+        appendLine(sb, "int skipped = 0");
+        appendLine(sb, "");
+        appendLine(sb, "if (mapRangeMode == 'SHARED' && !mapRangeResolved) {");
+        appendLine(sb, "    println 'Scanning every image for the shared map range...'");
+        appendLine(sb, "    def shared = computeSharedMapRange(project, entries, mapSource, densityBuilder,");
+        appendLine(sb, "            mapFilePattern, mapChannel, downsample, mapLowPercentile, mapHighPercentile)");
+        appendLine(sb, "    if (shared != null) {");
+        appendLine(sb, "        mapRangeMin = shared[0]");
+        appendLine(sb, "        mapRangeMax = shared[1] > shared[0] ? shared[1] : shared[0] + 1e-6");
+        appendLine(sb, "        mapRangeResolved = true");
+        appendLine(sb, "        println \"Map range for all images: ${mapRangeMin} to ${mapRangeMax}\"");
+        appendLine(sb, "    } else {");
+        appendLine(sb, "        println 'WARNING: no image had map values; each image uses its own percentiles'");
+        appendLine(sb, "    }");
+        appendLine(sb, "}");
         appendLine(sb, "");
         appendLine(sb, "for (int i = 0; i < entries.size(); i++) {");
         appendLine(sb, "    def entry = entries[i]");
@@ -1287,7 +1344,7 @@ class RenderedScriptGenerator {
         appendLine(sb, "    def entryName = imageName");
         appendLine(sb, "    println \"[${i + 1}/${entries.size()}] Processing: ${entryName}\"");
         appendLine(sb, "");
-        appendLine(sb, "    def densityServer = null");
+        appendLine(sb, "    def mapLayer = null");
         appendLine(sb, "    try {");
         appendLine(sb, "        def imageData = entry.readImageData()");
         appendLine(sb, "        def baseServer = imageData.getServer()");
@@ -1301,7 +1358,14 @@ class RenderedScriptGenerator {
         emitDisplayServerWrapping(sb, displayMode);
         appendLine(sb, "");
 
-        appendLine(sb, "        densityServer = densityBuilder.buildServer(imageData)");
+        appendLine(sb, "        try {");
+        appendLine(sb, "            mapLayer = openMapLayer(project, entry, imageData, mapSource, densityBuilder, mapFilePattern, mapChannel)");
+        appendLine(sb, "        } catch (IllegalArgumentException e) {");
+        appendLine(sb, "            println \"  SKIP: ${e.getMessage()}\"");
+        appendLine(sb, "            skipped++");
+        appendLine(sb, "            baseServer.close()");
+        appendLine(sb, "            continue");
+        appendLine(sb, "        }");
         appendLine(sb, "");
 
         if (perAnnotation) {
@@ -1309,27 +1373,13 @@ class RenderedScriptGenerator {
             emitAnnotationLoopOpen(sb);
             emitAnnotationRegionRead(sb, displayMode);
 
-            // Read density region for this annotation
-            appendLine(sb, "            def densityRequest = RegionRequest.createInstance(densityServer.getPath(), downsample, ax, ay, aw, ah)");
-            appendLine(sb, "            def densityImage = densityServer.readRegion(densityRequest)");
-            appendLine(sb, "");
-
-            // Compute min/max from density raster for this region
-            appendLine(sb, "            def raster = densityImage.getRaster()");
-            appendLine(sb, "            double densityMin = Double.MAX_VALUE");
-            appendLine(sb, "            double densityMax = -Double.MAX_VALUE");
-            appendLine(sb, "            for (int y = 0; y < raster.getHeight(); y++) {");
-            appendLine(sb, "                for (int x = 0; x < raster.getWidth(); x++) {");
-            appendLine(sb, "                    double v = raster.getSampleDouble(x, y, 0)");
-            appendLine(sb, "                    if (!Double.isNaN(v)) {");
-            appendLine(sb, "                        if (v < densityMin) densityMin = v");
-            appendLine(sb, "                        if (v > densityMax) densityMax = v");
-            appendLine(sb, "                    }");
-            appendLine(sb, "                }");
-            appendLine(sb, "            }");
-            appendLine(sb, "            if (densityMin > densityMax) { densityMin = 0; densityMax = 1 }");
-            appendLine(sb, "");
-            appendLine(sb, "            def colorized = colorizeDensityMap(densityImage, colorMap, densityMin, densityMax)");
+            // Read the map over this annotation and pick its color range
+            appendLine(sb, "            def band = readMapBand(mapLayer, ax, ay, aw, ah, downsample)");
+            appendLine(sb, "            def mapRange = mapRangeFor(band, mapRangeMode, mapRangeMin, mapRangeMax,");
+            appendLine(sb, "                    mapLowPercentile, mapHighPercentile, mapRangeResolved)");
+            appendLine(sb, "            double densityMin = mapRange[0]");
+            appendLine(sb, "            double densityMax = mapRange[1]");
+            appendLine(sb, "            def colorized = colorizeBand(band, colorMap, densityMin, densityMax)");
             appendLine(sb, "");
             appendLine(sb, "            def result = new BufferedImage(baseImage.getWidth(), baseImage.getHeight(), BufferedImage.TYPE_INT_RGB)");
             appendLine(sb, "            def g2d = result.createGraphics()");
@@ -1351,7 +1401,7 @@ class RenderedScriptGenerator {
                 // Color scale bar at annotation level (uses outW, outH from annotation region read)
                 appendLine(sb, "            if (showColorScaleBar) {");
                 appendLine(sb, "                g2d.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, 1.0f))");
-                appendLine(sb, "                drawColorScaleBar(g2d, outW, outH, colorMap, densityMin, densityMax, colorScaleBarPosition, colorScaleBarFontSize, colorScaleBarBoldText)");
+                appendLine(sb, "                drawColorScaleBar(g2d, outW, outH, colorMap, densityMin, densityMax, colorScaleBarPosition, colorScaleBarFontSize, colorScaleBarBoldText, colorScaleBarTitle)");
                 appendLine(sb, "            }");
                 appendLine(sb, "");
             }
@@ -1382,27 +1432,13 @@ class RenderedScriptGenerator {
             appendLine(sb, "                        display.selectedChannels(), display.displayMode().getValue())");
             appendLine(sb, "                : rawImage");
             appendLine(sb, "");
-            appendLine(sb, "        def densityRequest = RegionRequest.createInstance(");
-            appendLine(sb, "                densityServer.getPath(), downsample,");
-            appendLine(sb, "                0, 0, densityServer.getWidth(), densityServer.getHeight())");
-            appendLine(sb, "        def densityImage = densityServer.readRegion(densityRequest)");
-            appendLine(sb, "");
-            appendLine(sb, "        // Compute min/max from density raster");
-            appendLine(sb, "        def raster = densityImage.getRaster()");
-            appendLine(sb, "        double densityMin = Double.MAX_VALUE");
-            appendLine(sb, "        double densityMax = -Double.MAX_VALUE");
-            appendLine(sb, "        for (int y = 0; y < raster.getHeight(); y++) {");
-            appendLine(sb, "            for (int x = 0; x < raster.getWidth(); x++) {");
-            appendLine(sb, "                double v = raster.getSampleDouble(x, y, 0)");
-            appendLine(sb, "                if (!Double.isNaN(v)) {");
-            appendLine(sb, "                    if (v < densityMin) densityMin = v");
-            appendLine(sb, "                    if (v > densityMax) densityMax = v");
-            appendLine(sb, "                }");
-            appendLine(sb, "            }");
-            appendLine(sb, "        }");
-            appendLine(sb, "        if (densityMin > densityMax) { densityMin = 0; densityMax = 1 }");
-            appendLine(sb, "");
-            appendLine(sb, "        def colorized = colorizeDensityMap(densityImage, colorMap, densityMin, densityMax)");
+            appendLine(sb, "        // Read the map over the whole image and pick its color range");
+            appendLine(sb, "        def band = readMapBand(mapLayer, 0, 0, baseServer.getWidth(), baseServer.getHeight(), downsample)");
+            appendLine(sb, "        def mapRange = mapRangeFor(band, mapRangeMode, mapRangeMin, mapRangeMax,");
+            appendLine(sb, "                mapLowPercentile, mapHighPercentile, mapRangeResolved)");
+            appendLine(sb, "        double densityMin = mapRange[0]");
+            appendLine(sb, "        double densityMax = mapRange[1]");
+            appendLine(sb, "        def colorized = colorizeBand(band, colorMap, densityMin, densityMax)");
             appendLine(sb, "");
             appendLine(sb, "        def result = new BufferedImage(");
             appendLine(sb, "                baseImage.getWidth(), baseImage.getHeight(),");
@@ -1464,21 +1500,21 @@ class RenderedScriptGenerator {
         }
 
         appendLine(sb, "");
-        appendLine(sb, "        densityServer.close()");
-        appendLine(sb, "        densityServer = null");
+        appendLine(sb, "        mapLayer.server.close()");
+        appendLine(sb, "        mapLayer = null");
         appendLine(sb, "        baseServer.close()");
         appendLine(sb, "");
         appendLine(sb, "    } catch (Exception e) {");
         appendLine(sb, "        println \"  FAIL: ${e.getMessage()}\"");
         appendLine(sb, "        failed++");
-        appendLine(sb, "        if (densityServer != null) {");
-        appendLine(sb, "            try { densityServer.close() } catch (Exception ignored) {}");
+        appendLine(sb, "        if (mapLayer != null) {");
+        appendLine(sb, "            try { mapLayer.server.close() } catch (Exception ignored) {}");
         appendLine(sb, "        }");
         appendLine(sb, "    }");
         appendLine(sb, "}");
         appendLine(sb, "");
         appendLine(sb, "println ''");
-        appendLine(sb, "println \"Export complete: ${succeeded} succeeded, ${failed} failed\"");
+        appendLine(sb, "println \"Export complete: ${succeeded} succeeded, ${failed} failed, ${skipped} skipped (no map)\"");
 
         return sb.toString();
     }

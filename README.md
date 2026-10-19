@@ -158,11 +158,11 @@ Produce **publication-ready figures** -- the image as it looks in QuPath, with y
 | **None** (default) | Export the base image with no overlay source; objects, scale bar and labels can still be added. The **Render Mode** dropdown is ringed in blue until you open it, as a reminder that this is where overlays are chosen |
 | **Classifier Overlay** | Render a pixel classifier's output on top of the image at configurable opacity |
 | **Object Overlay** | Render annotation and/or detection objects with fill, outline, and name options |
-| **Density Map Overlay** | Render a saved density map with a configurable colormap (Viridis, Magma, etc.) and optional color scale bar |
+| **Density / Map Overlay** | Color a map with a colormap (Viridis, Magma, etc.) and draw it over the image: a density map saved in the project, or a map file per image written by another tool (density, probability or measurement maps). One color range can be shared by every image (see below) |
 | **Region Type** | Export the whole image or individual annotation regions (see below) |
 | **Display Settings** | Control brightness/contrast, channel visibility, and LUTs applied to the base image (see below) |
 | **Scale Bar** | Optionally burn a scale bar into the exported image with configurable position and color (see below) |
-| **Color Scale Bar** | For density map mode, optionally burn a color-mapped legend with min/max labels (see below) |
+| **Color Scale Bar** | For map overlays, optionally burn a color-mapped legend with its value labels and a title (see below) |
 | **Panel Label** | Optionally add a letter label (A, B, C...) for multi-panel publication figures (see below) |
 | **Info Label** | Optionally add a per-image metadata text stamp with template placeholders (see below) |
 | **Split Channels** | Export multi-channel images as individual channel panels plus a merged panel, with optional grayscale/pseudocolor rendering, channel border colors, and a channel/stain legend swatch (see below) |
@@ -170,6 +170,57 @@ Produce **publication-ready figures** -- the image as it looks in QuPath, with y
 | **Format** | PNG, TIFF, JPEG, OME-TIFF, OME-TIFF Pyramid, SVG |
 
 **Preview Current Image** renders the open image with the current settings in a separate window. While that window is open it updates as you change any setting -- scale bar, panel and info labels, color legend, display settings, overlays -- usually within a second, so you can place and size labels without clicking Preview again. A line under the image says *Updating...* while it redraws. The preview of a split-channel export shows the first visible channel; the preview of an annotation-region export shows the first matching annotation.
+
+<details>
+<summary><b>Density / Map Overlay</b></summary>
+
+Draws a map of values over each image, colored with a colormap. The map can come from two places:
+
+![Map file overlay: the Overlay Source section set to a Fiber Analysis density map, its Signal density channel on a shared 1 to 99 percentile range, and the live preview of the liver section with a titled color scale bar](documentation/images/map-file-overlay.png)
+
+| Map Source | What it reads |
+|------------|---------------|
+| **Project density map** | A density map saved in the project (**Analyze > Density maps**), computed from each image's objects. |
+| **Map file per image** | One image file per project image, such as the density maps and window-classifier maps written by Fiber Analysis, a probability map from another program, or any float OME-TIFF. QuIET does not need to know which tool wrote it. |
+
+**Finding each image's map file.** The **Map File** box takes a pattern. These tokens are replaced for each image:
+
+| Token | Becomes |
+|-------|---------|
+| `{project}` | The project folder |
+| `{imageDir}` | The folder holding the image file |
+| `{image}` | The image name in the project |
+| `{imageBase}` | The image name without its file extension |
+| `{imageSafe}` | The image name with each run of `\ / : * ? " < >` or `\|` or spaces replaced by `_`, and trailing dots removed |
+
+Add `:N` to a token to cut it to N characters (`{imageSafe:60}`). A relative pattern starts in the project folder. The file name (not the folders) may use the wildcards `*` and `?`, but exactly one file must match. The box offers examples, among them where Fiber Analysis writes its maps:
+
+```
+{project}/fiber-analysis/density-maps/{imageSafe:60}_density.ome.tif
+{project}/fiber-analysis/classifier-maps/{imageSafe:60}_*.ome.tif
+```
+
+**Check** finds the open image's map file, shows its size, channel count and pixel type, and fills the **Map Channel** list from the file's channel names. The channel is chosen by name, and the same name is used for every image.
+
+**How the map is drawn.** The map is stretched over the whole image, so a map can be written at full resolution or coarser. Pixels with no value (NaN), such as glass outside the tissue, are transparent. Values outside the color range take the end colors. Each map is read one channel at a time, so an 11-channel full-resolution map does not have to fit in memory.
+
+**Color range.** This decides which value gets which color, and so whether colors can be compared between images:
+
+| Color Range | Effect |
+|-------------|--------|
+| **Each image: its own min to max** (default, and how earlier versions drew every density map) | Every image (or annotation region) is stretched to its own minimum and maximum. The same color means different values in different images, so do not use it to compare images. |
+| **Fixed** | The minimum and maximum you enter, the same for every image. Use it when the map's values have a known scale, or to match an earlier export. |
+| **Shared** | Before exporting, QuIET reads the map of every selected image, pools the values, and takes two percentiles of them (for example 1 to 99; 0 to 100 is the overall minimum and maximum). Every image is then drawn on that one range. The preview uses the open image only. |
+
+The range used is written to `export_info.txt` beside the images, and the color scale bar on each image shows it. A Panel / Montage built from a map recipe with a shared range computes it over all the panel's images.
+
+**Images without a map.** Before the export starts, QuIET looks for every selected image's map file. If some have none, it lists them and asks whether to go on; those images are skipped and named in the result, never exported without their overlay.
+
+**Generated script.** The Groovy script does the same: it finds the files with the same pattern, reads the same channel, and for a shared range scans every image in the project before exporting. A script run on a different set of images computes its own shared range; to reproduce an earlier export exactly, set `mapRangeMode` to `'FIXED'` with the range from that export's `export_info.txt`.
+
+A channel holding class numbers (such as a classifier's *Predicted class index*) is categories, not a quantity, and a continuous colormap makes it misleading.
+
+</details>
 
 <details>
 <summary><b>Display Settings</b></summary>
@@ -224,16 +275,17 @@ The scale bar requires pixel calibration in the image metadata. If an image has 
 <details>
 <summary><b>Color Scale Bar</b></summary>
 
-For density map overlay mode, a color-mapped legend can be burned in showing the value range with min/max labels and a gradient swatch matching the selected colormap.
+For map overlays, a color-mapped legend can be burned in showing the value range with five value labels and a gradient swatch matching the selected colormap.
 
 | Option | Values |
 |--------|--------|
 | **Show color scale bar** | Enable/disable (default: off) |
 | **Position** | Lower Right (default), Lower Left, Upper Right, Upper Left |
+| **Title** | Text drawn beside the bar, such as the measurement and its unit (blank for none). For a map file it is filled in from the channel name, plus the channel's unit when the file's description lists one as `[index] name=...; unit=...` (Fiber Analysis maps do). |
 | **Font size** | Auto (computed from image dimensions) or explicit size in points |
 | **Bold text** | Enable/disable (default: on) |
 
-The color scale bar is only available in density map overlay mode.
+The color scale bar is only available in map overlay mode.
 
 </details>
 
@@ -710,7 +762,12 @@ src/main/java/qupath/ext/quiet/
     BatchExportTask.java           # JavaFX Task for background batch processing
     ExportResult.java              # Export outcome tracking
     ScaleBarRenderer.java          # Java2D scale bar with background box support
-    ColorScaleBarRenderer.java     # Color-mapped legend for density maps
+    ColorScaleBarRenderer.java     # Color-mapped legend for map overlays
+    MapOverlaySource.java          # Where a map overlay comes from: project density map or map file
+    MapFilePattern.java            # Finds each image's map file from a token pattern
+    MapLayer.java                  # One map channel over an image: strip reading, color range, coloring
+    MapRangeScanner.java           # One shared map range from percentiles over many images
+    TiffDescription.java           # Reads a TIFF's ImageDescription (classic and BigTIFF) and channel units
     PanelLabelRenderer.java        # Panel letter label renderer (A, B, C...)
     InfoLabelRenderer.java         # Per-image metadata text stamp renderer
     InsetRenderer.java             # Magnified-inset / detail-panel renderer (Java2D utility)
@@ -759,7 +816,7 @@ src/main/resources/
 - **Channel selection** currently uses channel indices. The UI populates available channels, but auto-detection from image metadata is planned for a future release.
 - **Tiled GeoJSON** produces one GeoJSON file per tile via QuPath's `TileExporter.exportJson()` API (not a single consolidated file).
 - Rendered export with classifier overlay requires a pixel classifier saved in the QuPath project.
-- Density map overlay requires a density map saved in the QuPath project (created via **Analyze > Density maps**).
+- A project density map overlay requires a density map saved in the QuPath project (created via **Analyze > Density maps**). A map file overlay needs one map file per image; the map is assumed to cover the whole image.
 - **Display Settings** "Current Viewer" mode requires an image to be open in the viewer at export time. "Saved Preset" mode requires presets saved via QuPath's Brightness & Contrast dialog.
 - **Panel / Montage** composes the whole figure as one in-memory image. Figures at or above 100 megapixels are restricted to OME-TIFF output; very large panels may still need a higher QuPath memory limit (`-Xmx`). See Troubleshooting in the Panel / Montage section.
 - **Panel / Montage** fills cells in the order images appear in the Step 1 selection list (row-major, left to right, top to bottom). Open the Layout preview window to drag any cell onto another and swap their positions; the arrangement you leave the preview in is what the figure is composed in.

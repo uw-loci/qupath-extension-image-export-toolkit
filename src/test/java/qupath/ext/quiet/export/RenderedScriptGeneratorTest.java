@@ -269,12 +269,14 @@ class RenderedScriptGeneratorTest {
 
         String script = ScriptGenerator.generate(ExportCategory.RENDERED, config);
 
-        assertTrue(script.contains("colorizeDensityMap"),
-                "Script should contain colorizeDensityMap function");
+        assertTrue(script.contains("def colorizeBand("),
+                "Script should contain the colorizeBand function");
         assertTrue(script.contains("densityBuilder.buildServer"),
                 "Script should build density server per image");
-        assertTrue(script.contains("densityMin"),
-                "Script should compute min/max from density raster");
+        assertTrue(script.contains("mapRangeFor(band"),
+                "Script should pick the color range from the map values");
+        assertTrue(script.contains("def mapRangeMode = \"PER_IMAGE\""),
+                "A density map keeps the per-image range by default");
     }
 
     @Test

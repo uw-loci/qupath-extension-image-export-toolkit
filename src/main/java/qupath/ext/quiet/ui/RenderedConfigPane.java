@@ -45,11 +45,13 @@ import javafx.util.Duration;
 import javafx.util.StringConverter;
 
 import qupath.ext.quiet.export.ClassNames;
+import qupath.ext.quiet.export.MapOverlaySource;
 import qupath.ext.quiet.export.OutputFormat;
 import qupath.ext.quiet.export.RenderedExportConfig;
 import qupath.ext.quiet.export.RenderedExportConfig.DisplaySettingsMode;
 import qupath.ext.quiet.export.RenderedImageExporter;
 import qupath.ext.quiet.export.ScaleBarRenderer;
+import qupath.ext.quiet.export.TiffDescription;
 import qupath.ext.quiet.preferences.QuietPreferences;
 import qupath.fx.utils.FXUtils;
 import qupath.lib.analysis.heatmaps.DensityMaps;
@@ -63,6 +65,7 @@ import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.viewer.overlays.PixelClassificationOverlay;
 import qupath.lib.images.ImageData;
 import qupath.lib.images.servers.ImageServer;
+import qupath.lib.images.servers.ImageServers;
 import qupath.lib.objects.classes.PathClass;
 
 /**
@@ -117,6 +120,40 @@ public class RenderedConfigPane extends VBox {
     private HBox densityMapBox;
     private ComboBox<String> colormapCombo;
     private Label colormapLabel;
+
+    // Map overlay source and color range
+    private ComboBox<RenderedExportConfig.MapSource> mapSourceCombo;
+    private Label mapSourceLabel;
+    private ComboBox<String> mapFilePatternCombo;
+    private Label mapFileLabel;
+    private HBox mapFileBox;
+    private Label mapFileStatusLabel;
+    private ComboBox<String> mapChannelCombo;
+    private Label mapChannelLabel;
+    private ComboBox<RenderedExportConfig.MapRangeMode> mapRangeCombo;
+    private Label mapRangeLabel;
+    private TextField mapRangeMinField;
+    private TextField mapRangeMaxField;
+    private Label mapFixedLabel;
+    private HBox mapFixedBox;
+    private Spinner<Double> mapLowPercentileSpinner;
+    private Spinner<Double> mapHighPercentileSpinner;
+    private Label mapPercentileLabel;
+    private HBox mapPercentileBox;
+    private Label mapSharedNoteLabel;
+    private TextField mapLabelField;
+    private Label mapLabelLabel;
+    /** The title last filled in from the channel, replaced while the user has not edited it. */
+    private String lastAutoMapLabel = "";
+    /** Units of the last checked map file's channels, by channel name. */
+    private final java.util.Map<String, String> mapChannelUnits = new java.util.HashMap<>();
+
+    /** Example patterns offered in the map file box. */
+    private static final List<String> MAP_PATTERN_EXAMPLES = List.of(
+            "{imageDir}/{imageBase}_map.ome.tif",
+            "{project}/maps/{imageSafe}.ome.tif",
+            "{project}/fiber-analysis/density-maps/{imageSafe:60}_density.ome.tif",
+            "{project}/fiber-analysis/classifier-maps/{imageSafe:60}_*.ome.tif");
 
     // Color scale bar controls
     private CheckBox showColorScaleBarCheck;
@@ -216,6 +253,9 @@ public class RenderedConfigPane extends VBox {
 
     // Simple mode state
     private boolean simpleMode;
+
+    /** True while saved settings are being applied to the controls. */
+    private boolean restoringPreferences;
 
     // Live preview: one window, re-rendered when a setting changes while it is open
     private Stage previewStage;
@@ -686,6 +726,13 @@ public class RenderedConfigPane extends VBox {
         var grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(10);
+        // A long map file pattern must not squeeze the labels
+        var labelColumn = new javafx.scene.layout.ColumnConstraints();
+        labelColumn.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE);
+        var fieldColumn = new javafx.scene.layout.ColumnConstraints();
+        fieldColumn.setHgrow(Priority.ALWAYS);
+        fieldColumn.setMinWidth(0);
+        grid.getColumnConstraints().addAll(labelColumn, fieldColumn);
         int row = 0;
 
         // Classifier selection (classifier mode only)
@@ -702,6 +749,34 @@ public class RenderedConfigPane extends VBox {
         grid.add(classifierBox, 1, row);
         row++;
 
+        // Map source (density map mode only)
+        mapSourceLabel = new Label(resources.getString("rendered.label.mapSource"));
+        grid.add(mapSourceLabel, 0, row);
+        mapSourceCombo = new ComboBox<>(FXCollections.observableArrayList(
+                RenderedExportConfig.MapSource.values()));
+        mapSourceCombo.setValue(RenderedExportConfig.MapSource.PROJECT_DENSITY_MAP);
+        mapSourceCombo.setMaxWidth(Double.MAX_VALUE);
+        mapSourceCombo.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(RenderedExportConfig.MapSource source) {
+                if (source == null) return "";
+                return switch (source) {
+                    case PROJECT_DENSITY_MAP -> resources.getString("rendered.mapSource.project");
+                    case IMAGE_FILE -> resources.getString("rendered.mapSource.file");
+                };
+            }
+            @Override
+            public RenderedExportConfig.MapSource fromString(String s) {
+                return RenderedExportConfig.MapSource.PROJECT_DENSITY_MAP;
+            }
+        });
+        mapSourceCombo.valueProperty().addListener((obs, o, n) -> {
+            updateMapVisibility();
+            if (n == RenderedExportConfig.MapSource.IMAGE_FILE) checkMapFile();
+        });
+        grid.add(mapSourceCombo, 1, row);
+        row++;
+
         // Density map selector (density map mode only)
         densityMapLabel = new Label(resources.getString("rendered.label.densityMap"));
         grid.add(densityMapLabel, 0, row);
@@ -716,6 +791,45 @@ public class RenderedConfigPane extends VBox {
         grid.add(densityMapBox, 1, row);
         row++;
 
+        // Map file pattern + channel (map file source only)
+        mapFileLabel = new Label(resources.getString("rendered.label.mapFile"));
+        grid.add(mapFileLabel, 0, row);
+        mapFilePatternCombo = new ComboBox<>(FXCollections.observableArrayList(MAP_PATTERN_EXAMPLES));
+        mapFilePatternCombo.setEditable(true);
+        mapFilePatternCombo.setMaxWidth(Double.MAX_VALUE);
+        mapFilePatternCombo.setMinWidth(150);
+        mapFilePatternCombo.setPrefWidth(300);
+        mapFilePatternCombo.setPromptText(MAP_PATTERN_EXAMPLES.get(0));
+        mapFilePatternCombo.valueProperty().addListener((obs, o, n) -> checkMapFile());
+        var mapCheckButton = new Button(resources.getString("rendered.button.checkMapFile"));
+        mapCheckButton.setTooltip(createTooltip("tooltip.rendered.checkMapFile"));
+        mapCheckButton.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE);
+        mapCheckButton.setOnAction(e -> {
+            // Commit typed text first; an editable combo only commits on Enter
+            mapFilePatternCombo.setValue(mapFilePatternCombo.getEditor().getText());
+            checkMapFile();
+        });
+        mapFileBox = new HBox(5, mapFilePatternCombo, mapCheckButton);
+        HBox.setHgrow(mapFilePatternCombo, Priority.ALWAYS);
+        grid.add(mapFileBox, 1, row);
+        row++;
+
+        mapFileStatusLabel = new Label();
+        mapFileStatusLabel.setWrapText(true);
+        mapFileStatusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        grid.add(mapFileStatusLabel, 1, row);
+        row++;
+
+        mapChannelLabel = new Label(resources.getString("rendered.label.mapChannel"));
+        grid.add(mapChannelLabel, 0, row);
+        mapChannelCombo = new ComboBox<>();
+        mapChannelCombo.setEditable(true);
+        mapChannelCombo.setMaxWidth(Double.MAX_VALUE);
+        mapChannelCombo.setPromptText(resources.getString("rendered.mapChannel.first"));
+        mapChannelCombo.valueProperty().addListener((obs, o, n) -> updateAutoMapLabel());
+        grid.add(mapChannelCombo, 1, row);
+        row++;
+
         // Colormap/LUT selector (density map mode only)
         colormapLabel = new Label(resources.getString("rendered.label.colormap"));
         grid.add(colormapLabel, 0, row);
@@ -726,6 +840,65 @@ public class RenderedConfigPane extends VBox {
         colormapCombo.setCellFactory(lv -> createColormapCell());
         colormapCombo.setButtonCell(createColormapCell());
         grid.add(colormapCombo, 1, row);
+        row++;
+
+        // Color range (density map mode only)
+        mapRangeLabel = new Label(resources.getString("rendered.label.mapRange"));
+        grid.add(mapRangeLabel, 0, row);
+        mapRangeCombo = new ComboBox<>(FXCollections.observableArrayList(
+                RenderedExportConfig.MapRangeMode.values()));
+        mapRangeCombo.setValue(RenderedExportConfig.MapRangeMode.PER_IMAGE);
+        mapRangeCombo.setMaxWidth(Double.MAX_VALUE);
+        mapRangeCombo.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(RenderedExportConfig.MapRangeMode mode) {
+                if (mode == null) return "";
+                return switch (mode) {
+                    case PER_IMAGE -> resources.getString("rendered.mapRange.perImage");
+                    case FIXED -> resources.getString("rendered.mapRange.fixed");
+                    case SHARED -> resources.getString("rendered.mapRange.shared");
+                };
+            }
+            @Override
+            public RenderedExportConfig.MapRangeMode fromString(String s) {
+                return RenderedExportConfig.MapRangeMode.PER_IMAGE;
+            }
+        });
+        mapRangeCombo.valueProperty().addListener((obs, o, n) -> updateMapVisibility());
+        grid.add(mapRangeCombo, 1, row);
+        row++;
+
+        mapFixedLabel = new Label(resources.getString("rendered.label.mapFixedRange"));
+        grid.add(mapFixedLabel, 0, row);
+        mapRangeMinField = new TextField("0");
+        mapRangeMinField.setPrefColumnCount(7);
+        mapRangeMaxField = new TextField("1");
+        mapRangeMaxField.setPrefColumnCount(7);
+        mapFixedBox = new HBox(5, mapRangeMinField,
+                new Label(resources.getString("rendered.label.rangeTo")), mapRangeMaxField);
+        mapFixedBox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        grid.add(mapFixedBox, 1, row);
+        row++;
+
+        mapPercentileLabel = new Label(resources.getString("rendered.label.mapPercentiles"));
+        grid.add(mapPercentileLabel, 0, row);
+        mapLowPercentileSpinner = new Spinner<>(0.0, 100.0, 1.0, 0.5);
+        mapLowPercentileSpinner.setEditable(true);
+        mapLowPercentileSpinner.setPrefWidth(90);
+        mapHighPercentileSpinner = new Spinner<>(0.0, 100.0, 99.0, 0.5);
+        mapHighPercentileSpinner.setEditable(true);
+        mapHighPercentileSpinner.setPrefWidth(90);
+        mapPercentileBox = new HBox(5, mapLowPercentileSpinner,
+                new Label(resources.getString("rendered.label.rangeTo")), mapHighPercentileSpinner);
+        mapPercentileBox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        grid.add(mapPercentileBox, 1, row);
+        row++;
+
+        mapSharedNoteLabel = new Label(resources.getString("rendered.mapRange.sharedNote"));
+        mapSharedNoteLabel.setWrapText(true);
+        mapSharedNoteLabel.setStyle("-fx-font-size: 11; -fx-text-fill: " + ThemeColors.MUTED
+                + "; -fx-font-style: italic;");
+        grid.add(mapSharedNoteLabel, 1, row);
         row++;
 
         return SectionBuilder.createSection(
@@ -875,6 +1048,13 @@ public class RenderedConfigPane extends VBox {
             }
         });
         grid.add(colorScaleBarPositionCombo, 1, row);
+        row++;
+
+        mapLabelLabel = new Label(resources.getString("rendered.label.colorScaleBarTitle"));
+        grid.add(mapLabelLabel, 0, row);
+        mapLabelField = new TextField();
+        mapLabelField.setPromptText(resources.getString("rendered.colorScaleBarTitle.prompt"));
+        grid.add(mapLabelField, 1, row);
         row++;
 
         colorScaleBarFontSizeLabel = new Label(resources.getString("rendered.label.colorScaleBarFontSize"));
@@ -1238,10 +1418,7 @@ public class RenderedConfigPane extends VBox {
         classifierBox.setVisible(isClassifier);
         classifierBox.setManaged(isClassifier);
 
-        densityMapLabel.setVisible(isDensityMap);
-        densityMapLabel.setManaged(isDensityMap);
-        densityMapBox.setVisible(isDensityMap);
-        densityMapBox.setManaged(isDensityMap);
+        updateMapVisibility();
         colormapLabel.setVisible(isDensityMap);
         colormapLabel.setManaged(isDensityMap);
         colormapCombo.setVisible(isDensityMap);
@@ -1267,6 +1444,156 @@ public class RenderedConfigPane extends VBox {
             updateColorScaleBarVisibility(showColorScaleBarCheck.isSelected());
         }
         applySimpleModeOverrides();
+    }
+
+    private static void showNode(javafx.scene.Node node, boolean show) {
+        node.setVisible(show);
+        node.setManaged(show);
+    }
+
+    /** Show the map source and range controls that apply to the current choices. */
+    private void updateMapVisibility() {
+        if (mapSourceCombo == null || mapRangeCombo == null) return;
+        boolean map = modeCombo != null
+                && modeCombo.getValue() == RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY;
+        boolean file = map && mapSourceCombo.getValue() == RenderedExportConfig.MapSource.IMAGE_FILE;
+        var range = mapRangeCombo.getValue();
+        showNode(mapSourceLabel, map);
+        showNode(mapSourceCombo, map);
+        showNode(densityMapLabel, map && !file);
+        showNode(densityMapBox, map && !file);
+        showNode(mapFileLabel, file);
+        showNode(mapFileBox, file);
+        showNode(mapFileStatusLabel, file);
+        showNode(mapChannelLabel, file);
+        showNode(mapChannelCombo, file);
+        showNode(mapRangeLabel, map);
+        showNode(mapRangeCombo, map);
+        boolean fixed = map && range == RenderedExportConfig.MapRangeMode.FIXED;
+        boolean shared = map && range == RenderedExportConfig.MapRangeMode.SHARED;
+        showNode(mapFixedLabel, fixed);
+        showNode(mapFixedBox, fixed);
+        showNode(mapPercentileLabel, shared);
+        showNode(mapPercentileBox, shared);
+        showNode(mapSharedNoteLabel, shared);
+    }
+
+    /**
+     * Look up the open image's map file in the background, list its channels and
+     * report the file (or why there is none) under the pattern box.
+     */
+    private void checkMapFile() {
+        if (mapSourceCombo == null
+                || mapSourceCombo.getValue() != RenderedExportConfig.MapSource.IMAGE_FILE) {
+            return;
+        }
+        String pattern = mapFilePatternCombo.getValue();
+        var viewer = qupath.getViewer();
+        if (pattern == null || pattern.isBlank()) {
+            mapFileStatusLabel.setText(resources.getString("rendered.mapFile.noPattern"));
+            return;
+        }
+        if (viewer == null || viewer.getImageData() == null) {
+            mapFileStatusLabel.setText(resources.getString("rendered.mapFile.noImage"));
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        ImageData<BufferedImage> imageData = (ImageData<BufferedImage>) viewer.getImageData();
+        var project = qupath.getProject();
+        mapFileStatusLabel.setText(resources.getString("rendered.mapFile.checking"));
+        Thread t = new Thread(() -> {
+            String status;
+            List<String> channels = new ArrayList<>();
+            java.util.Map<String, String> units = new java.util.HashMap<>();
+            try {
+                var source = (MapOverlaySource.ImageFileSource)
+                        MapOverlaySource.ofImageFiles(project, pattern, "");
+                File file = source.findFile(imageData);
+                try (var server = ImageServers.buildServer(file.toURI())) {
+                    var unitByIndex = TiffDescription.channelUnits(TiffDescription.read(file));
+                    for (int c = 0; c < server.nChannels(); c++) {
+                        String name = server.getChannel(c).getName();
+                        channels.add(name);
+                        if (unitByIndex.containsKey(c)) units.put(name, unitByIndex.get(c));
+                    }
+                    status = String.format(resources.getString("rendered.mapFile.found"),
+                            file.getName(), server.getWidth(), server.getHeight(),
+                            server.nChannels(), server.getPixelType().toString().toLowerCase());
+                }
+            } catch (Exception e) {
+                status = String.format(resources.getString("rendered.mapFile.notFound"),
+                        e.getMessage());
+            }
+            final String finalStatus = status;
+            Platform.runLater(() -> {
+                mapFileStatusLabel.setText(finalStatus);
+                if (channels.isEmpty()) return;
+                mapChannelUnits.clear();
+                mapChannelUnits.putAll(units);
+                String current = mapChannelCombo.getValue();
+                mapChannelCombo.getItems().setAll(channels);
+                if (current != null && channels.contains(current)) {
+                    mapChannelCombo.setValue(current);
+                } else if (current == null || current.isBlank() || !channels.contains(current)) {
+                    mapChannelCombo.setValue(channels.get(0));
+                }
+                updateAutoMapLabel();
+            });
+        });
+        t.setDaemon(true);
+        t.setName("quiet-map-file-check");
+        t.start();
+    }
+
+    /** Fill the color bar title from the channel and its unit, unless the user has typed one. */
+    private void updateAutoMapLabel() {
+        if (mapLabelField == null
+                || mapSourceCombo.getValue() != RenderedExportConfig.MapSource.IMAGE_FILE) {
+            return;
+        }
+        String channel = mapChannelCombo.getValue();
+        if (channel == null || channel.isBlank()) return;
+        String unit = mapChannelUnits.get(channel);
+        String auto = unit == null || unit.isBlank() || channel.contains(unit)
+                ? channel : channel + " (" + unit + ")";
+        String text = mapLabelField.getText();
+        if (text == null || text.isBlank() || text.equals(lastAutoMapLabel)) {
+            mapLabelField.setText(auto);
+        }
+        lastAutoMapLabel = auto;
+    }
+
+    /** The map overlay settings from the controls. */
+    private RenderedExportConfig.MapOverlayConfig buildMapOverlayConfig() {
+        double min = parseRangeValue(mapRangeMinField.getText(), "minimum");
+        double max = parseRangeValue(mapRangeMaxField.getText(), "maximum");
+        String pattern = mapFilePatternCombo.getValue();
+        String channel = mapChannelCombo.getValue();
+        return new RenderedExportConfig.MapOverlayConfig(
+                mapSourceCombo.getValue(),
+                pattern == null ? "" : pattern.trim(),
+                channel == null ? "" : channel.trim(),
+                mapRangeCombo.getValue(),
+                min, max,
+                mapLowPercentileSpinner.getValue() != null ? mapLowPercentileSpinner.getValue() : 1.0,
+                mapHighPercentileSpinner.getValue() != null ? mapHighPercentileSpinner.getValue() : 99.0,
+                false,
+                mapLabelField.getText() == null ? "" : mapLabelField.getText().trim());
+    }
+
+    private double parseRangeValue(String text, String which) {
+        if (mapRangeCombo.getValue() != RenderedExportConfig.MapRangeMode.FIXED) {
+            try {
+                return Double.parseDouble(text.trim());
+            } catch (RuntimeException e) {
+                return "maximum".equals(which) ? 1.0 : 0.0;
+            }
+        }
+        try {
+            return Double.parseDouble(text.trim());
+        } catch (RuntimeException e) {
+            throw new IllegalArgumentException("The map range " + which + " is not a number: " + text);
+        }
     }
 
     private void updateDisplaySettingsVisibility(DisplaySettingsMode mode) {
@@ -1317,6 +1644,10 @@ public class RenderedConfigPane extends VBox {
         colorScaleBarFontSizeSpinner.setManaged(show);
         colorScaleBarBoldCheck.setVisible(show);
         colorScaleBarBoldCheck.setManaged(show);
+        mapLabelLabel.setVisible(show);
+        mapLabelLabel.setManaged(show);
+        mapLabelField.setVisible(show);
+        mapLabelField.setManaged(show);
         applySimpleModeOverrides();
     }
 
@@ -1492,6 +1823,8 @@ public class RenderedConfigPane extends VBox {
      * auto-switch to SVG for vector-sharp overlays.
      */
     private void maybeSwitchToSvg() {
+        // Restoring saved settings must not override the saved format
+        if (restoringPreferences) return;
         if (formatCombo.getValue() == OutputFormat.PNG) {
             formatCombo.setValue(OutputFormat.SVG);
         }
@@ -1785,6 +2118,20 @@ public class RenderedConfigPane extends VBox {
         densityMapCombo.setTooltip(createTooltip("tooltip.rendered.densityMap"));
         densityMapLabel.setTooltip(createTooltip("tooltip.rendered.densityMap"));
         colormapCombo.setTooltip(createTooltip("tooltip.rendered.colormap"));
+        mapSourceCombo.setTooltip(createTooltip("tooltip.rendered.mapSource"));
+        mapSourceLabel.setTooltip(createTooltip("tooltip.rendered.mapSource"));
+        mapFilePatternCombo.setTooltip(createTooltip("tooltip.rendered.mapFile"));
+        mapFileLabel.setTooltip(createTooltip("tooltip.rendered.mapFile"));
+        mapChannelCombo.setTooltip(createTooltip("tooltip.rendered.mapChannel"));
+        mapChannelLabel.setTooltip(createTooltip("tooltip.rendered.mapChannel"));
+        mapRangeCombo.setTooltip(createTooltip("tooltip.rendered.mapRange"));
+        mapRangeLabel.setTooltip(createTooltip("tooltip.rendered.mapRange"));
+        mapFixedLabel.setTooltip(createTooltip("tooltip.rendered.mapRange"));
+        mapPercentileLabel.setTooltip(createTooltip("tooltip.rendered.mapPercentiles"));
+        mapLowPercentileSpinner.setTooltip(createTooltip("tooltip.rendered.mapPercentiles"));
+        mapHighPercentileSpinner.setTooltip(createTooltip("tooltip.rendered.mapPercentiles"));
+        mapLabelField.setTooltip(createTooltip("tooltip.rendered.colorScaleBarTitle"));
+        mapLabelLabel.setTooltip(createTooltip("tooltip.rendered.colorScaleBarTitle"));
         colormapLabel.setTooltip(createTooltip("tooltip.rendered.colormap"));
 
         // Object overlay checkboxes (self-labeling)
@@ -1974,6 +2321,15 @@ public class RenderedConfigPane extends VBox {
     }
 
     private void restorePreferences() {
+        restoringPreferences = true;
+        try {
+            restoreSavedPreferences();
+        } finally {
+            restoringPreferences = false;
+        }
+    }
+
+    private void restoreSavedPreferences() {
         String savedRegionType = QuietPreferences.getRenderedRegionType();
         try {
             regionTypeCombo.setValue(RenderedExportConfig.RegionType.valueOf(savedRegionType));
@@ -2041,6 +2397,29 @@ public class RenderedConfigPane extends VBox {
         if (savedColormap != null && !savedColormap.isBlank()) {
             colormapCombo.setValue(savedColormap);
         }
+        try {
+            mapSourceCombo.setValue(RenderedExportConfig.MapSource.valueOf(
+                    QuietPreferences.getRenderedMapSource()));
+        } catch (IllegalArgumentException e) { /* keep default */ }
+        String savedPattern = QuietPreferences.getRenderedMapFilePattern();
+        if (savedPattern != null && !savedPattern.isBlank()) {
+            mapFilePatternCombo.setValue(savedPattern);
+        }
+        String savedChannel = QuietPreferences.getRenderedMapChannel();
+        if (savedChannel != null && !savedChannel.isBlank()) {
+            mapChannelCombo.setValue(savedChannel);
+        }
+        try {
+            mapRangeCombo.setValue(RenderedExportConfig.MapRangeMode.valueOf(
+                    QuietPreferences.getRenderedMapRangeMode()));
+        } catch (IllegalArgumentException e) { /* keep default */ }
+        mapRangeMinField.setText(formatRangeValue(QuietPreferences.getRenderedMapRangeMin()));
+        mapRangeMaxField.setText(formatRangeValue(QuietPreferences.getRenderedMapRangeMax()));
+        mapLowPercentileSpinner.getValueFactory().setValue(QuietPreferences.getRenderedMapLowPercentile());
+        mapHighPercentileSpinner.getValueFactory().setValue(QuietPreferences.getRenderedMapHighPercentile());
+        mapLabelField.setText(QuietPreferences.getRenderedMapLabel());
+        lastAutoMapLabel = mapLabelField.getText();
+        updateMapVisibility();
 
         // Color scale bar preferences
         showColorScaleBarCheck.setSelected(QuietPreferences.isRenderedShowColorScaleBar());
@@ -2160,6 +2539,27 @@ public class RenderedConfigPane extends VBox {
         if (densityMap != null) QuietPreferences.setRenderedDensityMapName(densityMap);
         var colormap = colormapCombo.getValue();
         if (colormap != null) QuietPreferences.setRenderedColormapName(colormap);
+        if (mapSourceCombo.getValue() != null) {
+            QuietPreferences.setRenderedMapSource(mapSourceCombo.getValue().name());
+        }
+        QuietPreferences.setRenderedMapFilePattern(mapFilePatternCombo.getValue());
+        QuietPreferences.setRenderedMapChannel(mapChannelCombo.getValue());
+        if (mapRangeCombo.getValue() != null) {
+            QuietPreferences.setRenderedMapRangeMode(mapRangeCombo.getValue().name());
+        }
+        try {
+            QuietPreferences.setRenderedMapRangeMin(Double.parseDouble(mapRangeMinField.getText().trim()));
+            QuietPreferences.setRenderedMapRangeMax(Double.parseDouble(mapRangeMaxField.getText().trim()));
+        } catch (RuntimeException e) {
+            // keep the last valid range
+        }
+        if (mapLowPercentileSpinner.getValue() != null) {
+            QuietPreferences.setRenderedMapLowPercentile(mapLowPercentileSpinner.getValue());
+        }
+        if (mapHighPercentileSpinner.getValue() != null) {
+            QuietPreferences.setRenderedMapHighPercentile(mapHighPercentileSpinner.getValue());
+        }
+        QuietPreferences.setRenderedMapLabel(mapLabelField.getText());
         QuietPreferences.setRenderedShowColorScaleBar(showColorScaleBarCheck.isSelected());
         var csPos = colorScaleBarPositionCombo.getValue();
         if (csPos != null) QuietPreferences.setRenderedColorScaleBarPosition(csPos.name());
@@ -2269,6 +2669,7 @@ public class RenderedConfigPane extends VBox {
                 .panelLabelBold(panelLabelBoldCheck.isSelected());
 
         builder.densityMapName(densityMapCombo.getValue())
+                .mapOverlay(buildMapOverlayConfig())
                 .colormapName(colormapCombo.getValue())
                 .showColorScaleBar(showColorScaleBarCheck.isSelected())
                 .colorScaleBarPosition(colorScaleBarPositionCombo.getValue() != null
@@ -2524,7 +2925,7 @@ public class RenderedConfigPane extends VBox {
 
         // Load classifier or density map builder if needed
         PixelClassifier classifier = null;
-        DensityMapBuilder densityBuilder = null;
+        MapOverlaySource mapSource = null;
         if (config.getRenderMode() == RenderedExportConfig.RenderMode.CLASSIFIER_OVERLAY) {
             String classifierName = config.overlays().classifierName();
             if (ACTIVE_OVERLAY_SENTINEL.equals(classifierName)) {
@@ -2551,28 +2952,17 @@ public class RenderedConfigPane extends VBox {
                 return;
             }
         } else if (config.getRenderMode() == RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY) {
-            String dmName = config.overlays().densityMapName();
-            if (dmName == null || dmName.isBlank()) {
-                logger.warn("No density map selected for preview");
-                onFail.accept("No density map selected.");
+            try {
+                mapSource = MapOverlaySource.forConfig(qupath.getProject(), config);
+            } catch (IOException e) {
+                logger.warn("No map overlay for preview: {}", e.getMessage());
+                onFail.accept("Preview failed: " + e.getMessage());
                 return;
-            }
-            var project = qupath.getProject();
-            if (project != null) {
-                try {
-                    var dmResources = project.getResources(
-                            DensityMaps.PROJECT_LOCATION, DensityMapBuilder.class, "json");
-                    densityBuilder = dmResources.get(dmName);
-                } catch (Exception e) {
-                    logger.error("Failed to load density map for preview: {}", dmName, e);
-                    onFail.accept("Could not load density map " + dmName + ".");
-                    return;
-                }
             }
         }
 
         final PixelClassifier finalClassifier = classifier;
-        final DensityMapBuilder finalDensityBuilder = densityBuilder;
+        final MapOverlaySource finalMapSource = mapSource;
 
         // Render at up to half the screen's longer dimension so the preview
         // window can fill the cap without being blurry on a large monitor.
@@ -2588,7 +2978,7 @@ public class RenderedConfigPane extends VBox {
             String failure = null;
             try {
                 preview = RenderedImageExporter.renderPreview(
-                        imageData, finalClassifier, finalDensityBuilder, config, maxPreviewDim);
+                        imageData, finalClassifier, finalMapSource, config, maxPreviewDim);
             } catch (Exception e) {
                 logger.error("Preview rendering failed", e);
                 failure = "Preview failed: " + e.getMessage();
@@ -2663,8 +3053,8 @@ public class RenderedConfigPane extends VBox {
         return modeCombo.getValue();
     }
 
-    public String getDensityMapName() {
-        return densityMapCombo.getValue();
+    private static String formatRangeValue(double v) {
+        return v == Math.rint(v) && Math.abs(v) < 1e15 ? String.valueOf((long) v) : String.valueOf(v);
     }
 
     /**

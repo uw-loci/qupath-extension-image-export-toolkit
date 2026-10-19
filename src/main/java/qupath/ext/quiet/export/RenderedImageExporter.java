@@ -34,8 +34,6 @@ import org.jfree.svg.SVGHints;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import qupath.lib.analysis.heatmaps.DensityMaps;
-import qupath.lib.analysis.heatmaps.DensityMaps.DensityMapBuilder;
 import qupath.lib.classifiers.pixel.PixelClassificationImageServer;
 import qupath.lib.classifiers.pixel.PixelClassifier;
 import qupath.lib.color.ColorDeconvolutionStains;
@@ -190,24 +188,24 @@ public class RenderedImageExporter {
      * Exports a single image with a density map overlay colorized by a LUT.
      *
      * @param imageData      the image data to export (caller is responsible for closing)
-     * @param densityBuilder the density map builder (loaded from project resources)
+     * @param mapSource      the map overlay source
      * @param config         rendered export configuration
      * @param entryName      the image entry name (used for filename generation)
      * @param panelIndex     zero-based index for auto-incrementing panel labels
      * @throws IOException if the export fails
      */
     public static void exportWithDensityMap(ImageData<BufferedImage> imageData,
-                                             DensityMapBuilder densityBuilder,
+                                             MapOverlaySource mapSource,
                                              RenderedExportConfig config,
                                              String entryName,
                                              int panelIndex) throws IOException {
 
         ImageServer<BufferedImage> baseServer = imageData.getServer();
         ImageServer<BufferedImage> displayServer = null;
-        ImageServer<BufferedImage> densityServer = null;
+        MapLayer mapLayer = null;
 
         try {
-            densityServer = densityBuilder.buildServer(imageData);
+            mapLayer = mapSource.open(imageData);
             displayServer = resolveDisplayServer(imageData, baseServer, config);
 
             String panelLabel = resolvePanelLabel(config, panelIndex);
@@ -216,23 +214,25 @@ public class RenderedImageExporter {
 
             if (config.getFormat() == OutputFormat.SVG) {
                 String svg = renderRegionToSvg(imageData, baseServer,
-                        null, densityServer, displayServer, config,
+                        null, mapLayer, displayServer, config,
                         0, 0, baseServer.getWidth(), baseServer.getHeight(), panelLabel);
                 writeSvg(svg, outputFile);
             } else {
                 BufferedImage result = renderDensityMapComposite(
-                        imageData, baseServer, densityServer, displayServer,
+                        imageData, baseServer, mapLayer, displayServer,
                         config, panelLabel, entryName);
                 ImageWriterTools.writeImage(result, outputFile.getAbsolutePath());
             }
 
             logger.info("Exported: {}", outputFile.getAbsolutePath());
 
+        } catch (IllegalArgumentException e) {
+            throw e;
         } catch (Exception e) {
             throw new IOException("Failed to export density map image: " + entryName, e);
         } finally {
             closeQuietly(displayServer, entryName);
-            closeQuietly(densityServer, entryName);
+            closeQuietly(mapLayer, entryName);
         }
     }
 
@@ -243,7 +243,7 @@ public class RenderedImageExporter {
      *
      * @param imageData      the image data to export (caller is responsible for closing)
      * @param classifier     the pixel classifier (null for non-CLASSIFIER modes)
-     * @param densityBuilder the density map builder (null for non-DENSITY_MAP modes)
+     * @param mapSource      the map overlay source (null for non-DENSITY_MAP modes)
      * @param config         rendered export configuration (must have regionType ALL_ANNOTATIONS)
      * @param entryName      the image entry name (used for filename generation)
      * @param panelIndex     zero-based starting index for auto-incrementing panel labels
@@ -252,7 +252,7 @@ public class RenderedImageExporter {
      */
     public static int exportPerAnnotation(ImageData<BufferedImage> imageData,
                                            PixelClassifier classifier,
-                                           DensityMapBuilder densityBuilder,
+                                           MapOverlaySource mapSource,
                                            RenderedExportConfig config,
                                            String entryName,
                                            int panelIndex) throws IOException {
@@ -281,7 +281,7 @@ public class RenderedImageExporter {
         // Set up servers for the render mode
         PixelClassificationImageServer classificationServer = null;
         ImageServer<BufferedImage> displayServer = null;
-        ImageServer<BufferedImage> densityServer = null;
+        MapLayer mapLayer = null;
 
         try {
             displayServer = resolveDisplayServer(imageData, baseServer, config);
@@ -294,8 +294,8 @@ public class RenderedImageExporter {
                 }
                 classificationServer = new PixelClassificationImageServer(imageData, classifier);
             } else if (config.getRenderMode() == RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY
-                    && densityBuilder != null) {
-                densityServer = densityBuilder.buildServer(imageData);
+                    && mapSource != null) {
+                mapLayer = mapSource.open(imageData);
             }
 
             // Per-class index counters for filename suffixes
@@ -348,13 +348,13 @@ public class RenderedImageExporter {
 
                     if (config.getFormat() == OutputFormat.SVG) {
                         String svg = renderRegionToSvg(imageData, baseServer,
-                                classificationServer, densityServer, displayServer,
+                                classificationServer, mapLayer, displayServer,
                                 config, x, y, w, h, panelLabel);
                         writeSvg(svg, outputFile);
                     } else {
                         BufferedImage regionImage = renderRegion(
                                 imageData, baseServer,
-                                classificationServer, densityServer, displayServer,
+                                classificationServer, mapLayer, displayServer,
                                 config, x, y, w, h, panelLabel);
                         ImageWriterTools.writeImage(regionImage, outputFile.getAbsolutePath());
                     }
@@ -379,7 +379,7 @@ public class RenderedImageExporter {
         } finally {
             closeQuietly(displayServer, entryName);
             closeQuietly(classificationServer, entryName);
-            closeQuietly(densityServer, entryName);
+            closeQuietly(mapLayer, entryName);
         }
     }
 
@@ -395,7 +395,7 @@ public class RenderedImageExporter {
      *
      * @param imageData      the image data (caller is responsible for closing)
      * @param classifier     the pixel classifier (null for non-CLASSIFIER modes)
-     * @param densityBuilder the density map builder (null for non-DENSITY_MAP modes)
+     * @param mapSource      the map overlay source (null for non-DENSITY_MAP modes)
      * @param config         rendered export configuration
      * @param entryName      the image entry name (for info-label resolution)
      * @return the rendered whole-image BufferedImage
@@ -403,13 +403,13 @@ public class RenderedImageExporter {
      */
     public static BufferedImage renderToImage(ImageData<BufferedImage> imageData,
                                               PixelClassifier classifier,
-                                              DensityMapBuilder densityBuilder,
+                                              MapOverlaySource mapSource,
                                               RenderedExportConfig config,
                                               String entryName) throws IOException {
         ImageServer<BufferedImage> baseServer = imageData.getServer();
         ImageServer<BufferedImage> displayServer = null;
         PixelClassificationImageServer classificationServer = null;
-        ImageServer<BufferedImage> densityServer = null;
+        MapLayer mapLayer = null;
         try {
             displayServer = resolveDisplayServer(imageData, baseServer, config);
             String panelLabel = resolvePanelLabel(config, 0);
@@ -427,10 +427,10 @@ public class RenderedImageExporter {
                             displayServer, config, panelLabel, entryName);
                 }
                 case DENSITY_MAP_OVERLAY -> {
-                    if (densityBuilder != null) {
-                        densityServer = densityBuilder.buildServer(imageData);
+                    if (mapSource != null) {
+                        mapLayer = mapSource.open(imageData);
                         return renderDensityMapComposite(imageData, baseServer,
-                                densityServer, displayServer, config,
+                                mapLayer, displayServer, config,
                                 panelLabel, entryName);
                     }
                     return renderObjectComposite(imageData, baseServer,
@@ -441,14 +441,14 @@ public class RenderedImageExporter {
                             displayServer, config, panelLabel, entryName);
                 }
             }
-        } catch (IOException e) {
+        } catch (IOException | IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {
             throw new IOException("Failed to render image: " + entryName, e);
         } finally {
             closeQuietly(displayServer, entryName);
             closeQuietly(classificationServer, entryName);
-            closeQuietly(densityServer, entryName);
+            closeQuietly(mapLayer, entryName);
         }
     }
 
@@ -460,7 +460,7 @@ public class RenderedImageExporter {
             ImageData<BufferedImage> imageData,
             ImageServer<BufferedImage> baseServer,
             PixelClassificationImageServer classificationServer,
-            ImageServer<BufferedImage> densityServer,
+            MapLayer mapLayer,
             ImageServer<BufferedImage> displayServer,
             RenderedExportConfig config,
             int x, int y, int w, int h) throws Exception {
@@ -496,15 +496,11 @@ public class RenderedImageExporter {
                 g2d.drawImage(classImage,
                         0, 0, baseImage.getWidth(), baseImage.getHeight(), null);
             }
-        } else if (densityServer != null && opacity > 0) {
-            RegionRequest densityRequest = RegionRequest.createInstance(
-                    densityServer.getPath(), downsample, x, y, w, h);
-            BufferedImage densityImage = densityServer.readRegion(densityRequest);
-
+        } else if (mapLayer != null && opacity > 0) {
+            MapLayer.Band band = mapLayer.read(x, y, w, h, downsample);
             ColorMaps.ColorMap colorMap = resolveColorMap(config.overlays().colormapName());
-            double[] minMax = computeMinMax(densityImage);
-            BufferedImage colorized = colorizeDensityMap(
-                    densityImage, colorMap, minMax[0], minMax[1]);
+            double[] minMax = MapLayer.range(band, config.mapOverlay());
+            BufferedImage colorized = MapLayer.colorize(band, colorMap, minMax[0], minMax[1]);
 
             if (colorized != null) {
                 g2d.setComposite(AlphaComposite.getInstance(
@@ -525,13 +521,13 @@ public class RenderedImageExporter {
     private static void drawVectorOverlays(
             Graphics2D g2d,
             ImageData<BufferedImage> imageData,
-            ImageServer<BufferedImage> densityServer,
+            MapLayer mapLayer,
             RenderedExportConfig config,
             int regionX, int regionY, int regionW, int regionH,
             int imageWidth, int imageHeight,
             String panelLabel,
             double downsample) throws Exception {
-        drawVectorOverlays(g2d, imageData, densityServer, config,
+        drawVectorOverlays(g2d, imageData, mapLayer, config,
                 regionX, regionY, regionW, regionH,
                 imageWidth, imageHeight, panelLabel, downsample, false);
     }
@@ -545,14 +541,14 @@ public class RenderedImageExporter {
     private static void drawVectorOverlays(
             Graphics2D g2d,
             ImageData<BufferedImage> imageData,
-            ImageServer<BufferedImage> densityServer,
+            MapLayer mapLayer,
             RenderedExportConfig config,
             int regionX, int regionY, int regionW, int regionH,
             int imageWidth, int imageHeight,
             String panelLabel,
             double downsample,
             boolean skipObjectPainting) throws Exception {
-        drawVectorOverlays(g2d, imageData, densityServer, config,
+        drawVectorOverlays(g2d, imageData, mapLayer, config,
                 regionX, regionY, regionW, regionH,
                 imageWidth, imageHeight, panelLabel, downsample,
                 skipObjectPainting, null, null);
@@ -569,7 +565,7 @@ public class RenderedImageExporter {
     private static void drawVectorOverlays(
             Graphics2D g2d,
             ImageData<BufferedImage> imageData,
-            ImageServer<BufferedImage> densityServer,
+            MapLayer mapLayer,
             RenderedExportConfig config,
             int regionX, int regionY, int regionW, int regionH,
             int imageWidth, int imageHeight,
@@ -593,13 +589,11 @@ public class RenderedImageExporter {
         maybeDrawScaleBar(g2d, imageData, config, imageWidth, imageHeight, downsample);
 
         // Color scale bar for density map mode
-        if (densityServer != null && config.colorScaleBar().show()) {
+        if (mapLayer != null && config.colorScaleBar().show()) {
             ColorMaps.ColorMap colorMap = resolveColorMap(config.overlays().colormapName());
-            RegionRequest densityRequest = RegionRequest.createInstance(
-                    densityServer.getPath(), downsample,
-                    regionX, regionY, regionW, regionH);
-            BufferedImage densityImage = densityServer.readRegion(densityRequest);
-            double[] minMax = computeMinMax(densityImage);
+            // The raster pass read this region at this downsample; the layer returns it cached
+            MapLayer.Band band = mapLayer.read(regionX, regionY, regionW, regionH, downsample);
+            double[] minMax = MapLayer.range(band, config.mapOverlay());
             maybeDrawColorScaleBar(g2d, config, colorMap, minMax[0], minMax[1],
                     imageWidth, imageHeight);
         }
@@ -624,12 +618,12 @@ public class RenderedImageExporter {
             ImageData<BufferedImage> imageData,
             ImageServer<BufferedImage> baseServer,
             PixelClassificationImageServer classificationServer,
-            ImageServer<BufferedImage> densityServer,
+            MapLayer mapLayer,
             ImageServer<BufferedImage> displayServer,
             RenderedExportConfig config,
             int x, int y, int w, int h,
             String panelLabel) throws Exception {
-        return renderRegion(imageData, baseServer, classificationServer, densityServer,
+        return renderRegion(imageData, baseServer, classificationServer, mapLayer,
                 displayServer, config, x, y, w, h, panelLabel, null);
     }
 
@@ -637,7 +631,7 @@ public class RenderedImageExporter {
             ImageData<BufferedImage> imageData,
             ImageServer<BufferedImage> baseServer,
             PixelClassificationImageServer classificationServer,
-            ImageServer<BufferedImage> densityServer,
+            MapLayer mapLayer,
             ImageServer<BufferedImage> displayServer,
             RenderedExportConfig config,
             int x, int y, int w, int h,
@@ -645,7 +639,7 @@ public class RenderedImageExporter {
             String entryName) throws Exception {
 
         BufferedImage raster = renderRasterLayers(
-                imageData, baseServer, classificationServer, densityServer,
+                imageData, baseServer, classificationServer, mapLayer,
                 displayServer, config, x, y, w, h);
 
         double effectiveDs = resolveEffectiveDownsample(config, baseServer);
@@ -655,7 +649,7 @@ public class RenderedImageExporter {
                 RenderingHints.KEY_INTERPOLATION,
                 RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 
-        drawVectorOverlays(g2d, imageData, densityServer, config,
+        drawVectorOverlays(g2d, imageData, mapLayer, config,
                 x, y, w, h,
                 raster.getWidth(), raster.getHeight(),
                 panelLabel, effectiveDs,
@@ -680,14 +674,14 @@ public class RenderedImageExporter {
             ImageData<BufferedImage> imageData,
             ImageServer<BufferedImage> baseServer,
             PixelClassificationImageServer classificationServer,
-            ImageServer<BufferedImage> densityServer,
+            MapLayer mapLayer,
             ImageServer<BufferedImage> displayServer,
             RenderedExportConfig config,
             int x, int y, int w, int h,
             String panelLabel) throws Exception {
 
         BufferedImage raster = renderRasterLayers(
-                imageData, baseServer, classificationServer, densityServer,
+                imageData, baseServer, classificationServer, mapLayer,
                 displayServer, config, x, y, w, h);
 
         double effectiveDs = resolveEffectiveDownsample(config,
@@ -750,7 +744,7 @@ public class RenderedImageExporter {
 
         // Draw remaining overlays (scale bar, color scale bar, panel label, info label)
         // but skip object painting since we already did it as SVG vectors
-        drawVectorOverlays(svgG2d, imageData, densityServer, config,
+        drawVectorOverlays(svgG2d, imageData, mapLayer, config,
                 x, y, w, h,
                 raster.getWidth(), raster.getHeight(),
                 panelLabel, effectiveDs,
@@ -1002,7 +996,7 @@ public class RenderedImageExporter {
      *
      * @param imageData      the image data to preview
      * @param classifier     the pixel classifier (null for non-CLASSIFIER modes)
-     * @param densityBuilder the density map builder (null for non-DENSITY_MAP modes)
+     * @param mapSource      the map overlay source (null for non-DENSITY_MAP modes)
      * @param config         rendered export configuration
      * @param maxDimension   maximum pixel dimension for the longest side of the preview
      * @return the rendered preview image
@@ -1010,7 +1004,7 @@ public class RenderedImageExporter {
      */
     public static BufferedImage renderPreview(ImageData<BufferedImage> imageData,
                                               PixelClassifier classifier,
-                                              DensityMapBuilder densityBuilder,
+                                              MapOverlaySource mapSource,
                                               RenderedExportConfig config,
                                               int maxDimension) throws IOException {
 
@@ -1059,7 +1053,7 @@ public class RenderedImageExporter {
                             longestSide / maxDimension);
                     RenderedExportConfig previewConfig = buildPreviewConfig(config, previewDownsample);
                     return renderRegionPreview(imageData, baseServer, classifier,
-                            densityBuilder, previewConfig, x, y, w, h);
+                            mapSource, previewConfig, x, y, w, h);
                 }
             }
             // Fall through to whole-image preview if no annotation found
@@ -1074,7 +1068,7 @@ public class RenderedImageExporter {
 
         ImageServer<BufferedImage> displayServer = null;
         PixelClassificationImageServer classificationServer = null;
-        ImageServer<BufferedImage> densityServer = null;
+        MapLayer mapLayer = null;
 
         try {
             displayServer = resolveDisplayServer(imageData, baseServer, previewConfig);
@@ -1105,11 +1099,11 @@ public class RenderedImageExporter {
                     throw new IOException("Failed to render classifier preview", e);
                 }
             } else if (config.getRenderMode() == RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY
-                    && densityBuilder != null) {
-                densityServer = densityBuilder.buildServer(imageData);
+                    && mapSource != null) {
+                mapLayer = mapSource.open(imageData);
                 try {
                     return renderDensityMapComposite(
-                            imageData, baseServer, densityServer, displayServer,
+                            imageData, baseServer, mapLayer, displayServer,
                             previewConfig, previewLabel);
                 } catch (Exception e) {
                     throw new IOException("Failed to render density map preview", e);
@@ -1125,7 +1119,7 @@ public class RenderedImageExporter {
         } finally {
             closeQuietly(displayServer, "preview");
             closeQuietly(classificationServer, "preview");
-            closeQuietly(densityServer, "preview");
+            closeQuietly(mapLayer, "preview");
         }
     }
 
@@ -1151,32 +1145,7 @@ public class RenderedImageExporter {
 
     /** A builder carrying every setting that affects rendering. */
     private static RenderedExportConfig.Builder copyForRender(RenderedExportConfig config) {
-        return new RenderedExportConfig.Builder()
-                // Core fields
-                .regionType(config.getRegionType())
-                .selectedClassifications(config.getSelectedClassifications())
-                .paddingPixels(config.getPaddingPixels())
-                .renderMode(config.getRenderMode())
-                .displaySettingsMode(config.getDisplaySettingsMode())
-                .capturedDisplaySettings(config.getCapturedDisplaySettings())
-                .displayPresetName(config.getDisplayPresetName())
-                .overlayOpacity(config.getOverlayOpacity())
-                .downsample(config.getDownsample())
-                .targetDpi(config.getTargetDpi())
-                .format(config.getFormat())
-                .outputDirectory(config.getOutputDirectory())
-                .matchedDisplayPercentile(config.getMatchedDisplayPercentile())
-                .showChannelLegend(config.isShowChannelLegend())
-                .svgMaxVectorDetections(config.getSvgMaxVectorDetections())
-                // Sub-configs copied wholesale
-                .overlays(config.overlays())
-                .scaleBar(config.scaleBar())
-                .colorScaleBar(config.colorScaleBar())
-                .panelLabel(config.panelLabel())
-                .infoLabel(config.infoLabel())
-                .splitChannel(config.splitChannel())
-                .splitStains(config.splitStains())
-                .inset(config.inset());
+        return RenderedExportConfig.Builder.from(config);
     }
 
     /**
@@ -1203,13 +1172,13 @@ public class RenderedImageExporter {
             ImageData<BufferedImage> imageData,
             ImageServer<BufferedImage> baseServer,
             PixelClassifier classifier,
-            DensityMapBuilder densityBuilder,
+            MapOverlaySource mapSource,
             RenderedExportConfig config,
             int x, int y, int w, int h) throws IOException {
 
         PixelClassificationImageServer classificationServer = null;
         ImageServer<BufferedImage> displayServer = null;
-        ImageServer<BufferedImage> densityServer = null;
+        MapLayer mapLayer = null;
 
         try {
             displayServer = resolveDisplayServer(imageData, baseServer, config);
@@ -1218,13 +1187,13 @@ public class RenderedImageExporter {
                     && classifier != null) {
                 classificationServer = new PixelClassificationImageServer(imageData, classifier);
             } else if (config.getRenderMode() == RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY
-                    && densityBuilder != null) {
-                densityServer = densityBuilder.buildServer(imageData);
+                    && mapSource != null) {
+                mapLayer = mapSource.open(imageData);
             }
 
             String previewLabel = resolvePanelLabel(config, 0);
             return renderRegion(imageData, baseServer,
-                    classificationServer, densityServer, displayServer,
+                    classificationServer, mapLayer, displayServer,
                     config, x, y, w, h, previewLabel);
 
         } catch (Exception e) {
@@ -1232,7 +1201,7 @@ public class RenderedImageExporter {
         } finally {
             closeQuietly(displayServer, "preview");
             closeQuietly(classificationServer, "preview");
-            closeQuietly(densityServer, "preview");
+            closeQuietly(mapLayer, "preview");
         }
     }
 
@@ -1646,18 +1615,18 @@ public class RenderedImageExporter {
     private static BufferedImage renderDensityMapComposite(
             ImageData<BufferedImage> imageData,
             ImageServer<BufferedImage> baseServer,
-            ImageServer<BufferedImage> densityServer,
+            MapLayer mapLayer,
             ImageServer<BufferedImage> displayServer,
             RenderedExportConfig config,
             String panelLabel) throws Exception {
-        return renderDensityMapComposite(imageData, baseServer, densityServer,
+        return renderDensityMapComposite(imageData, baseServer, mapLayer,
                 displayServer, config, panelLabel, null);
     }
 
     private static BufferedImage renderDensityMapComposite(
             ImageData<BufferedImage> imageData,
             ImageServer<BufferedImage> baseServer,
-            ImageServer<BufferedImage> densityServer,
+            MapLayer mapLayer,
             ImageServer<BufferedImage> displayServer,
             RenderedExportConfig config,
             String panelLabel,
@@ -1672,22 +1641,14 @@ public class RenderedImageExporter {
                 imageData, baseServer, displayServer, config,
                 0, 0, baseServer.getWidth(), baseServer.getHeight(), downsample);
 
-        // Read density map
-        RegionRequest densityRequest = RegionRequest.createInstance(
-                densityServer.getPath(), downsample,
-                0, 0, densityServer.getWidth(), densityServer.getHeight());
-        BufferedImage densityImage = densityServer.readRegion(densityRequest);
-
-        // Resolve colormap
+        // Read the map over the whole image
+        MapLayer.Band band = mapLayer.read(
+                0, 0, baseServer.getWidth(), baseServer.getHeight(), downsample);
         ColorMaps.ColorMap colorMap = resolveColorMap(config.overlays().colormapName());
-
-        // Compute min/max from density raster
-        double[] minMax = computeMinMax(densityImage);
+        double[] minMax = MapLayer.range(band, config.mapOverlay());
         double minVal = minMax[0];
         double maxVal = minMax[1];
-
-        // Colorize density map
-        BufferedImage colorized = colorizeDensityMap(densityImage, colorMap, minVal, maxVal);
+        BufferedImage colorized = MapLayer.colorize(band, colorMap, minVal, maxVal);
 
         // Composite onto base
         BufferedImage result = new BufferedImage(
@@ -1742,31 +1703,6 @@ public class RenderedImageExporter {
     }
 
     /**
-     * Compute min/max float values from band 0 of a density image raster.
-     */
-    private static double[] computeMinMax(BufferedImage densityImage) {
-        WritableRaster raster = densityImage.getRaster();
-        int w = raster.getWidth();
-        int h = raster.getHeight();
-        double min = Double.MAX_VALUE;
-        double max = -Double.MAX_VALUE;
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                double val = raster.getSampleDouble(x, y, 0);
-                if (Double.isNaN(val)) continue;
-                if (val < min) min = val;
-                if (val > max) max = val;
-            }
-        }
-        if (min > max) {
-            // All NaN or empty
-            min = 0;
-            max = 1;
-        }
-        return new double[]{min, max};
-    }
-
-    /**
      * Look up a ColorMap by name from QuPath's registered color maps.
      * Falls back to the first available map if the name is not found.
      */
@@ -1790,32 +1726,6 @@ public class RenderedImageExporter {
     }
 
     /**
-     * Colorize a density image using a color map.
-     * Creates a TYPE_INT_ARGB image with transparent pixels for NaN values.
-     */
-    private static BufferedImage colorizeDensityMap(BufferedImage densityImage,
-                                                     ColorMaps.ColorMap colorMap,
-                                                     double min, double max) {
-        int w = densityImage.getWidth();
-        int h = densityImage.getHeight();
-        WritableRaster raster = densityImage.getRaster();
-        BufferedImage colorized = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                double val = raster.getSampleDouble(x, y, 0);
-                if (Double.isNaN(val)) {
-                    colorized.setRGB(x, y, 0x00000000); // fully transparent
-                } else {
-                    int rgb = colorMap.getColor(val, min, max);
-                    colorized.setRGB(x, y, 0xFF000000 | (rgb & 0x00FFFFFF));
-                }
-            }
-        }
-        return colorized;
-    }
-
-    /**
      * Draw a color scale bar if enabled in the config.
      */
     private static void maybeDrawColorScaleBar(Graphics2D g2d,
@@ -1828,7 +1738,8 @@ public class RenderedImageExporter {
         ColorScaleBarRenderer.drawColorScaleBar(g2d, w, h, colorMap, min, max,
                 config.colorScaleBar().position(),
                 config.colorScaleBar().fontSize(),
-                config.colorScaleBar().bold());
+                config.colorScaleBar().bold(),
+                config.mapOverlay().label());
     }
 
     /**
@@ -1867,7 +1778,7 @@ public class RenderedImageExporter {
      *
      * @param imageData      the image data to export
      * @param classifier     the pixel classifier (null for non-CLASSIFIER modes)
-     * @param densityBuilder the density map builder (null for non-DENSITY_MAP modes)
+     * @param mapSource      the map overlay source (null for non-DENSITY_MAP modes)
      * @param config         rendered export configuration with splitChannels enabled
      * @param entryName      the image entry name (used for filename generation)
      * @param panelIndex     zero-based index for auto-incrementing panel labels
@@ -1876,7 +1787,7 @@ public class RenderedImageExporter {
      */
     public static int exportSplitChannels(ImageData<BufferedImage> imageData,
                                            PixelClassifier classifier,
-                                           DensityMaps.DensityMapBuilder densityBuilder,
+                                           MapOverlaySource mapSource,
                                            RenderedExportConfig config,
                                            String entryName,
                                            int panelIndex) throws IOException {
@@ -1896,6 +1807,10 @@ public class RenderedImageExporter {
         double downsample = resolveEffectiveDownsample(config, baseServer);
         File outDir = config.getOutputDirectory();
         int filesExported = 0;
+
+        // Open the map first: an image without one is skipped, not exported bare
+        MapLayer splitLayer = config.getRenderMode() == RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY
+                && mapSource != null ? mapSource.open(imageData) : null;
 
         // 1. Merge panel -- full composite with all channels + overlays
         try {
@@ -1920,10 +1835,9 @@ public class RenderedImageExporter {
                     }
                 }
                 case DENSITY_MAP_OVERLAY -> {
-                    if (densityBuilder != null) {
+                    if (splitLayer != null) {
                         mergeImage = renderDensityMapComposite(
-                                imageData, baseServer,
-                                densityBuilder.buildServer(imageData),
+                                imageData, baseServer, splitLayer,
                                 mergeServer, config, panelLabel);
                     } else {
                         mergeImage = renderObjectComposite(
@@ -1940,6 +1854,8 @@ public class RenderedImageExporter {
             closeQuietly(mergeServer, entryName);
         } catch (Exception e) {
             logger.error("Failed to export merge panel for {}: {}", entryName, e.getMessage());
+        } finally {
+            closeQuietly(splitLayer, entryName);
         }
 
         // 2. Per-channel panels, each rendered through the viewer's own display

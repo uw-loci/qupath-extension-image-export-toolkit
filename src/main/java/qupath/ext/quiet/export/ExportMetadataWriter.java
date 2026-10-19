@@ -143,6 +143,10 @@ public class ExportMetadataWriter {
                 writeChannelGroup(pw, group, renderedConfig, channelsConsistent);
             }
 
+            for (String line : mapOverlayLines(renderedConfig)) {
+                pw.println(line);
+            }
+
             // Tiled export parameters
             if (category == ExportCategory.TILED && tiledConfig != null) {
                 pw.println("Tiled Export Parameters");
@@ -168,6 +172,48 @@ public class ExportMetadataWriter {
         } catch (IOException e) {
             logger.warn("Failed to write export info: {}", e.getMessage());
         }
+    }
+
+    /**
+     * Lines describing a rendered export's map overlay: source, channel and color range.
+     *
+     * @param config the rendered configuration, may be null
+     * @return the lines, ending with a blank line; empty if the export draws no map
+     */
+    static List<String> mapOverlayLines(RenderedExportConfig config) {
+        if (config == null
+                || config.getRenderMode() != RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY) {
+            return List.of();
+        }
+        var map = config.mapOverlay();
+        var lines = new java.util.ArrayList<String>();
+        lines.add("Map Overlay");
+        lines.add("-----------");
+        if (map.source() == RenderedExportConfig.MapSource.IMAGE_FILE) {
+            lines.add("Source: map file per image, pattern " + map.filePattern());
+            lines.add("Channel: " + (map.channel() == null || map.channel().isBlank()
+                    ? "first channel" : map.channel()));
+        } else {
+            lines.add("Source: project density map " + config.overlays().densityMapName());
+        }
+        lines.add("Color map: " + config.overlays().colormapName());
+        String range = switch (map.rangeMode()) {
+            case PER_IMAGE -> "each image stretched to its own minimum and maximum";
+            case FIXED -> formatDouble(map.rangeMin()) + " to " + formatDouble(map.rangeMax())
+                    + " (fixed), the same for every image";
+            case SHARED -> map.rangeResolved()
+                    ? formatDouble(map.rangeMin()) + " to " + formatDouble(map.rangeMax())
+                        + ", the " + formatDouble(map.lowPercentile()) + " to "
+                        + formatDouble(map.highPercentile())
+                        + " percentile of the values of all exported images"
+                    : "the " + formatDouble(map.lowPercentile()) + " to "
+                        + formatDouble(map.highPercentile()) + " percentile of each image"
+                        + " (no shared range could be computed)";
+        };
+        lines.add("Color range: " + range);
+        lines.add("Values outside the range take the end colors; pixels with no value are transparent.");
+        lines.add("");
+        return lines;
     }
 
     /**
