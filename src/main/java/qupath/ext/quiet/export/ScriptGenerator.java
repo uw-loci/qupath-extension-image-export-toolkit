@@ -83,6 +83,18 @@ public class ScriptGenerator {
     }
 
     /**
+     * The QuIET and QuPath versions, for script headers and export records.
+     *
+     * @return e.g. {@code QuIET 1.3.1 (QuPath Image Export Toolkit) for QuPath 0.7.0}
+     */
+    static String versionLine() {
+        String qupathVersion = qupath.lib.common.GeneralTools.getVersion();
+        return "QuIET " + qupath.ext.quiet.QuietExtension.QUIET_VERSION
+                + " (QuPath Image Export Toolkit) for QuPath "
+                + (qupathVersion == null || qupathVersion.isBlank() ? "(unknown)" : qupathVersion);
+    }
+
+    /**
      * Append a line with a newline character to a StringBuilder.
      */
     static void appendLine(StringBuilder sb, String line) {

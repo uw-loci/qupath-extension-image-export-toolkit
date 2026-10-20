@@ -77,6 +77,12 @@ public class ImageSelectionPane extends VBox {
     private TextField filterField;
     private Label imageCountLabel;
 
+    /** The category and config the advice was last computed for, so a selection change can redo it. */
+    private ExportCategory adviceCategory;
+    private Object adviceConfig;
+    private final javafx.animation.PauseTransition adviceRefresh =
+            new javafx.animation.PauseTransition(javafx.util.Duration.millis(400));
+
     // Panel / Montage mode extras (created lazily; null in standard mode)
     private boolean panelMode;
     private Label stepHeader;
@@ -108,6 +114,9 @@ public class ImageSelectionPane extends VBox {
     public ImageSelectionPane(QuPathGUI qupath, Stage ownerStage) {
         this.qupath = qupath;
         this.ownerStage = ownerStage;
+        adviceRefresh.setOnFinished(e -> {
+            if (adviceCategory != null) updateAdvice(adviceCategory, adviceConfig);
+        });
         setSpacing(10);
         setPadding(new Insets(10));
         buildUI();
@@ -392,6 +401,8 @@ public class ImageSelectionPane extends VBox {
     }
 
     private void updateImageCount() {
+        // Advice depends on which images are selected (e.g. IC-3 needs several)
+        if (adviceCategory != null) adviceRefresh.playFromStart();
         long selectedCount = masterItems.stream()
                 .filter(ImageEntryItem::isSelected).count();
         String filterText = filterField.getText();
@@ -583,6 +594,8 @@ public class ImageSelectionPane extends VBox {
      * @param config   the category-specific config object, or null
      */
     public void updateAdvice(ExportCategory category, Object config) {
+        adviceCategory = category;
+        adviceConfig = config;
         List<ImageContext> imageContexts = buildImageContexts();
         List<AdviceItem> items = PublicationAdviceChecker.check(category, config, imageContexts);
         advicePane.update(items);

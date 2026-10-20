@@ -68,9 +68,12 @@ public final class PanelImageExporter {
         private final List<String> errors;
         private final int figureWidth;
         private final int figureHeight;
+        private final List<String> mapOverlayLines;
 
         PanelResult(File outputFile, int composedCells, int skipped,
-                    List<String> errors, int figureWidth, int figureHeight) {
+                    List<String> errors, int figureWidth, int figureHeight,
+                    List<String> mapOverlayLines) {
+            this.mapOverlayLines = List.copyOf(mapOverlayLines);
             this.outputFile = outputFile;
             this.composedCells = composedCells;
             this.skipped = skipped;
@@ -89,6 +92,11 @@ public final class PanelImageExporter {
 
         public int getSkipped() {
             return skipped;
+        }
+
+        /** The map overlay and color range every cell was drawn with; empty if none. */
+        public List<String> getMapOverlayLines() {
+            return mapOverlayLines;
         }
 
         public List<String> getErrors() {
@@ -282,8 +290,10 @@ public final class PanelImageExporter {
         writeFigure(figure, config, outputFile);
         logger.info("Wrote panel figure: {}", outputFile.getAbsolutePath());
 
+        List<String> mapLines = renderConfig.getRecipeConfig() instanceof RenderedExportConfig rc
+                ? ExportMetadataWriter.mapOverlayLines(rc) : List.of();
         return new PanelResult(outputFile, composedCellCount, skipped, errors,
-                figure.getWidth(), figure.getHeight());
+                figure.getWidth(), figure.getHeight(), mapLines);
     }
 
     /**

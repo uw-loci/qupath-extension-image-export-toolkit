@@ -34,6 +34,9 @@ import qupath.ext.quiet.preferences.QuietPreferences;
  */
 public class RawConfigPane extends VBox {
 
+    private static final org.slf4j.Logger logger =
+            org.slf4j.LoggerFactory.getLogger(RawConfigPane.class);
+
     private static final ResourceBundle resources =
             ResourceBundle.getBundle("qupath.ext.quiet.ui.strings");
 
@@ -255,6 +258,31 @@ public class RawConfigPane extends VBox {
         tip.setMaxWidth(400);
         tip.setShowDuration(javafx.util.Duration.seconds(30));
         return tip;
+    }
+
+    /**
+     * Fill the channel list from the open image, or else the project's first image.
+     *
+     * @param qupath the QuPath GUI
+     */
+    public void populateChannelsFrom(qupath.lib.gui.QuPathGUI qupath) {
+        List<String> names = new ArrayList<>();
+        try {
+            var viewerData = qupath.getViewer() == null ? null : qupath.getViewer().getImageData();
+            if (viewerData != null) {
+                for (var ch : viewerData.getServer().getMetadata().getChannels()) names.add(ch.getName());
+            } else if (qupath.getProject() != null && !qupath.getProject().getImageList().isEmpty()) {
+                var imageData = qupath.getProject().getImageList().get(0).readImageData();
+                try {
+                    for (var ch : imageData.getServer().getMetadata().getChannels()) names.add(ch.getName());
+                } finally {
+                    imageData.getServer().close();
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Could not read channel names for raw export: {}", e.getMessage());
+        }
+        populateChannels(names);
     }
 
     /**

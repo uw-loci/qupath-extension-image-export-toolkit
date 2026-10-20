@@ -81,6 +81,7 @@ public class PanelRecipePane extends VBox {
 
         renderedConfigPane = new RenderedConfigPane(qupath);
         rawConfigPane = new RawConfigPane();
+        rawConfigPane.populateChannelsFrom(qupath);
         maskConfigPane = new MaskConfigPane(qupath);
         // The panel's Layout step owns the composed-figure output format.
         // Hide each recipe pane's own format control so the format is set in
@@ -355,6 +356,7 @@ public class PanelRecipePane extends VBox {
             switch (category) {
                 case RAW -> {
                     rawConfigPane = new RawConfigPane();
+                    rawConfigPane.populateChannelsFrom(qupath);
                     rawConfigPane.setFormatControlVisible(false);
                 }
                 case MASK -> {

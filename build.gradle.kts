@@ -7,7 +7,7 @@ plugins {
 qupathExtension {
     name = "qupath-extension-image-export-toolkit"
     group = "io.github.uw-loci"
-    version = "1.3.0"
+    version = "1.3.1"
     description = "QuIET - QuPath Image Export Toolkit. Comprehensive export of rendered overlays, label masks, raw pixel data, and ML training tiles with wizard UI, script generation, and batch processing."
     automaticModule = "io.github.uw-loci.extension.quiet"
 }
@@ -36,6 +36,8 @@ dependencies {
     testImplementation(libs.qupath.fxtras)
     testImplementation("org.jfree:org.jfree.svg:5.0.6")
     testImplementation("com.google.code.gson:gson:2.13.2")
+    // Runs the generated scripts' map helpers against the Java code (QuPath 0.7 ships Groovy 5.0.4)
+    testImplementation("org.apache.groovy:groovy:5.0.4")
 }
 
 tasks.withType<JavaCompile> {

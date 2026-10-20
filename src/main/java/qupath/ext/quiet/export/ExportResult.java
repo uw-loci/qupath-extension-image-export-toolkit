@@ -70,7 +70,7 @@ public class ExportResult {
         var sb = new StringBuilder();
         sb.append(String.format("Exported %d images.", succeeded));
         if (skipped > 0) {
-            sb.append(String.format(" %d skipped (incompatible).", skipped));
+            sb.append(String.format(" %d skipped.", skipped));
         }
         if (failed > 0) {
             sb.append(String.format(" %d failed.", failed));

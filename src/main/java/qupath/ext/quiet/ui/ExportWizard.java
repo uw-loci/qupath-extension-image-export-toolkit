@@ -285,6 +285,7 @@ public class ExportWizard {
         renderedConfigPane = new RenderedConfigPane(qupath);
         maskConfigPane = new MaskConfigPane(qupath);
         rawConfigPane = new RawConfigPane();
+        rawConfigPane.populateChannelsFrom(qupath);
         tiledConfigPane = new TiledConfigPane(qupath);
         objectCropConfigPane = new ObjectCropConfigPane(qupath);
         imageSelectionPane = new ImageSelectionPane(qupath, stage);
@@ -930,6 +931,8 @@ public class ExportWizard {
         String list = String.join("\n", missing.subList(0, Math.min(8, missing.size())))
                 + (missing.size() > 8 ? "\n..." : "");
         if (missing.size() == entries.size()) {
+            logger.error("None of the {} selected images has a map file:\n{}",
+                    entries.size(), String.join("\n", missing));
             Dialogs.showErrorMessage(resources.getString("error.title"),
                     String.format(resources.getString("error.noMapFiles"), list));
             return null;
@@ -1119,11 +1122,23 @@ public class ExportWizard {
             openResultFolder();
         }
 
+        String sidecarNotice = String.format(resources.getString("export.sidecarNotice"),
+                isPanelMode() ? "panel_figure_info.txt"
+                        : selectedCategory == ExportCategory.MASK ? "mask_legend.txt" : "export_info.txt");
         if (result.hasErrors()) {
             String errorText = String.join("\n", result.getErrors());
+            logger.error("Export finished with errors: {}\n{}", result.getSummary(), errorText);
             Dialogs.showErrorMessage(
                     resources.getString("error.title"),
                     result.getSummary() + "\n\nErrors:\n" + errorText);
+        } else if (result.getSkipped() > 0 && !result.getErrors().isEmpty()) {
+            // Skipped images are named, not only counted
+            Dialogs.showMessageDialog(
+                    resources.getString("title.skippedImages"),
+                    result.getSummary() + "\n\n"
+                    + resources.getString("export.skippedHeader") + "\n"
+                    + String.join("\n", result.getErrors())
+                    + (result.getSucceeded() > 0 ? "\n\n" + sidecarNotice : ""));
         } else if (isPanelMode()) {
             Dialogs.showInfoNotification(
                     resources.getString("name"),

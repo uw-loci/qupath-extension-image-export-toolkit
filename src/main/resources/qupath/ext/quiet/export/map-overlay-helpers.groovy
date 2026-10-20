@@ -24,7 +24,7 @@ def resolveMapFile(String pattern, File projectDir, File imageDir, String imageN
                 v = imageDir.getAbsolutePath().replace('\\', '/')
                 break
             case 'image': v = imageName; break
-            case 'imageBase': v = GeneralTools.stripExtension(imageName); break
+            case 'imageBase': v = GeneralTools.stripExtension(imageName) ?: imageName; break
             case 'imageSafe': v = mapSafeName(imageName); break
             default: throw new IllegalArgumentException('unknown token {' + token + '}')
         }
@@ -38,6 +38,10 @@ def resolveMapFile(String pattern, File projectDir, File imageDir, String imageN
     String expanded = sb.toString().replace('\\', '/')
     int slash = expanded.lastIndexOf('/')
     String namePart = slash >= 0 ? expanded.substring(slash + 1) : expanded
+    String dirPart = slash >= 0 ? expanded.substring(0, slash) : ''
+    if (dirPart.contains('*') || dirPart.contains('?')) {
+        throw new IllegalArgumentException('wildcards are allowed only in the file name, not in folders: ' + pattern)
+    }
     File dir = slash < 0 ? null : new File(slash == 0 ? '/' : expanded.substring(0, slash))
     if (dir == null || !dir.isAbsolute()) {
         if (projectDir == null) throw new IllegalArgumentException('the pattern is relative but there is no project folder')
@@ -49,7 +53,13 @@ def resolveMapFile(String pattern, File projectDir, File imageDir, String imageN
         if (!f.isFile()) throw new IllegalArgumentException('no map file ' + f.getAbsolutePath())
         return f
     }
-    def glob = java.nio.file.FileSystems.getDefault().getPathMatcher('glob:' + namePart)
+    // Glob characters other than * and ? in a name are literal, as in QuIET
+    def escaped = new StringBuilder()
+    for (char c : namePart.toCharArray()) {
+        if ('[]{}\\,'.indexOf((int) c) >= 0) escaped.append('\\')
+        escaped.append(c)
+    }
+    def glob = java.nio.file.FileSystems.getDefault().getPathMatcher('glob:' + escaped)
     def matches = dir.isDirectory()
             ? dir.listFiles().findAll { it.isFile() && glob.matches(it.toPath().getFileName()) }
             : []

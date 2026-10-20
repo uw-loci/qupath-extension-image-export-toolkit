@@ -35,8 +35,13 @@ public class QuietExtension implements QuPathExtension, GitHubProject {
     private static final ResourceBundle resources =
             ResourceBundle.getBundle("qupath.ext.quiet.ui.strings");
 
-    /** The QuIET extension version, for provenance records. */
-    public static final String QUIET_VERSION = "1.0.0";
+    /** The QuIET extension version from the jar manifest, for provenance records. */
+    public static final String QUIET_VERSION = readVersion();
+
+    private static String readVersion() {
+        String v = QuietExtension.class.getPackage().getImplementationVersion();
+        return v == null || v.isBlank() ? "unknown (not run from the release jar)" : v;
+    }
 
     private static final String EXTENSION_NAME = resources.getString("name");
     private static final String EXTENSION_DESCRIPTION = resources.getString("description");

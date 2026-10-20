@@ -1918,13 +1918,6 @@ public class RenderedConfigPane extends VBox {
      */
     private void applySimpleModeOverrides() {
         if (!simpleMode) return;
-        // Opacity
-        opacitySlider.setVisible(false);
-        opacitySlider.setManaged(false);
-        opacityValueLabel.setVisible(false);
-        opacityValueLabel.setManaged(false);
-        opacityLabel.setVisible(false);
-        opacityLabel.setManaged(false);
         // Display settings (preset/matched percentile)
         displaySettingsCombo.setVisible(false);
         displaySettingsCombo.setManaged(false);
@@ -1964,9 +1957,21 @@ public class RenderedConfigPane extends VBox {
         paddingLabel.setManaged(false);
         paddingSpinner.setVisible(false);
         paddingSpinner.setManaged(false);
-        // Overlay source section (classifier/density map sub-options)
-        overlaySourceSection.setVisible(false);
-        overlaySourceSection.setManaged(false);
+        // The overlay source, its opacity and the map's color scale bar stay
+        // visible in Simple mode when the render mode needs them: they decide
+        // what the export draws.
+        var mode = modeCombo.getValue();
+        boolean hasSource = mode == RenderedExportConfig.RenderMode.CLASSIFIER_OVERLAY
+                || mode == RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY;
+        boolean isMap = mode == RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY;
+        overlaySourceSection.setVisible(hasSource);
+        overlaySourceSection.setManaged(hasSource);
+        opacitySlider.setVisible(hasSource);
+        opacitySlider.setManaged(hasSource);
+        opacityValueLabel.setVisible(hasSource);
+        opacityValueLabel.setManaged(hasSource);
+        opacityLabel.setVisible(hasSource);
+        opacityLabel.setManaged(hasSource);
         // Object overlay details (fill annotations/show names)
         fillAnnotationsCheck.setVisible(false);
         fillAnnotationsCheck.setManaged(false);
@@ -1997,9 +2002,9 @@ public class RenderedConfigPane extends VBox {
         scaleBarBackgroundBoxCheck.setManaged(false);
         scaleBarColorHintLabel.setVisible(false);
         scaleBarColorHintLabel.setManaged(false);
-        // Color scale bar section
-        colorScaleBarSection.setVisible(false);
-        colorScaleBarSection.setManaged(false);
+        // Color scale bar section (map overlays only)
+        colorScaleBarSection.setVisible(isMap);
+        colorScaleBarSection.setManaged(isMap);
         // Info label section
         infoLabelSection.setVisible(false);
         infoLabelSection.setManaged(false);
