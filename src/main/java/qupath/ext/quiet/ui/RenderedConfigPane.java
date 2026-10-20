@@ -1054,6 +1054,7 @@ public class RenderedConfigPane extends VBox {
         grid.add(mapLabelLabel, 0, row);
         mapLabelField = new TextField();
         mapLabelField.setPromptText(resources.getString("rendered.colorScaleBarTitle.prompt"));
+        mapLabelField.setPrefColumnCount(28);
         grid.add(mapLabelField, 1, row);
         row++;
 

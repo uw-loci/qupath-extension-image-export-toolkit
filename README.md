@@ -5,7 +5,7 @@
 
 A [QuPath](https://qupath.github.io/) extension that turns annotated whole-slide images into **publication-ready figures**, **review images for collaborators**, and **training datasets for machine learning** -- in batch, without writing an export script.
 
-A guided wizard walks you from "I have an annotated project" to finished files: composite figures with scale bars and panel labels, segmentation masks for training or QC, raw pixel data at any resolution, image+label tile pairs for deep-learning frameworks, per-object crops for cell-type classifiers, and multi-image panel figures that arrange many project images into a single montage. Every export also writes a self-contained Groovy script, so the same settings can be re-run, version-controlled, or shared with a collaborator who doesn't have QuIET installed.
+A guided wizard walks you from "I have an annotated project" to finished files: composite figures with scale bars and panel labels, segmentation masks for training or QC, raw pixel data at any resolution, image+label tile pairs for deep-learning frameworks, per-object crops for cell-type classifiers, and multi-image panel figures that arrange many project images into a single montage. Every single-image export also writes a self-contained Groovy script, so the same settings can be re-run, version-controlled, or shared with a collaborator who doesn't have QuIET installed (see *Script Generation* for what a script does not reproduce).
 
 <!-- TODO(v1.0.0 docs): regenerate QUIET-interface.png and RenderedImageExport.png on a
      running QuPath with the v1.0.0 jar. The Step 1 category picker shows five cards
@@ -28,6 +28,16 @@ A guided wizard walks you from "I have an annotated project" to finished files: 
 
 ## Installation
 
+### From the catalog (recommended)
+
+Updates are offered there too.
+
+1. In QuPath, open `Extensions > Manage extensions > Manage extension catalogs > Add catalog` and add `https://github.com/uw-loci/qupath-catalog-mikenelson` (LOCI QuPath Extensions).
+2. In **Manage extensions**, install **QuIET - Image Export Toolkit**.
+3. Restart QuPath.
+
+### By hand
+
 1. Download the latest `qupath-extension-image-export-toolkit-*-all.jar` from [Releases](https://github.com/uw-loci/qupath-extension-image-export-toolkit/releases)
 2. Drag the JAR onto the running QuPath window, **or** copy it into your QuPath `extensions/` directory
 3. Restart QuPath
@@ -47,23 +57,36 @@ The extension appears under **Extensions > QuIET**, with two menu items: **Image
 4. **Step 2** -- Configure export settings (grouped into collapsible sections). A QUAREP-LiMi guidelines panel on the right provides context-sensitive recommendations based on your project's images.
 5. **Step 3** -- Select images, choose output directory, review Publication Advice, and click **Export**
 
+When the export finishes, the bottom of the wizard reads `Exported N images.` and the output folder (`exports/<category>` inside the project, unless you chose another) opens in your file browser. It holds the exported files and a metadata file (`export_info.txt`, or `mask_legend.txt` for masks).
+
 All five categories use this **3-step** flow. Composing a multi-image figure is a separate **Extensions > QuIET > Panel / Montage Export...** menu item with its own **3-step** flow -- see *Making a panel figure* below.
 
-Every export also generates a **Groovy script** that you can copy, save, and re-run from QuPath's built-in script editor -- no extension required.
+Every single-image export also generates a **Groovy script** that you can copy, save, and re-run from QuPath's built-in script editor -- no extension required. **Copy Script** and **Save Script...** are on the last step in Advanced mode.
 
-**Simple vs Advanced mode** -- the navigation bar has a Simple / Advanced toggle. Simple mode (the default on first run) hides rarely-used controls to reduce clutter; Advanced mode exposes every option. The toggle persists across QuPath sessions and applies to every step. If a section below seems to be missing settings, flip to Advanced.
+**Simple vs Advanced mode** -- the navigation bar has a Simple / Advanced toggle. Simple mode (the default on first run) hides rarely-used controls to reduce clutter; Advanced mode exposes every option. Hidden controls keep their values, and those values still apply to the export. The toggle persists across QuPath sessions and applies to every step. If a section below seems to be missing settings, flip to Advanced.
 
-**Making a panel figure** -- The **Panel / Montage Export...** menu item builds one combined figure from several images in your project. It opens its own wizard with a **3-step** flow: (1) select the images you want in the figure, (2) choose a *recipe* -- a recipe is the saved settings for how one image is exported, and the same recipe is applied to every image you picked -- and (3) lay out the grid (rows and columns, spacing, background colour, optional captions). QuIET renders every image the same way and tiles them into one file. You do not need to export each image separately or assemble the figure by hand in another program. See the **Panel / Montage** section below.
+**Making a panel figure** -- The **Panel / Montage Export...** menu item builds one combined figure from several images in your project. It opens its own wizard with a **3-step** flow: (1) select the images you want in the figure, (2) choose a *recipe* -- a recipe is the saved settings for how one image is exported, and the same recipe is applied to every image you picked -- and (3) lay out the grid (rows and columns, spacing, background color, optional captions). QuIET renders every image the same way and tiles them into one file. You do not need to export each image separately or assemble the figure by hand in another program. See the **Panel / Montage** section below.
 
 ---
 
-## What's new in v1.0.0
+## What's new
 
-**Panel / Montage export** -- QuIET can now compose many images from your project into a single multi-panel figure. Choose your images, pick a single-image export recipe to apply to all of them, set the grid size, spacing, background colour, and optional per-image captions, and QuIET writes one montage file. See the **Panel / Montage** section below.
+**v1.3.1** -- Fixes found in a documentation review:
+- Skipped images are named when an export ends, not only counted.
+- `export_info.txt` writes a map's color range in full, with a decimal point in every language, and names the QuIET and QuPath versions, as do the generated scripts.
+- A Panel / Montage records its map overlay and range in `panel_figure_info.txt`, and that file now gives the right QuIET version.
+- Global Matched display ranges are recorded in `export_info.txt`.
+- In Simple mode, the overlay source, its opacity and the map's color scale bar stay visible when the render mode needs them.
+- Publication Advice updates as you tick and untick images.
+- Raw export's channel list is filled in, so channels can be left out.
 
-**Export recipes** -- A recipe is the saved settings for how one image is exported. Any panel-mode recipe configuration can now be saved to a `.json` recipe file and reloaded later -- to repeat a panel export with identical settings, or to share the look of a figure with a collaborator. Look for the **Save recipe...** and **Load recipe...** buttons on the panel recipe step.
+**v1.3.0** -- **Density / Map Overlay** can draw a map file per image (for example density or probability maps written by another program), found by a file pattern. Every map overlay, including QuPath's own density maps, can share one color range across images, and the color scale bar takes a title. See *Density / Map Overlay* under Rendered Image.
 
-This is QuIET's first 1.x release. It is a maturity milestone for a major new feature; **no existing settings, menus, or exports change** -- see *Migrating from v0.7.x to v1.0.0* below.
+**v1.0.0** -- **Panel / Montage export** -- QuIET can now compose many images from your project into a single multi-panel figure. Choose your images, pick a single-image export recipe to apply to all of them, set the grid size, spacing, background color, and optional per-image captions, and QuIET writes one montage file. See the **Panel / Montage** section below.
+
+**Export recipes** (v1.0.0) -- A recipe is the saved settings for how one image is exported. Any panel-mode recipe configuration can now be saved to a `.json` recipe file and reloaded later -- to repeat a panel export with identical settings, or to share the look of a figure with a collaborator. Look for the **Save recipe...** and **Load recipe...** buttons on the panel recipe step.
+
+v1.0.0 was QuIET's first 1.x release, a maturity milestone for a major new feature; **no existing settings, menus, or exports changed** -- see *Migrating from v0.7.x to v1.0.0* below.
 
 <details>
 <summary><strong>Migrating from v0.7.x to v1.0.0</strong></summary>
@@ -75,7 +98,7 @@ v1.0.0 is a **fully backward-compatible** release. The version jump marks the ar
 - **The existing flows are unchanged.** Rendered, Mask, Raw, Tiled, and Object Crops still run from the **Image Export...** menu item (renamed from "Export Images...") with the same 3-step wizard. Panel / Montage is added as a separate **Panel / Montage Export...** menu item with its own wizard.
 - **Existing Groovy scripts still run.** Scripts generated by earlier QuIET versions are unaffected.
 
-Simply install the v1.0.0 jar over the old one and restart QuPath.
+Install the v1.0.0 jar over the old one and restart QuPath.
 
 </details>
 
@@ -159,7 +182,8 @@ Produce **publication-ready figures** -- the image as it looks in QuPath, with y
 | **Classifier Overlay** | Render a pixel classifier's output on top of the image at configurable opacity |
 | **Object Overlay** | Render annotation and/or detection objects with fill, outline, and name options |
 | **Density / Map Overlay** | Color a map with a colormap (Viridis, Magma, etc.) and draw it over the image: a density map saved in the project, or a map file per image written by another tool (density, probability or measurement maps). One color range can be shared by every image (see below) |
-| **Region Type** | Export the whole image or individual annotation regions (see below) |
+| **Export Region** | Export the whole image or one image per annotation (see below) |
+| **Overlay Opacity** | How much a classifier or map overlay covers the image, 0 to 1 (default 0.5) |
 | **Display Settings** | Control brightness/contrast, channel visibility, and LUTs applied to the base image (see below) |
 | **Scale Bar** | Optionally burn a scale bar into the exported image with configurable position and color (see below) |
 | **Color Scale Bar** | For map overlays, optionally burn a color-mapped legend with its value labels and a title (see below) |
@@ -174,51 +198,104 @@ Produce **publication-ready figures** -- the image as it looks in QuPath, with y
 <details>
 <summary><b>Density / Map Overlay</b></summary>
 
-Draws a map of values over each image, colored with a colormap. The map can come from two places:
+Draws a map of values over each image, in color. With **Render Mode** (in **Image Settings**) set to **Density / Map Overlay**, the **Overlay Source** and **Color Scale Bar** sections appear, in Simple mode too.
 
-![Map file overlay: the Overlay Source section set to a Fiber Analysis density map, its Signal density channel on a shared 1 to 99 percentile range, and the live preview of the liver section with a titled color scale bar](documentation/images/map-file-overlay.png)
+![The Configure Export screen in Simple mode for a map overlay: Render Mode set to Density / Map Overlay with Overlay Opacity 1.00; Overlay Source with Map Source set to Map file per image, the Fiber Analysis density-map pattern in Map File and the Check result below it (10320 x 7720, 11 channels, float32), Map Channel set to Signal density (no threshold), Colormap/LUT Viridis, Color Range Shared with Percentiles 1 to 99; Color Scale Bar ticked, in the upper right, titled Signal density (fraction of full scale)](documentation/images/map-overlay-settings.png)
 
 | Map Source | What it reads |
 |------------|---------------|
-| **Project density map** | A density map saved in the project (**Analyze > Density maps**), computed from each image's objects. |
-| **Map file per image** | One image file per project image, such as the density maps and window-classifier maps written by Fiber Analysis, a probability map from another program, or any float OME-TIFF. QuIET does not need to know which tool wrote it. |
+| **Project density map** | A density map saved in the project (**Analyze > Density maps > Create density map...**), computed from each image's objects. QuIET draws its first channel. A density map carries no unit, so type one into the color scale bar **Title** if you want it shown. |
+| **Map file per image** | One image file per project image, holding the values to color: a density map, a probability map, a measurement map, or any OME-TIFF of decimal (floating-point) values. QuIET does not need to know which program wrote it. The development version of Fiber Analysis writes such maps; no Fiber Analysis release does yet. |
 
-**Finding each image's map file.** The **Map File** box takes a pattern. These tokens are replaced for each image:
+The controls, in screen order:
 
-| Token | Becomes |
-|-------|---------|
-| `{project}` | The project folder |
-| `{imageDir}` | The folder holding the image file |
-| `{image}` | The image name in the project |
-| `{imageBase}` | The image name without its file extension |
-| `{imageSafe}` | The image name with each run of `\ / : * ? " < >` or `\|` or spaces replaced by `_`, and trailing dots removed |
+| Control | Default | What it does |
+|---------|---------|--------------|
+| **Map Source** | Project density map | Where the map comes from (above) |
+| **Density Map** | -- | Which saved density map (Project density map only) |
+| **Map File** and **Check** | blank | The file pattern (below). **Check** finds the open image's map file |
+| **Map Channel** | the first channel | The channel to color, chosen by name |
+| **Colormap/LUT** | Viridis | The colors from low to high. Viridis, Magma, Plasma and Inferno change evenly in brightness and stay readable with common color blindness |
+| **Color Range** | Each image: its own min to max | How values are given colors (see *Color range*) |
+| **Min / Max** | 0 / 1 | The values given the first and last color (Fixed only). Max must be greater than Min |
+| **Percentiles** | 1 / 99 | Which pooled values set the range (Shared only); 0 to 100 in steps of 0.5, the upper greater than the lower |
+| **Overlay Opacity** (in Image Settings) | 0.5 | How much the map covers the image (see *Comparing colors between images*) |
 
-Add `:N` to a token to cut it to N characters (`{imageSafe:60}`). A relative pattern starts in the project folder. The file name (not the folders) may use the wildcards `*` and `?`, but exactly one file must match. The box offers examples, among them where Fiber Analysis writes its maps:
+**Finding each image's map file.** The **Map File** box takes a file path with placeholders in braces, which QuIET fills in for each image:
 
-```
-{project}/fiber-analysis/density-maps/{imageSafe:60}_density.ome.tif
-{project}/fiber-analysis/classifier-maps/{imageSafe:60}_*.ome.tif
-```
+| Placeholder | Becomes | For `slide 1.ome.tif` in a project at `D:/study` |
+|-------------|---------|------------------------------------------------|
+| `{project}` | The project folder | `D:/study` |
+| `{imageDir}` | The folder holding the image file | the image's own folder |
+| `{image}` | The image name in the project | `slide 1.ome.tif` |
+| `{imageBase}` | The image name without its last extension (QuPath's rule, which treats `.ome.tif` as one extension) | `slide 1` |
+| `{imageSafe}` | The image name with each run of `\ / : * ? " < >`, `\|` or white space replaced by `_`, and trailing dots removed. The extension stays | `slide_1.ome.tif` |
 
-**Check** finds the open image's map file, shows its size, channel count and pixel type, and fills the **Map Channel** list from the file's channel names. The channel is chosen by name, and the same name is used for every image.
+Add `:N` to cut a placeholder to N characters: `{imageSafe:5}` gives `slide`. A path that does not start at a drive or at `/` is looked up inside the project folder. In the file name (not in folder names), `*` stands for any run of characters and `?` for any one character. Exactly one file must match; when none or more than one does, that image counts as having no map file.
 
-**How the map is drawn.** The map is stretched over the whole image, so a map can be written at full resolution or coarser. Pixels with no value (NaN), such as glass outside the tissue, are transparent. Values outside the color range take the end colors. Each map is read one channel at a time, so an 11-channel full-resolution map does not have to fit in memory.
+The **Map File** box offers four examples:
+
+| Pattern | Use it when |
+|---------|-------------|
+| `{imageDir}/{imageBase}_map.ome.tif` | The maps sit next to the images: `slide1.svs` has `slide1_map.ome.tif` |
+| `{project}/maps/{imageSafe}.ome.tif` | The maps are in a `maps` folder inside the project |
+| `{project}/fiber-analysis/density-maps/{imageSafe:60}_density.ome.tif` | Fiber Analysis density maps (development version): `slide_1.ome.tif_density.ome.tif`. Fiber Analysis cuts the name to 60 characters before adding `_density`, which `:60` matches |
+| `{project}/fiber-analysis/classifier-maps/{imageSafe:60}_*.ome.tif` | Fiber Analysis window-classifier maps, while one classifier has been applied to each image. With two, `*` matches both files: replace it with the model's part of the file name |
+
+**Check** finds the open image's map file and reports it under the box, for example `Open image: slide_1.ome.tif_density.ome.tif (10320 x 7720, 11 channels, float32)`, then fills **Map Channel** with the file's channel names. Pick a channel of measured values. A channel of class numbers, such as a classifier's *Predicted class index*, is a poor fit: a continuous colormap shades class 3 as if it lay between classes 2 and 4. The same channel name is used for every image.
+
+**How the map is drawn.** The map must cover the whole image, its top-left corner at the image's top-left. QuIET stretches it to the image's width and height, so a map can be written at full resolution or coarser. A map of a different shape is stretched anyway (the log warns when the shapes differ by more than 2%), and a map made for a crop of the image lands in the wrong place. The map is colored at its own resolution and then enlarged with smoothing, so the colors between map pixels are blends. Pixels with no value (NaN), such as glass outside the tissue, are transparent. Values outside the color range, infinities included, take the end colors. A map too large to read with all its channels at once (over 128 MB) is read in strips of rows, so an 11-channel full-resolution map never has to be in memory whole.
 
 **Color range.** This decides which value gets which color, and so whether colors can be compared between images:
 
 | Color Range | Effect |
 |-------------|--------|
-| **Each image: its own min to max** (default, and how earlier versions drew every density map) | Every image (or annotation region) is stretched to its own minimum and maximum. The same color means different values in different images, so do not use it to compare images. |
-| **Fixed** | The minimum and maximum you enter, the same for every image. Use it when the map's values have a known scale, or to match an earlier export. |
-| **Shared** | Before exporting, QuIET reads the map of every selected image, pools the values, and takes two percentiles of them (for example 1 to 99; 0 to 100 is the overall minimum and maximum). Every image is then drawn on that one range. The preview uses the open image only. |
+| **Each image: its own min to max** (default, and how earlier versions drew every density map) | Every image, or annotation region, is stretched to its own minimum and maximum. The same color then means different values in different images, so do not use it to compare images. |
+| **Fixed: the same values for every image** | The **Min / Max** you enter, for every image. Use it when the map's values have a known scale, or to repeat an earlier export. |
+| **Shared: percentiles of all exported images** | Before exporting, QuIET reads the map of every selected image and takes the two **Percentiles** of their values. With 1 to 99, the lowest and highest 1% of values take the end colors, so a few extreme pixels do not stretch the scale. Every image is drawn on that one range. |
 
-The range used is written to `export_info.txt` beside the images, and the color scale bar on each image shows it. A Panel / Montage built from a map recipe with a shared range computes it over all the panel's images.
+*How the Shared range is computed.* The values are a sample. Each image's map is read over the whole image (in an annotation-region export too), at the export downsample or coarser, and never larger than 4096 pixels on its longest side. Each image then adds at most 2,000,000 / *N* of its values (for *N* images, and at least 10,000), thinned evenly, so each image counts about equally however large it is. Percentiles interpolate between sorted values, as NumPy's `percentile` does by default. Nothing random is involved, so the same images and settings give the same range; changing the selected images, or the downsample for images smaller than 4096 pixels times the downsample, changes it. 0 to 100 gives the minimum and maximum of the sample, so a few full-resolution pixels can still fall outside. The preview computes its range from the open image alone, so its color scale bar can differ from the export's.
 
-**Images without a map.** Before the export starts, QuIET looks for every selected image's map file. If some have none, it lists them and asks whether to go on; those images are skipped and named in the result, never exported without their overlay.
+**Comparing colors between images.** A shared or fixed range makes one color stand for one value. What you see, though, is the map blended with the image under it at **Overlay Opacity** (default 0.5), while the color scale bar is drawn fully opaque. To compare values by color, set **Overlay Opacity** to 1.
 
-**Generated script.** The Groovy script does the same: it finds the files with the same pattern, reads the same channel, and for a shared range scans every image in the project before exporting. A script run on a different set of images computes its own shared range; to reproduce an earlier export exactly, set `mapRangeMode` to `'FIXED'` with the range from that export's `export_info.txt`.
+![Preview of a liver section with its Fiber Analysis signal density map at Overlay Opacity 1, colored with Viridis on the 1 to 99 percentile range: dense collagen bundles in yellow, sparse tissue in teal and blue, and the background in dark purple. A color scale bar in the upper right runs from 0.03 to 0.12 with the title Signal density (fraction of full scale) beneath it, and a 250 µm scale bar sits in the lower right](documentation/images/map-overlay-preview.png)
 
-A channel holding class numbers (such as a classifier's *Predicted class index*) is categories, not a quantity, and a continuous colormap makes it misleading.
+**What is recorded.** `export_info.txt` beside the images holds a *Map Overlay* block; for a Panel / Montage the same block is in `panel_figure_info.txt`. Fixed and shared ranges are written in full, with a decimal point whatever your system's language, so they can be pasted into a script. With **Each image** the block says so but holds no numbers: the color scale bar on each image shows them. From a real export:
+
+```
+Map Overlay
+-----------
+Source: map file per image, pattern ../maps/{imageSafe}_density.ome.tif
+Channel: Signal density
+Color map: Viridis
+Color range: 0.02010050229728222 to 0.6000000238418579, the 0 to 100 percentile of the values of all exported images
+Overlay opacity: 1
+Values outside the range take the end colors; pixels with no value are transparent.
+```
+
+**Images without a map.** Before the export starts, QuIET looks for every selected image's map file. If some have none, a **QuIET - Missing Map Files** window lists them (`1 of 4 selected images have no map file and will be skipped: ... Continue?`). If you go on, those images are skipped, never exported without their overlay, and named again in **QuIET - Some Images Skipped** when the export ends. If none of the selected images has a map file, the export does not start.
+
+**Generated script.** The Groovy script finds the files with the same pattern and reads the same channel. For a shared range it scans every image in the project, not only the ones you selected, before exporting. It prints `Map range for all images: <min> to <max>`, then `SKIP: <reason>` for each image without a map, and ends with a line such as `Export complete: 3 succeeded, 0 failed, 1 skipped (no map)`. A script run on a different set of images computes its own shared range. To repeat an earlier export exactly, set the range by hand, with the numbers from that export's `export_info.txt`:
+
+```groovy
+def mapRangeMode = "FIXED"
+def mapRangeMin = 0.02010050229728222d
+def mapRangeMax = 0.6000000238418579d
+```
+
+The other map settings in the script are `mapSource`, `densityMapName`, `mapFilePattern`, `mapChannel`, `mapLowPercentile`, `mapHighPercentile`, `colorScaleBarTitle` and `overlayOpacity`.
+
+#### If Check reports a problem
+
+| Under Map File | Cause | Fix |
+|----------------|-------|-----|
+| `Open image: no map file <path>` | No file at that path. Often `{imageBase}` was used where the program kept the extension in the name | Compare the path shown with the real file name. Switch between `{imageBase}` and `{imageSafe}`, or add `:60` |
+| `Open image: 2 map files match <path> ...; make the pattern more specific` | A wildcard matched several files | Replace `*` with the part of the name that tells the files apart |
+| `Open image: unknown token {imagename}; use {project}, {imageDir}, {image}, {imageBase} or {imageSafe}` | A misspelled placeholder; they are case-sensitive | Use the exact spelling |
+| `Open image: wildcards are allowed only in the file name, not in folders: ...` | A `*` or `?` in a folder name | Write the folder name in full |
+| `Open an image to check which file the pattern finds.` | No image is open | Open a project image, then **Check** |
+
+An image whose map lacks the chosen channel is skipped with `the map has no channel '<name>' (it has ...)`: that map was written with different channel names.
 
 </details>
 
@@ -232,7 +309,10 @@ By default, rendered exports apply per-image brightness/contrast and channel vis
 | **Per-Image Saved Settings** (default) | Each image uses its own saved display settings from the QuPath project. If you used "Apply to similar images" in the B&C dialog, all images will already share the same settings. Changes made in Brightness & Contrast reach the export only after the image is saved (**File > Save**); to export exactly what is on screen without saving, use **Current Viewer Settings**. |
 | **Current Viewer Settings** | Captures the display settings from the currently open image and applies them uniformly to all exported images. Requires an image to be open. |
 | **Saved Preset** | Loads a named B&C preset saved in the project (via the Brightness & Contrast dialog's save button) and applies it to all images. |
+| **Global Matched (batch)** | Before exporting, reads every image being exported at 1/32 size and sets one display minimum and maximum per channel for all of them, leaving out **Saturation (%)** of the values at each end (default 0.1, up to 5). The same pixel value then looks the same in every image, so use it for images readers will compare. Channel names and colors come from the first image, so the images should share a channel order. The generated script scans every image in the project, so it gives the same ranges only for the same set of images. |
 | **Raw (No Adjustments)** | Exports raw pixel data with no display transforms. This was the only behavior prior to v0.2.1. |
+
+`export_info.txt` records the minimum and maximum used for each channel with **Current Viewer Settings**, **Saved Preset** and **Global Matched**. With **Per-Image Saved Settings** it records only that each image used its own, and a generated script reads them again when it runs, so prefer Global Matched or Current Viewer Settings for a figure you will publish.
 
 </details>
 
@@ -243,10 +323,10 @@ Instead of exporting the whole image, you can export individual annotation regio
 
 | Option | Values |
 |--------|--------|
-| **Region type** | Whole image (default), All annotations (individual) |
-| **Region padding** | Pixel padding around each annotation's bounding box (default: 0) |
+| **Export Region** | Whole Image (default), One Image Per Annotation |
+| **Padding (pixels)** | Pixel padding around each annotation's bounding box (default: 0) |
 
-When "All annotations" is selected, each annotation's bounding box is exported as a separate image file, with all overlays (classifier, objects, density map, scale bar, panel label) applied to the cropped region. Padding is clamped to image bounds.
+When **One Image Per Annotation** is selected, each annotation's bounding box is exported as a separate image file, with all overlays (classifier, objects, density map, scale bar, panel label) applied to the cropped region. Padding is clamped to image bounds.
 
 </details>
 
@@ -281,11 +361,13 @@ For map overlays, a color-mapped legend can be burned in showing the value range
 |--------|--------|
 | **Show color scale bar** | Enable/disable (default: off) |
 | **Position** | Lower Right (default), Lower Left, Upper Right, Upper Left |
-| **Title** | Text drawn beside the bar, such as the measurement and its unit (blank for none). For a map file it is filled in from the channel name, plus the channel's unit when the file's description lists one as `[index] name=...; unit=...` (Fiber Analysis maps do). |
+| **Title** | Text drawn under the bar (above it when the bar is in a lower corner), such as the measurement and its unit; blank for none. With **Map file per image**, picking a **Map Channel** fills it in from the channel name, plus the channel's unit when the map file records one (`Signal density (no threshold)` with unit `fraction of full scale` becomes `Signal density (no threshold) (fraction of full scale)`). A title you typed yourself is kept. |
 | **Font size** | Auto (computed from image dimensions) or explicit size in points |
 | **Bold text** | Enable/disable (default: on) |
 
-The color scale bar is only available in map overlay mode.
+The five labels are the range's minimum, quartiles and maximum, rounded to 2 decimals (values below 0.01 in scientific notation). With a fixed or shared range, pixels beyond either end take the end color, so the top label means "this value or more". The color scale bar is only available with Render Mode **Density / Map Overlay**.
+
+For tools that write map files: QuIET reads a channel's unit from rows of the form `[index] name=...; unit=...` in the TIFF's image description (classic TIFF or BigTIFF).
 
 </details>
 
@@ -346,7 +428,7 @@ For multi-channel fluorescence images, the rendered export can emit one panel pe
 | **Individual channels as grayscale** | Render each channel panel as grayscale (best intensity contrast for quantitative comparison). The channel's display minimum maps to black and its maximum to white, exactly as in the viewer's grayscale mode. |
 | **Individual channels in pseudocolor** | Render each channel panel in its LUT color, with its display minimum and maximum, so it looks as it does in the viewer with only that channel on (helps readers identify channels across multi-panel figures). |
 | **Color border on channel panels** | Draw a colored border around each channel panel matching that channel's LUT color. |
-| **Channel color legend swatch** | Draw a small colored rectangle with the channel name on each individual channel panel, so the channel is identifiable even in grayscale. |
+| **Channel color legend** | Draw a small colored rectangle with the channel name on each individual channel panel, so the channel is identifiable even in grayscale. |
 | **Show channel/stain legend** | Draw a full channel/stain legend on the exported image (available for all rendered exports, not only split-channel). It lists the visible channels in their display colors. In a split-channel export the merged file gets the full legend and each channel file gets its own swatch. |
 
 </details>
@@ -379,7 +461,7 @@ Generate **segmentation masks paired with your images** -- the ground-truth labe
 |-----------|-------------|
 | **Binary** | Single-class foreground/background (label 0 and 1) |
 | **Grayscale Labels** | Integer label per classification (1, 2, 3, ...) with optional grayscale LUT |
-| **Class-Colored** | RGB mask using each PathClass's assigned color |
+| **Class-Colored** | RGB mask using each class's color |
 | **Instance IDs** | Unique integer per object instance (16-bit), with optional label shuffling for visual clarity |
 | **Multi-Channel** | One binary channel per classification |
 
@@ -405,7 +487,7 @@ Export the **underlying image pixels** -- no overlays, no brightness/contrast ad
 |--------|-------------|
 | **Region type** | Whole image, selected annotations, or all annotations |
 | **Annotation padding** | Add pixel padding around annotation bounding boxes (clamped to image bounds) |
-| **Channel selection** | Export only specific channels from multi-channel/fluorescence images |
+| **Channel Selection** | Untick channels to leave them out (Advanced mode). The list shows the open image's channels, or the first project image's if none is open. Leaving a channel out of an RGB image writes the kept channels as 32-bit values (QuPath's channel extraction), with the same numbers |
 | **OME-TIFF Pyramid** | Multi-resolution pyramidal output with configurable levels, tile size, and compression |
 | **Downsample** | Resolution factor |
 | **Format** | PNG, TIFF, JPEG, OME-TIFF, OME-TIFF Pyramid |
@@ -425,22 +507,22 @@ Generate **fixed-size image + label tile pairs** ready to feed into deep-learnin
 | **Overlap** | Pixel overlap between adjacent tiles |
 | **Downsample** | Resolution factor for tile extraction |
 | **Image format** | Output format for image tiles |
-| **Label masks** | Optionally generate a label mask tile alongside each image tile |
+| **Generate label mask tiles** | Optionally write a label mask tile alongside each image tile |
 | **Label mask type** | Binary, Grayscale Labels, Instance, Colored, or Multi-Channel |
-| **Parent filter** | Restrict tiles to annotation regions, TMA cores, or export all |
-| **Annotated only** | Skip tiles that contain no annotated objects |
-| **GeoJSON per tile** | Export object geometries for each tile |
+| **Parent Objects** | Restrict tiles to annotation regions, TMA cores, or export all |
+| **Annotated tiles only** | Skip tiles that contain no annotated objects |
+| **Export GeoJSON per tile** | Export object geometries for each tile |
 
 </details>
 
 <details>
 <summary><h3>Object Crops (Classification Training)</h3></summary>
 
-Export **one small image per detected object**, organized by class, for training a per-object classifier (cell-type calls, detection-quality filters, mitosis classifiers, etc.). Pick a fixed crop size around each cell or detection centroid, choose how classes should be encoded (subdirectory per class, or filename prefix), and QuIET produces a directory tree that drops directly into PyTorch / TensorFlow `ImageFolder`-style loaders.
+Export **one small image per detected object**, organized by class, for training a per-object classifier (cell types, detection-quality filters, mitosis classifiers, etc.). Pick a fixed crop size around each cell or detection centroid, choose how classes should be encoded (subdirectory per class, or filename prefix), and QuIET produces a directory tree that drops directly into PyTorch / TensorFlow `ImageFolder`-style loaders.
 
 | Option | Description |
 |--------|-------------|
-| **Object type** | Detections, Cells, or All detection objects |
+| **Object type** | Detections, Cells, Annotations, or All (Detections + Cells) |
 | **Crop size** | Fixed output size in pixels (e.g., 64x64) |
 | **Padding** | Extra pixels around the object centroid |
 | **Downsample** | Resolution factor for crop extraction |
@@ -458,7 +540,7 @@ Output structure depends on the label format:
 <details>
 <summary><h3>Panel / Montage</h3></summary>
 
-Compose **many project images into one multi-panel figure**. Instead of exporting each image to its own file, Panel / Montage renders a set of selected images with a single shared **export recipe**, then tiles them into one rows-by-columns montage with controllable spacing, an optional per-image caption, and a chosen background colour. This is the export for a figure that compares conditions, timepoints, or samples side by side -- replacing the manual "export each image, then assemble in Illustrator or ImageJ" step.
+Compose **many project images into one multi-panel figure**. Instead of exporting each image to its own file, Panel / Montage renders a set of selected images with a single shared **export recipe**, then tiles them into one rows-by-columns montage with controllable spacing, an optional per-image caption, and a chosen background color. This is the export for a figure that compares conditions, timepoints, or samples side by side -- replacing the manual "export each image, then assemble in Illustrator or ImageJ" step.
 
 > A **recipe** is the saved settings for how one image is exported. In panel mode you choose the recipe once, and QuIET applies it to every image in the figure so all panels are rendered the same way.
 
@@ -466,7 +548,7 @@ Panel / Montage has its own menu item -- **Extensions > QuIET > Panel / Montage 
 
 1. **Step 1 -- Select images.** Choose which project images go into the figure. Image selection comes *before* the layout on purpose -- the grid size is suggested from how many images you pick.
 2. **Step 2 -- Recipe.** Choose how a single image should be exported. The recipe can be any of QuIET's single-image categories (Rendered, Raw, Mask); the same recipe is applied to every image. You can accept the pre-filled settings and continue, or adjust them. Optionally **Save recipe...** to a `.json` file, or **Load recipe...** to reuse one.
-3. **Step 3 -- Layout, captions and output.** Set the grid (rows x columns), the gutter spacing, the background colour, the cell-fit mode and optional captions, then choose the output format and export. Click **Open layout preview...** for a separate, resizable, always-on-top window that shows the montage with thumbnails -- drag any image onto another to swap their positions and rearrange the figure.
+3. **Step 3 -- Layout, captions and output.** Set the grid (rows x columns), the gutter spacing, the background color, the cell-fit mode and optional captions, then choose the output format and export. Click **Open layout preview...** for a separate, resizable, always-on-top window that shows the montage with thumbnails -- drag any image onto another to swap their positions and rearrange the figure.
 
 ![Panel / Montage Step 3 Layout, captions and output, set to a 2 x 4 grid with Same scale in every cell and a scale bar on every cell, beside the separate Panel Layout Preview window showing the eight thumbnails, each with its 200 µm scale bar](documentation/images/panel-montage-layout-preview.png)
 
@@ -488,11 +570,11 @@ QuIET's panel/montage layout follows conventions established by figure-assembly 
 <details>
 <summary><strong>Common tasks</strong></summary>
 
-**Compose a figure from project images** -- open Panel / Montage, filter and check the images you want, pick or load a recipe, set rows x columns, set the X/Y gutter and background colour, review the size estimate, choose an output format, and Export. The result is one montage file in `exports/panels/`.
+**Compose a figure from project images** -- open Panel / Montage, filter and check the images you want, pick or load a recipe, set rows x columns, set the X/Y gutter and background color, review the size estimate, choose an output format, and Export. The result is one montage file in `exports/panels/`.
 
 **Save and reuse an export recipe** -- a recipe is the saved settings for how one image is exported, stored as a `.json` file. Configure the recipe on Step 2, then click **Save recipe...** to write the `.json`; later, click **Load recipe...** in panel mode to apply it again. You do **not** need a recipe file to make a panel -- without one, the recipe step pre-fills from your last-used settings. Save/Load is the reuse and reproducibility path.
 
-**Add captions to each panel** -- turn on the filename caption, choose whether it sits **Above** or **Below** the image, optionally check metadata fields to print (each renders on its own line), and set the caption font size and colour. Captions are drawn in the gutter band against the panel background colour. These are a **Caption** -- distinct from the in-image **Info Label** and **Panel Label** features on the Rendered category.
+**Add captions to each panel** -- turn on the filename caption, choose whether it sits **Above** or **Below** the image, optionally check metadata fields to print (each renders on its own line), and set the caption font size and color. Captions are drawn in the gutter band against the panel background color. These are a **Caption** -- distinct from the in-image **Info Label** and **Panel Label** features on the Rendered category.
 
 **Filter a large project down to the right images** -- on Step 1, use the **Filter images** section: filter by name, by image type, and by metadata field/value to narrow the list, then check the specific images you want. The live "X selected" count confirms how many will be used. Panels fill the grid in the order images appear in this list (row-major: left to right, top to bottom).
 
@@ -505,31 +587,31 @@ QuIET's panel/montage layout follows conventions established by figure-assembly 
 
 **Recipe categories** -- The Step 2 recipe can be Rendered, Raw, or Mask -- the single-image categories that produce exactly one image per source image. Object Crops is not offered (it produces many crops per image), Tiled is not offered (it produces many tiles per image), and Panel is not offered (no panels-of-panels). The recipe category's own format restrictions still apply: a recipe that forbids JPEG (a Mask, or real fluorescence Raw data) forbids JPEG for the panel output too.
 
-**Layout preview** -- The **Open layout preview...** button on Step 3 opens a separate, resizable, always-on-top window showing the composed grid with image thumbnails, the real gutters and background colour, and caption placeholders drawn as horizontal bars. It updates live as you change the grid, gutters, background, cell-fit mode or captions. **Drag any image cell onto another to swap them** -- the arrangement in the preview is the order the figure is composed in. The window stays open beside the wizard so you can adjust settings and watch the result; its always-on-top is lifted automatically while an export runs so progress and result dialogs stay visible.
+**Layout preview** -- The **Open layout preview...** button on Step 3 opens a separate, resizable, always-on-top window showing the composed grid with image thumbnails, the real gutters and background color, and caption placeholders drawn as horizontal bars. It updates live as you change the grid, gutters, background, cell-fit mode or captions. **Drag any image cell onto another to swap them** -- the arrangement in the preview is the order the figure is composed in. The window stays open beside the wizard so you can adjust settings and watch the result; its always-on-top is lifted automatically while an export runs so progress and result dialogs stay visible.
 
-**Per-panel labels (A, B, C...)** -- Step 3 has a **Panel labels** section that prints a label inside each cell. Three styles are supported: **A, B, C** (uppercase, default for journal figures), **a, b, c** (lowercase, used by some journals), and **1, 2, 3** (numeric, intended for slides, posters, and other non-publication contexts). Pick the corner (upper / lower x left / right), font size (0 = auto-scale to cell size), bold, and label colour; the renderer adds a luminance-based contrast outline automatically so the label stays legible on any background. Labels are drawn into the cell *image* area (not the caption band) and follow the same drag-reorder order the figure is composed in, so swapping cell positions also renumbers the labels.
+**Per-panel labels (A, B, C...)** -- Step 3 has a **Panel labels** section that prints a label inside each cell. Three styles are supported: **A, B, C** (uppercase, default for journal figures), **a, b, c** (lowercase, used by some journals), and **1, 2, 3** (numeric, intended for slides, posters, and other non-publication contexts). Pick the corner (upper / lower x left / right), font size (0 = auto-scale to cell size), bold, and label color; the renderer adds a luminance-based contrast outline automatically so the label stays legible on any background. Labels are drawn into the cell *image* area (not the caption band) and follow the same drag-reorder order the figure is composed in, so swapping cell positions also renumbers the labels.
 
-**Cell-fit mode** -- The **Cell fit** control on Step 3 decides how each image is fitted into its grid cell. All three modes **preserve the image aspect ratio** -- no mode distorts an image:
+**Image fit** -- The **Image fit** control on Step 3 decides how each image is fitted into its grid cell. All three modes **preserve the image aspect ratio** -- no mode distorts an image:
 
-| Cell fit mode | Behaviour |
+| Image fit | Behavior |
 |---------------|-----------|
-| **Fit (letterbox)** (default) | Scale the image to fit fully inside the cell; fill the leftover space with the background colour. Nothing is cropped. |
+| **Fit (letterbox)** (default) | Scale the image to fit fully inside the cell; fill the leftover space with the background color. Nothing is cropped. |
 | **Fill (crop)** | Scale the image to completely cover the cell; crop the overflow. Nothing is padded. |
-| **Actual size** | Place the image at its native pixel size, centred in the cell; pad with background if smaller, crop if larger. |
+| **Actual size** | Place the image at its native pixel size, centered in the cell; pad with background if smaller, crop if larger. |
 
 **Cell size, same scale and scale bars** -- The **Cell size and scale bar** section on Step 3 controls how images of different sizes and pixel sizes line up:
 
 - **Fixed cell size** makes every cell the given width x height in pixels. Off (the default), every cell takes the size of the largest rendered image.
 - **Same scale in every cell** draws every image at one microns-per-pixel, so equal distances look equal across the figure. With **Fit**, the physically largest image fits its cell and smaller specimens sit inside theirs at the same scale; with **Fill**, the smallest image covers its cell and larger ones are cropped; with **Actual size**, images are resampled to the finest pixel size. It needs a pixel size on every image -- if one has none, images are fitted individually and the export lists which image lacked it.
-- **Scale bar** draws the bar *after* each image is fitted, inside the visible part of the image (never in the letterbox margin, never cropped off by Fill). **Every cell** puts a bar in each panel; **Last cell only** draws one bar, which describes the whole figure only when *Same scale* is on (the wizard warns otherwise). With Same scale on, every bar has the same length. Set the corner, length in microns (0 = a round length near 15% of the cell width), colour, font size and bold.
+- **Scale bar** draws the bar *after* each image is fitted, inside the visible part of the image (never in the letterbox margin, never cropped off by Fill). **Every cell** puts a bar in each panel; **Last cell only** draws one bar, which describes the whole figure only when *Same scale* is on (the wizard warns otherwise). With Same scale on, every bar has the same length. Set the corner, length in microns (0 = a round length near 15% of the cell width), color, font size and bold.
 
 A scale bar set in a Rendered recipe is drawn on each image *before* fitting, so it is resized with the image and Fill can crop it. When a montage scale bar is chosen, the recipe's own bar is turned off automatically.
 
-The **Layout preview** window uses the same placement and scale-bar arithmetic as the export, so each cell shows where its image lands, at what scale, and with which bar. Point at a panel to read its image name, microns per figure pixel, visible image size and scale-bar length; enlarge the window to see each cell bigger. (For an Object Crops recipe the thumbnail is the whole image, not the crop.)
+The **Layout preview** window uses the same placement and scale-bar arithmetic as the export, so each cell shows where its image lands, at what scale, and with which bar. Point at a panel to read its image name, microns per figure pixel, visible image size and scale-bar length; enlarge the window to see each cell bigger.
 
 **Reading the size estimate** -- Step 3 shows the composed pixel dimensions (from grid x cell size x gutters) and a rough output file-size estimate. The file-size figure is an estimate and varies with image content.
 
-**The generated Groovy script** -- panel mode, like every QuIET category, emits a self-contained script. The panel script holds all cells in memory while composing.
+**The generated Groovy script** -- a Panel / Montage export records its settings as a Groovy configuration block in each source image's workflow history (`Automate > Show workflow command history`). It does not compose the figure: to make it again, re-run the export from the wizard, or save the recipe with **Save recipe...**. The wizard has no Copy Script or Save Script button in panel mode. The map overlay and color range a map recipe used are written to `panel_figure_info.txt`.
 
 </details>
 
@@ -541,25 +623,25 @@ All panel settings persist across QuPath sessions, like every other QuIET settin
 | Preference key | What it controls |
 |----------------|------------------|
 | `quiet.panel.rows` | Number of grid rows |
-| `quiet.panel.columns` | Number of grid columns |
+| `quiet.panel.cols` | Number of grid columns |
 | `quiet.panel.gutterX` | Horizontal spacing between cells (and at the left/right edges), pixels |
 | `quiet.panel.gutterY` | Vertical spacing between cells (and at the top/bottom edges), pixels |
-| `quiet.panel.backgroundColor` | Panel background and gutter colour |
+| `quiet.panel.backgroundColor` | Panel background and gutter color |
 | `quiet.panel.cellFitMode` | How images are fitted into cells (Fit / Fill / Actual size) |
 | `quiet.panel.fixedCellSize` / `cellWidth` / `cellHeight` | Fixed cell size in pixels (off = largest image) |
 | `quiet.panel.matchScale` | Draw every image at one microns-per-pixel |
 | `quiet.panel.scaleBar.mode` | `NONE` / `EVERY_CELL` / `LAST_CELL` |
-| `quiet.panel.scaleBar.position` / `lengthMicrons` / `color` / `fontSize` / `bold` | Montage scale bar corner, length (0 = auto), colour, font size (0 = auto), bold |
+| `quiet.panel.scaleBar.position` / `lengthMicrons` / `color` / `fontSize` / `bold` | Montage scale bar corner, length (0 = auto), color, font size (0 = auto), bold |
 | `quiet.panel.showFilenameCaption` | Whether the per-image filename caption is drawn |
 | `quiet.panel.captionPosition` | Caption band above or below the image |
 | `quiet.panel.metadataFields` | Which metadata fields to print, one line each |
 | `quiet.panel.captionFontSize` | Caption font size |
-| `quiet.panel.captionColor` | Caption text colour |
+| `quiet.panel.captionColor` | Caption text color |
 | `quiet.panel.label.style` | Per-cell label style: `NONE` / `UPPER` (A,B,C) / `LOWER` (a,b,c) / `NUMERIC` (1,2,3) |
 | `quiet.panel.label.position` | Corner the label is drawn in: `UPPER_LEFT` / `UPPER_RIGHT` / `LOWER_LEFT` / `LOWER_RIGHT` |
 | `quiet.panel.label.fontSize` | Label font size in pixels (0 = auto-scale from cell size) |
 | `quiet.panel.label.bold` | Whether the label is drawn in bold |
-| `quiet.panel.label.color` | Label text colour |
+| `quiet.panel.label.color` | Label text color |
 | `quiet.panel.format` | Output format for the composed figure |
 | `quiet.panel.recipeCategory` | Last-used single-image recipe category |
 
@@ -584,12 +666,12 @@ All panel settings persist across QuPath sessions, like every other QuIET settin
 | **Layout preview** (Step 3) | Separate always-on-top window: visual grid with thumbnails; drag images to swap/rearrange. |
 | **Rows / Columns** | Grid dimensions; seeded near-square from the image count |
 | **Gutter X / Gutter Y** | Horizontal and vertical spacing between cells, in pixels |
-| **Background** | Background colour of the figure and the gutters / caption bands |
-| **Cell fit** | Fit (letterbox), Fill (crop), or Actual size -- aspect ratio always preserved |
+| **Background** | Background color of the figure and the gutters / caption bands |
+| **Image fit** | Fit (letterbox), Fill (crop), or Actual size -- aspect ratio always preserved |
 | **Cell size / Same scale** | Optional fixed cell size in pixels; optionally draw every image at one microns-per-pixel |
-| **Scale bar** | Drawn after fitting: none, every cell, or last cell only; corner, length, colour, font size, bold |
+| **Scale bar** | Drawn after fitting: none, every cell, or last cell only; corner, length, color, font size, bold |
 | **Captions** | Optional per-image filename caption plus metadata lines, drawn above or below each panel |
-| **Panel labels** | Optional per-cell label inside the image area: A,B,C / a,b,c / 1,2,3, configurable corner, font size, bold, colour |
+| **Panel labels** | Optional per-cell label inside the image area: A,B,C / a,b,c / 1,2,3, configurable corner, font size, bold, color |
 | **Format** | PNG, TIFF, JPEG, OME-TIFF, OME-TIFF Pyramid, SVG -- restricted to OME-TIFF at or above 100 megapixels |
 
 </details>
@@ -607,10 +689,14 @@ All panel settings persist across QuPath sessions, like every other QuIET settin
 - Pixel size after downsampling
 
 **Rendered, raw, and tiled exports** produce `export_info.txt` containing:
+- The QuIET and QuPath versions and the export time
 - Channel names and colors (fluorescence) or stain vectors (brightfield H&E/H-DAB)
-- Display settings applied during rendering (if applicable)
-- Pixel size with downsample factor
+- Display settings: each channel's minimum and maximum for Current Viewer Settings, Saved Preset and Global Matched; for Per-Image Saved Settings only a note that each image used its own
+- The map overlay: source, channel, colormap, color range and opacity (map overlays only)
+- Pixel size with downsample factor, for example `Pixel Size: 0.5 um/px (downsample 1x from 0.5 um/px)`
 - Tile size and overlap (for tiled exports)
+
+**Panel / Montage exports** produce `panel_figure_info.txt` beside the figure: the versions, the layout, the recipe, the map overlay (for a map recipe), and the source images in placement order.
 
 Images with different channel configurations are automatically grouped in the metadata file. Metadata writing never interrupts the export -- failures are logged but silently ignored.
 
@@ -621,15 +707,23 @@ Images with different channel configurations are automatically grouped in the me
 <details>
 <summary><h2>Script Generation</h2></summary>
 
-Every export produces a **self-contained Groovy script** that:
+Every single-image export (Rendered, Mask, Raw, Tiled, Object Crops) produces a **self-contained Groovy script** that:
 
 - Runs standalone in QuPath's script editor (no extension dependencies)
+- Names the QuIET and QuPath versions that wrote it in its header
 - Contains all configuration as editable variables at the top
-- Processes all project images in a batch loop
+- Rendered, Mask, Raw and Tiled scripts process every project image in a batch loop (not only the ones you selected); the Object Crops script works on the open image, so use the script editor's **Run for project** to run it on several
 - Reports progress and error counts
 - Can be saved, version-controlled, and shared
 
-Use the **Copy Script** or **Save Script...** buttons in the wizard to capture the generated script before or after running an export.
+What a script does not reproduce:
+
+- **SVG**: a script for an SVG export writes PNG, because SVG output needs QuIET.
+- **Per-Image Saved Settings**: the script reads each image's saved brightness and contrast when it runs, so a change you save later changes its output.
+- **Panel / Montage**: its script only records the settings (see the Panel / Montage section).
+- A classifier chosen as **(Active Overlay)** is the viewer's live classifier, not one saved in the project, so a script cannot load it; such an export is not added to the workflow history.
+
+Use the **Copy Script** or **Save Script...** buttons on the last step (shown in **Advanced** mode) to capture the generated script before or after running an export. When **Add to Workflow** is ticked (the default), the script is also added to each exported image's workflow history.
 
 </details>
 
@@ -652,8 +746,8 @@ Exports are written to a configurable output directory. The default structure un
       export_info.txt        # Channel info, pixel size
     tiles/                   # Tiled ML exports
       <image_name>/
-        <image_name>_[x,y,w,h].tif
-        <image_name>_[x,y,w,h].png   (label)
+        <image_name> [x=0,y=0,w=512,h=512].tif
+        <image_name> [x=0,y=0,w=512,h=512].png   (label tile)
       export_info.txt        # Channel info, tile params, pixel size
     crops/                   # Object crop exports
       <ClassName>/
@@ -662,7 +756,7 @@ Exports are written to a configurable output directory. The default structure un
       panel_figure.png
 ```
 
-Filenames are sanitized using QuPath's `GeneralTools.stripInvalidFilenameChars()` for cross-platform compatibility.
+Tile names come from QuPath's `TileExporter`: when the downsample is not 1, `d=<downsample>,` comes first inside the brackets, and a label tile that would have the image tile's extension gets `-labelled` added. Other filenames are sanitized using QuPath's `GeneralTools.stripInvalidFilenameChars()` for cross-platform compatibility.
 
 </details>
 
@@ -754,13 +848,16 @@ src/main/java/qupath/ext/quiet/
     ObjectCropExporter.java        # Per-object crop export logic
     PanelExportConfig.java         # Panel / Montage export configuration
     CellFitMode.java               # FIT_LETTERBOX, FILL_CROP, ACTUAL_SIZE (aspect preserved)
-    ExportRecipe.java              # Gson-serialised .json single-image recipe (load/save)
+    ExportRecipe.java              # Gson-serialized .json single-image recipe (load/save)
     PanelComposer.java             # Grid composition: background, gutters, cell-fit, captions
     CaptionRenderer.java           # Multi-line gutter caption renderer (panel mode)
     PanelImageExporter.java        # Renders each image via the recipe, composes once, writes once
     GeoJsonExporter.java           # GeoJSON annotation export
     BatchExportTask.java           # JavaFX Task for background batch processing
     ExportResult.java              # Export outcome tracking
+    ClassNames.java                # Class-name matching for annotation filters
+    ImageNames.java                # Output base names (extension rule, collision check)
+    PanelCellGeometry.java         # Common microns-per-pixel and placement for panel cells
     ScaleBarRenderer.java          # Java2D scale bar with background box support
     ColorScaleBarRenderer.java     # Color-mapped legend for map overlays
     MapOverlaySource.java          # Where a map overlay comes from: project density map or map file
@@ -783,16 +880,18 @@ src/main/java/qupath/ext/quiet/
     PanelScriptGenerator.java      # Groovy script for panel / montage export
   ui/
     ExportWizard.java              # Main wizard window (Simple/Advanced mode toggle)
-    CategorySelectionPane.java     # Step 1: category cards (FlowPane, 6 cards)
+    CategorySelectionPane.java     # Step 1: category cards (five cards)
     SectionBuilder.java            # Collapsible TitledPane section factory
     RenderedConfigPane.java        # Step 2a: rendered options (smart defaults, live preview)
     MaskConfigPane.java            # Step 2b: mask options (no JPEG)
     RawConfigPane.java             # Step 2c: raw options
     TiledConfigPane.java           # Step 2d: tiled options
     ObjectCropConfigPane.java      # Step 2e: object crop options
-    PanelRecipePane.java           # Panel Step 3: recipe category + embedded config + load/save
+    PanelRecipePane.java           # Panel Step 2: recipe category + embedded config + load/save
     PanelLayoutPane.java           # Panel layout step: grid, gutters, background, cell-fit, captions, output
-    ImageSelectionPane.java        # Step 3: image list + run + advice button (Step 2 in panel mode)
+    ImageSelectionPane.java        # Step 3: image list + run + advice button (Step 1 in panel mode)
+    PanelLayoutPreview.java        # Panel layout preview window (drag to swap cells)
+    ThemeColors.java               # Text colors that suit QuPath's light and dark themes
     ImageEntryItem.java            # Wrapper for ProjectImageEntry in the image selection list
     GuidelinesPane.java            # QUAREP-LiMi context-sensitive guidelines (Step 2 right panel)
     PublicationAdvicePane.java     # Floating advice dialog with section references
@@ -802,6 +901,9 @@ src/main/java/qupath/ext/quiet/
 src/main/resources/
   qupath/ext/quiet/ui/
     strings.properties             # All UI strings (i18n-ready)
+    images/category_*.png          # Category card icons
+  qupath/ext/quiet/export/
+    map-overlay-helpers.groovy     # Map file lookup, map reading and shared range for generated scripts
   META-INF/services/
     qupath.lib.gui.extensions.QuPathExtension
 ```
@@ -812,11 +914,11 @@ src/main/resources/
 <summary><h2>Known Limitations</h2></summary>
 
 - **OME-TIFF Pyramid** requires `qupath-extension-bioformats` to be installed alongside QuIET. Without it, pyramid exports fall back to flat OME-TIFF.
-- **SVG export** uses the JFreeSVG library for vector rendering. The base image is embedded as a raster element; annotations are always rendered as vector paths. Detections are rendered as vector paths up to the per-export **SVG vector detection cap** (default 1000); above the cap, detections are rasterized into the embedded base image so the document stays browser-viewable. Set the cap to `0` to keep every detection as a vector path regardless of count and accept the file size. SVG is only available for rendered exports.
-- **Channel selection** currently uses channel indices. The UI populates available channels, but auto-detection from image metadata is planned for a future release.
+- **SVG export** uses the JFreeSVG library for vector rendering. The base image is embedded as a raster element; annotations are always rendered as vector paths. Detections are rendered as vector paths up to the per-export **SVG vector detection cap** (default 1000); above the cap, detections are rasterized into the embedded base image so the document stays browser-viewable. Set the cap to `0` to keep every detection as a vector path regardless of count and accept the file size. Single-image SVG is available only for Rendered exports; a Panel / Montage can also be written as SVG.
+- **Raw channel selection** lists the channels of the open image (or the first project image) and leaves channels out by position, so the selected images should share a channel order.
 - **Tiled GeoJSON** produces one GeoJSON file per tile via QuPath's `TileExporter.exportJson()` API (not a single consolidated file).
 - Rendered export with classifier overlay requires a pixel classifier saved in the QuPath project.
-- A project density map overlay requires a density map saved in the QuPath project (created via **Analyze > Density maps**). A map file overlay needs one map file per image; the map is assumed to cover the whole image.
+- A project density map overlay requires a density map saved in the QuPath project (**Analyze > Density maps > Create density map...**). A map file overlay needs one map file per image covering the whole image; QuIET has no colormap for categories such as class numbers.
 - **Display Settings** "Current Viewer" mode requires an image to be open in the viewer at export time. "Saved Preset" mode requires presets saved via QuPath's Brightness & Contrast dialog.
 - **Panel / Montage** composes the whole figure as one in-memory image. Figures at or above 100 megapixels are restricted to OME-TIFF output; very large panels may still need a higher QuPath memory limit (`-Xmx`). See Troubleshooting in the Panel / Montage section.
 - **Panel / Montage** fills cells in the order images appear in the Step 1 selection list (row-major, left to right, top to bottom). Open the Layout preview window to drag any cell onto another and swap their positions; the arrangement you leave the preview in is what the figure is composed in.
@@ -843,6 +945,16 @@ See `documentation/POTENTIAL_FEATURES.md` for detailed implementation plans.
 ## Support
 
 For general support and feature requests, please post on the [image.sc forum](https://forum.image.sc/) with the `#qupath` tag and mention `@Mike_Nelson` to flag the topic for my attention.
+
+## How to cite
+
+If you use QuIET in published work, please cite the repository and the version you used (`uw-loci/qupath-extension-image-export-toolkit`, for example v1.3.1; `export_info.txt` records it), and QuPath:
+
+> Bankhead P, et al. QuPath: Open source software for digital pathology image analysis. *Scientific Reports* 7, 16878 (2017). https://doi.org/10.1038/s41598-017-17204-5
+
+If you followed the publication checklists that QuIET's advice is built on, cite them too:
+
+> Schmied C, Nelson MS, et al. Community-developed checklists for publishing images and image analyses. *Nature Methods* 21, 170-181 (2024; published online 2023). https://doi.org/10.1038/s41592-023-01987-9
 
 ## License
 
