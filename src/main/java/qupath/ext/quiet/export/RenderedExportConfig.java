@@ -127,6 +127,8 @@ public class RenderedExportConfig {
      * @param highPercentile upper percentile for SHARED (0-100)
      * @param rangeResolved  true once a SHARED range has been computed over the exported images
      * @param label          title drawn above the color scale bar; blank for none
+     * @param hideAtOrBelowMin leave values at or below the range's lower end transparent
+     *                       instead of drawing them in the first color
      */
     public record MapOverlayConfig(
             MapSource source,
@@ -138,12 +140,13 @@ public class RenderedExportConfig {
             double lowPercentile,
             double highPercentile,
             boolean rangeResolved,
-            String label
+            String label,
+            boolean hideAtOrBelowMin
     ) {
         /** Project density map, each image on its own range: the behavior before map files. */
         public static MapOverlayConfig defaults() {
             return new MapOverlayConfig(MapSource.PROJECT_DENSITY_MAP, "", "",
-                    MapRangeMode.PER_IMAGE, 0.0, 1.0, 1.0, 99.0, false, "");
+                    MapRangeMode.PER_IMAGE, 0.0, 1.0, 1.0, 99.0, false, "", false);
         }
 
         /** True when every image is drawn with the same range, known before rendering. */
@@ -155,7 +158,7 @@ public class RenderedExportConfig {
         /** A copy holding a computed SHARED range. */
         public MapOverlayConfig withResolvedRange(double min, double max) {
             return new MapOverlayConfig(source, filePattern, channel, rangeMode,
-                    min, max, lowPercentile, highPercentile, true, label);
+                    min, max, lowPercentile, highPercentile, true, label, hideAtOrBelowMin);
         }
     }
 

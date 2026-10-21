@@ -497,17 +497,11 @@ public class RenderedImageExporter {
                         0, 0, baseImage.getWidth(), baseImage.getHeight(), null);
             }
         } else if (mapLayer != null && opacity > 0) {
-            MapLayer.Band band = mapLayer.read(x, y, w, h, downsample);
-            ColorMaps.ColorMap colorMap = resolveColorMap(config.overlays().colormapName());
-            double[] minMax = MapLayer.range(band, config.mapOverlay());
-            BufferedImage colorized = MapLayer.colorize(band, colorMap, minMax[0], minMax[1]);
-
-            if (colorized != null) {
-                g2d.setComposite(AlphaComposite.getInstance(
-                        AlphaComposite.SRC_OVER, opacity));
-                g2d.drawImage(colorized,
-                        0, 0, baseImage.getWidth(), baseImage.getHeight(), null);
-            }
+            BufferedImage colorized = paintMap(mapLayer, config, x, y, w, h, downsample,
+                    baseImage.getWidth(), baseImage.getHeight());
+            g2d.setComposite(AlphaComposite.getInstance(
+                    AlphaComposite.SRC_OVER, opacity));
+            g2d.drawImage(colorized, 0, 0, null);
         }
 
         g2d.dispose();
@@ -590,12 +584,9 @@ public class RenderedImageExporter {
 
         // Color scale bar for density map mode
         if (mapLayer != null && config.colorScaleBar().show()) {
-            ColorMaps.ColorMap colorMap = resolveColorMap(config.overlays().colormapName());
             // The raster pass read this region at this downsample; the layer returns it cached
-            MapLayer.Band band = mapLayer.read(regionX, regionY, regionW, regionH, downsample);
-            double[] minMax = MapLayer.range(band, config.mapOverlay());
-            maybeDrawColorScaleBar(g2d, config, colorMap, minMax[0], minMax[1],
-                    imageWidth, imageHeight);
+            maybeDrawMapScale(g2d, config, mapLayer, regionX, regionY, regionW, regionH,
+                    downsample, imageWidth, imageHeight);
         }
 
         maybeDrawPanelLabel(g2d, config, panelLabel, imageWidth, imageHeight);
@@ -1641,14 +1632,10 @@ public class RenderedImageExporter {
                 imageData, baseServer, displayServer, config,
                 0, 0, baseServer.getWidth(), baseServer.getHeight(), downsample);
 
-        // Read the map over the whole image
-        MapLayer.Band band = mapLayer.read(
-                0, 0, baseServer.getWidth(), baseServer.getHeight(), downsample);
-        ColorMaps.ColorMap colorMap = resolveColorMap(config.overlays().colormapName());
-        double[] minMax = MapLayer.range(band, config.mapOverlay());
-        double minVal = minMax[0];
-        double maxVal = minMax[1];
-        BufferedImage colorized = MapLayer.colorize(band, colorMap, minVal, maxVal);
+        // Draw the map over the whole image at the output's size
+        BufferedImage colorized = paintMap(mapLayer, config,
+                0, 0, baseServer.getWidth(), baseServer.getHeight(), downsample,
+                baseImage.getWidth(), baseImage.getHeight());
 
         // Composite onto base
         BufferedImage result = new BufferedImage(
@@ -1663,11 +1650,10 @@ public class RenderedImageExporter {
         g2d.drawImage(baseImage, 0, 0, null);
 
         float opacity = (float) config.getOverlayOpacity();
-        if (opacity > 0 && colorized != null) {
+        if (opacity > 0) {
             g2d.setComposite(AlphaComposite.getInstance(
                     AlphaComposite.SRC_OVER, opacity));
-            g2d.drawImage(colorized,
-                    0, 0, baseImage.getWidth(), baseImage.getHeight(), null);
+            g2d.drawImage(colorized, 0, 0, null);
         }
 
         // Object overlays on top if requested
@@ -1682,7 +1668,8 @@ public class RenderedImageExporter {
         maybeDrawScaleBar(g2d, imageData, config,
                 baseImage.getWidth(), baseImage.getHeight(), downsample);
 
-        maybeDrawColorScaleBar(g2d, config, colorMap, minVal, maxVal,
+        maybeDrawMapScale(g2d, config, mapLayer,
+                0, 0, baseServer.getWidth(), baseServer.getHeight(), downsample,
                 baseImage.getWidth(), baseImage.getHeight());
 
         maybeDrawPanelLabel(g2d, config, panelLabel,
@@ -1728,6 +1715,41 @@ public class RenderedImageExporter {
     /**
      * Draw a color scale bar if enabled in the config.
      */
+    /**
+     * Draw a map layer over a region at the output's size, in the configured colors and range.
+     */
+    private static BufferedImage paintMap(MapLayer mapLayer, RenderedExportConfig config,
+                                          int x, int y, int w, int h, double downsample,
+                                          int outW, int outH) throws IOException {
+        double[] minMax = mapLayer.range(x, y, w, h, downsample, config.mapOverlay());
+        return mapLayer.paint(x, y, w, h, downsample, outW, outH,
+                resolveColorMap(config.overlays().colormapName()), minMax[0], minMax[1],
+                config.mapOverlay().hideAtOrBelowMin());
+    }
+
+    /**
+     * Draw the map's color scale bar, or for a class-index channel a legend of its classes.
+     */
+    private static void maybeDrawMapScale(Graphics2D g2d, RenderedExportConfig config,
+                                          MapLayer mapLayer, int x, int y, int w, int h,
+                                          double downsample, int imageWidth, int imageHeight)
+            throws IOException {
+        if (!config.colorScaleBar().show()) return;
+        if (mapLayer.isClassChannel()) {
+            var entries = new java.util.ArrayList<int[]>();
+            for (int rgb : mapLayer.classColors()) {
+                entries.add(new int[]{(rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF});
+            }
+            g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
+            drawSwatchLegend(g2d, entries, mapLayer.classNames(),
+                    config.colorScaleBar().position(), imageWidth, imageHeight);
+            return;
+        }
+        double[] minMax = mapLayer.range(x, y, w, h, downsample, config.mapOverlay());
+        maybeDrawColorScaleBar(g2d, config, resolveColorMap(config.overlays().colormapName()),
+                minMax[0], minMax[1], imageWidth, imageHeight);
+    }
+
     private static void maybeDrawColorScaleBar(Graphics2D g2d,
                                                 RenderedExportConfig config,
                                                 ColorMaps.ColorMap colorMap,
@@ -2237,6 +2259,30 @@ public class RenderedImageExporter {
 
         if (entries.isEmpty()) return;
 
+        // Origin of the legend bounding box for the chosen corner. When
+        // split-channel is on, the swatch position is the source of truth
+        // (so swatch + merge legend stay in the same corner); otherwise
+        // default to UPPER_LEFT.
+        ScaleBarRenderer.Position pos = config.splitChannel().enabled()
+                ? config.splitChannel().colorLegendPosition()
+                : ScaleBarRenderer.Position.UPPER_LEFT;
+        drawSwatchLegend(g2d, entries, names, pos, w, h);
+    }
+
+    /**
+     * Draw a legend of color swatches and names in a corner, wrapped into columns and
+     * shrunk so it covers at most half the image in each direction.
+     *
+     * @param entries {r, g, b} per row
+     * @param names   the name per row
+     * @param pos     the corner
+     * @param w       image width
+     * @param h       image height
+     */
+    private static void drawSwatchLegend(Graphics2D g2d, List<int[]> entries,
+                                         List<String> names, ScaleBarRenderer.Position pos,
+                                         int w, int h) {
+        if (entries.isEmpty()) return;
         // Lay the legend out so it does not overrun the image. With many
         // channels (e.g. a 20-channel multiplex) a single column at the default
         // size would obscure the figure entirely; instead, wrap to columns and
@@ -2288,13 +2334,6 @@ public class RenderedImageExporter {
         int colWidth = swatchSize + margin / 2 + actualWidest + margin / 2;
         int rowPitch = swatchSize + lineSpacing;
 
-        // Origin of the legend bounding box for the chosen corner. When
-        // split-channel is on, the swatch position is the source of truth
-        // (so swatch + merge legend stay in the same corner); otherwise
-        // default to UPPER_LEFT.
-        ScaleBarRenderer.Position pos = config.splitChannel().enabled()
-                ? config.splitChannel().colorLegendPosition()
-                : ScaleBarRenderer.Position.UPPER_LEFT;
         int legendW = columns * colWidth;
         int legendH = rowsPerCol * rowPitch;
         int originX, originY;

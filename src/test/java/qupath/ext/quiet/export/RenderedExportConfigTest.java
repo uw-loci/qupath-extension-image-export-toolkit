@@ -359,7 +359,7 @@ class RenderedExportConfigTest {
     private static RenderedExportConfig.MapOverlayConfig fileMap(RenderedExportConfig.MapRangeMode mode,
                                                                  String pattern, double min, double max) {
         return new RenderedExportConfig.MapOverlayConfig(RenderedExportConfig.MapSource.IMAGE_FILE,
-                pattern, "Signal density", mode, min, max, 1, 99, false, "Signal");
+                pattern, "Signal density", mode, min, max, 1, 99, false, "Signal", false);
     }
 
     @Test

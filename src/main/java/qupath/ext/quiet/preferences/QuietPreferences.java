@@ -137,6 +137,8 @@ public class QuietPreferences {
             PathPrefs.createPersistentPreference(PREFIX + "rendered.mapHighPercentile", 99.0);
     private static final StringProperty renderedMapLabel =
             PathPrefs.createPersistentPreference(PREFIX + "rendered.mapLabel", "");
+    private static final BooleanProperty renderedMapHideAtOrBelowMin =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.mapHideAtOrBelowMin", false);
 
     private static final BooleanProperty renderedShowColorScaleBar =
             PathPrefs.createPersistentPreference(PREFIX + "rendered.showColorScaleBar", false);
@@ -624,6 +626,8 @@ public class QuietPreferences {
     public static void setRenderedMapHighPercentile(double value) { renderedMapHighPercentile.set(value); }
     public static String getRenderedMapLabel() { return renderedMapLabel.get(); }
     public static void setRenderedMapLabel(String value) { renderedMapLabel.set(value != null ? value : ""); }
+    public static boolean isRenderedMapHideAtOrBelowMin() { return renderedMapHideAtOrBelowMin.get(); }
+    public static void setRenderedMapHideAtOrBelowMin(boolean value) { renderedMapHideAtOrBelowMin.set(value); }
 
     public static BooleanProperty renderedShowColorScaleBarProperty() { return renderedShowColorScaleBar; }
     public static boolean isRenderedShowColorScaleBar() { return renderedShowColorScaleBar.get(); }

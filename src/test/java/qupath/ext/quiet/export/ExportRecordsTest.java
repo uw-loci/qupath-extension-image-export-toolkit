@@ -29,7 +29,7 @@ class ExportRecordsTest {
             Locale.setDefault(Locale.GERMANY);
             var map = new RenderedExportConfig.MapOverlayConfig(RenderedExportConfig.MapSource.IMAGE_FILE,
                     "{image}.tif", "Signal", RenderedExportConfig.MapRangeMode.SHARED,
-                    0, 0, 1, 99, false, "").withResolvedRange(0.0000012, 12.5);
+                    0, 0, 1, 99, false, "", false).withResolvedRange(0.0000012, 12.5);
             var config = new RenderedExportConfig.Builder()
                     .renderMode(RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY)
                     .mapOverlay(map).overlayOpacity(0.5).outputDirectory(tempDir).build();

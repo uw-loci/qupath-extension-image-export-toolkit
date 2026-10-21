@@ -26,6 +26,11 @@ class TiffDescriptionTest {
 
     /** A TIFF holding only an IFD with an ImageDescription tag. */
     private File writeTiff(String name, boolean big, ByteOrder order, String text) throws IOException {
+        return writeTiff(tempDir, name, big, order, text);
+    }
+
+    /** A TIFF in {@code dir} holding only an IFD with an ImageDescription tag. */
+    static File writeTiff(File dir, String name, boolean big, ByteOrder order, String text) throws IOException {
         byte[] desc = (text + "\0").getBytes(StandardCharsets.UTF_8);
         ByteBuffer b = ByteBuffer.allocate(64 + desc.length).order(order);
         b.put(order == ByteOrder.LITTLE_ENDIAN ? (byte) 'I' : (byte) 'M');
@@ -44,7 +49,7 @@ class TiffDescriptionTest {
         }
         b.position(64);
         b.put(desc);
-        File f = new File(tempDir, name);
+        File f = new File(dir, name);
         Files.write(f.toPath(), b.array());
         return f;
     }
@@ -73,5 +78,20 @@ class TiffDescriptionTest {
         assertEquals("um", units.get(2));
         assertEquals("fraction", units.get(3));
         assertTrue(TiffDescription.channelUnits(null).isEmpty());
+    }
+
+    @Test
+    void parsesAxialPeriods() {
+        String d = "Channels:\n"
+                + "  [0] name=Fiber coverage (%); unit=%\n"
+                + "  [5] name=Mean angle (deg); unit=deg; axial=180\n"
+                + "  [6] name=Phase; axial=6.2832\n"
+                + "  [7] name=Order parameter\n";
+        var periods = TiffDescription.channelAxialPeriods(d);
+        assertEquals(2, periods.size());
+        assertEquals(180.0, periods.get(5));
+        assertEquals(6.2832, periods.get(6));
+        assertEquals("deg", TiffDescription.channelUnits(d).get(5), "the axial mark does not end up in the unit");
+        assertTrue(TiffDescription.channelAxialPeriods(null).isEmpty());
     }
 }

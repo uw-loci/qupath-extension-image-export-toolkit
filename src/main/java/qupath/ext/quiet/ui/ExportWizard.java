@@ -37,12 +37,14 @@ import qupath.ext.quiet.export.BatchExportTask;
 import qupath.ext.quiet.export.ExportCategory;
 import qupath.ext.quiet.export.ExportResult;
 import qupath.ext.quiet.export.MapOverlaySource;
+import qupath.ext.quiet.export.MapThreshold;
 import qupath.ext.quiet.export.MaskExportConfig;
 import qupath.ext.quiet.export.ObjectCropConfig;
 import qupath.ext.quiet.export.OutputFormat;
 import qupath.ext.quiet.export.RawExportConfig;
 import qupath.ext.quiet.export.RenderedExportConfig;
 import qupath.ext.quiet.export.TiledExportConfig;
+import qupath.ext.quiet.export.TiffDescription;
 import qupath.ext.quiet.preferences.QuietPreferences;
 import qupath.ext.quiet.export.ImageNames;
 import qupath.ext.quiet.export.ScriptGenerator;
@@ -918,12 +920,18 @@ public class ExportWizard {
             return source;
         }
         List<String> missing = new ArrayList<>();
+        Map<String, String> thresholds = new LinkedHashMap<>();
         for (var entry : entries) {
             try {
-                files.findFile(entry);
+                File file = files.findFile(entry);
+                thresholds.put(entry.getImageName(),
+                        MapThreshold.findLine(TiffDescription.read(file)));
             } catch (IllegalArgumentException e) {
                 missing.add(entry.getImageName() + ": " + e.getMessage());
             }
+        }
+        if (!confirmComparableMaps(thresholds)) {
+            return null;
         }
         if (missing.isEmpty()) {
             return source;
@@ -941,6 +949,21 @@ public class ExportWizard {
                 String.format(resources.getString("confirm.someMapFilesMissing"),
                         missing.size(), entries.size(), list));
         return go ? source : null;
+    }
+
+    /**
+     * Warn, and ask whether to go on, when the maps were cut at different thresholds or
+     * pixel sizes (from their {@code Threshold:} lines), since their values then do not compare.
+     *
+     * @param thresholds image name to its map's threshold line, null where there is none
+     * @return true to go on
+     */
+    private boolean confirmComparableMaps(Map<String, String> thresholds) {
+        String warning = MapThreshold.incomparableWarning(thresholds);
+        if (warning == null) return true;
+        logger.warn("{}", warning);
+        return Dialogs.showConfirmDialog(resources.getString("title.mapsNotComparable"),
+                String.format(resources.getString("confirm.mapsNotComparable"), warning));
     }
 
     /**

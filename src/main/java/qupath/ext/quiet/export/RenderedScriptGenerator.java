@@ -458,7 +458,9 @@ class RenderedScriptGenerator {
      * Emit per-image color scale bar drawing code.
      */
     private static void emitColorScaleBarDrawing(StringBuilder sb) {
-        appendLine(sb, "        if (showColorScaleBar) {");
+        appendLine(sb, "        if (showColorScaleBar && mapLayer?.classNames != null) {");
+        appendLine(sb, "            drawMapClassLegend(g2d, mapLayer, outW, outH, colorScaleBarPosition)");
+        appendLine(sb, "        } else if (showColorScaleBar) {");
         appendLine(sb, "            g2d.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, 1.0f))");
         appendLine(sb, "            drawColorScaleBar(g2d, outW, outH, colorMap, densityMin, densityMax, colorScaleBarPosition, colorScaleBarFontSize, colorScaleBarBoldText, colorScaleBarTitle)");
         appendLine(sb, "        }");
@@ -484,6 +486,8 @@ class RenderedScriptGenerator {
         appendLine(sb, "def mapHighPercentile = " + map.highPercentile() + "d");
         appendLine(sb, "def mapRangeResolved = false");
         appendLine(sb, "def colorScaleBarTitle = " + quote(map.label()));
+        appendLine(sb, "// Leave values at or below the range's minimum transparent instead of the first color");
+        appendLine(sb, "def mapHideAtOrBelowMin = " + map.hideAtOrBelowMin());
     }
 
     /**
@@ -1374,12 +1378,13 @@ class RenderedScriptGenerator {
             emitAnnotationRegionRead(sb, displayMode);
 
             // Read the map over this annotation and pick its color range
-            appendLine(sb, "            def band = readMapBand(mapLayer, ax, ay, aw, ah, downsample)");
-            appendLine(sb, "            def mapRange = mapRangeFor(band, mapRangeMode, mapRangeMin, mapRangeMax,");
+            appendLine(sb, "            def mapRegion = readMapRegion(mapLayer, ax, ay, aw, ah, downsample)");
+            appendLine(sb, "            def mapRange = mapRangeFor(mapLayer, mapRegion, mapRangeMode, mapRangeMin, mapRangeMax,");
             appendLine(sb, "                    mapLowPercentile, mapHighPercentile, mapRangeResolved)");
             appendLine(sb, "            double densityMin = mapRange[0]");
             appendLine(sb, "            double densityMax = mapRange[1]");
-            appendLine(sb, "            def colorized = colorizeBand(band, colorMap, densityMin, densityMax)");
+            appendLine(sb, "            def colorized = paintMapRegion(mapLayer, mapRegion, ax, ay, aw, ah,");
+            appendLine(sb, "                    baseImage.getWidth(), baseImage.getHeight(), colorMap, densityMin, densityMax, mapHideAtOrBelowMin)");
             appendLine(sb, "");
             appendLine(sb, "            def result = new BufferedImage(baseImage.getWidth(), baseImage.getHeight(), BufferedImage.TYPE_INT_RGB)");
             appendLine(sb, "            def g2d = result.createGraphics()");
@@ -1388,7 +1393,7 @@ class RenderedScriptGenerator {
             appendLine(sb, "");
             appendLine(sb, "            if (overlayOpacity > 0 && colorized != null) {");
             appendLine(sb, "                g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, (float) overlayOpacity))");
-            appendLine(sb, "                g2d.drawImage(colorized, 0, 0, baseImage.getWidth(), baseImage.getHeight(), null)");
+            appendLine(sb, "                g2d.drawImage(colorized, 0, 0, null)");
             appendLine(sb, "            }");
             appendLine(sb, "");
             emitAnnotationObjectOverlay(sb);
@@ -1399,7 +1404,9 @@ class RenderedScriptGenerator {
             }
             if (config.colorScaleBar().show()) {
                 // Color scale bar at annotation level (uses outW, outH from annotation region read)
-                appendLine(sb, "            if (showColorScaleBar) {");
+                appendLine(sb, "            if (showColorScaleBar && mapLayer.classNames != null) {");
+                appendLine(sb, "                drawMapClassLegend(g2d, mapLayer, outW, outH, colorScaleBarPosition)");
+                appendLine(sb, "            } else if (showColorScaleBar) {");
                 appendLine(sb, "                g2d.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, 1.0f))");
                 appendLine(sb, "                drawColorScaleBar(g2d, outW, outH, colorMap, densityMin, densityMax, colorScaleBarPosition, colorScaleBarFontSize, colorScaleBarBoldText, colorScaleBarTitle)");
                 appendLine(sb, "            }");
@@ -1432,13 +1439,14 @@ class RenderedScriptGenerator {
             appendLine(sb, "                        display.selectedChannels(), display.displayMode().getValue())");
             appendLine(sb, "                : rawImage");
             appendLine(sb, "");
-            appendLine(sb, "        // Read the map over the whole image and pick its color range");
-            appendLine(sb, "        def band = readMapBand(mapLayer, 0, 0, baseServer.getWidth(), baseServer.getHeight(), downsample)");
-            appendLine(sb, "        def mapRange = mapRangeFor(band, mapRangeMode, mapRangeMin, mapRangeMax,");
+            appendLine(sb, "        // Read the map over the whole image, pick its color range and draw it at the output's size");
+            appendLine(sb, "        def mapRegion = readMapRegion(mapLayer, 0, 0, baseServer.getWidth(), baseServer.getHeight(), downsample)");
+            appendLine(sb, "        def mapRange = mapRangeFor(mapLayer, mapRegion, mapRangeMode, mapRangeMin, mapRangeMax,");
             appendLine(sb, "                mapLowPercentile, mapHighPercentile, mapRangeResolved)");
             appendLine(sb, "        double densityMin = mapRange[0]");
             appendLine(sb, "        double densityMax = mapRange[1]");
-            appendLine(sb, "        def colorized = colorizeBand(band, colorMap, densityMin, densityMax)");
+            appendLine(sb, "        def colorized = paintMapRegion(mapLayer, mapRegion, 0, 0, baseServer.getWidth(), baseServer.getHeight(),");
+            appendLine(sb, "                baseImage.getWidth(), baseImage.getHeight(), colorMap, densityMin, densityMax, mapHideAtOrBelowMin)");
             appendLine(sb, "");
             appendLine(sb, "        def result = new BufferedImage(");
             appendLine(sb, "                baseImage.getWidth(), baseImage.getHeight(),");
@@ -1453,8 +1461,7 @@ class RenderedScriptGenerator {
             appendLine(sb, "        if (overlayOpacity > 0 && colorized != null) {");
             appendLine(sb, "            g2d.setComposite(AlphaComposite.getInstance(");
             appendLine(sb, "                    AlphaComposite.SRC_OVER, (float) overlayOpacity))");
-            appendLine(sb, "            g2d.drawImage(colorized,");
-            appendLine(sb, "                    0, 0, baseImage.getWidth(), baseImage.getHeight(), null)");
+            appendLine(sb, "            g2d.drawImage(colorized, 0, 0, null)");
             appendLine(sb, "        }");
             appendLine(sb, "");
             appendLine(sb, "        if (includeAnnotations || includeDetections) {");
@@ -1514,7 +1521,7 @@ class RenderedScriptGenerator {
         appendLine(sb, "}");
         appendLine(sb, "");
         appendLine(sb, "println ''");
-        appendLine(sb, "println \"Export complete: ${succeeded} succeeded, ${failed} failed, ${skipped} skipped (no map)\"");
+        appendLine(sb, "println \"Export complete: ${succeeded} succeeded, ${failed} failed, ${skipped} skipped (no usable map)\"");
 
         return sb.toString();
     }

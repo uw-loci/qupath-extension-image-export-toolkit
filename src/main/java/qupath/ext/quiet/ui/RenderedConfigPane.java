@@ -141,6 +141,14 @@ public class RenderedConfigPane extends VBox {
     private Label mapPercentileLabel;
     private HBox mapPercentileBox;
     private Label mapSharedNoteLabel;
+    private CheckBox mapHideAtOrBelowMinCheck;
+    private Label mapChannelNoteLabel;
+    /** Angle period by channel name, from the open image's map file. */
+    private final java.util.Map<String, Double> mapChannelAxial = new java.util.HashMap<>();
+    /** Class names by class-index channel name, from the open image's map file. */
+    private final java.util.Map<String, List<String>> mapChannelClasses = new java.util.HashMap<>();
+    /** The angle channel whose color map and range defaults were last applied. */
+    private String angleDefaultsAppliedFor;
     private TextField mapLabelField;
     private Label mapLabelLabel;
     /** The title last filled in from the channel, replaced while the user has not edited it. */
@@ -826,8 +834,17 @@ public class RenderedConfigPane extends VBox {
         mapChannelCombo.setEditable(true);
         mapChannelCombo.setMaxWidth(Double.MAX_VALUE);
         mapChannelCombo.setPromptText(resources.getString("rendered.mapChannel.first"));
-        mapChannelCombo.valueProperty().addListener((obs, o, n) -> updateAutoMapLabel());
+        mapChannelCombo.valueProperty().addListener((obs, o, n) -> {
+            updateAutoMapLabel();
+            updateChannelNote();
+        });
         grid.add(mapChannelCombo, 1, row);
+        row++;
+
+        mapChannelNoteLabel = new Label();
+        mapChannelNoteLabel.setWrapText(true);
+        mapChannelNoteLabel.setStyle("-fx-font-size: 11; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        grid.add(mapChannelNoteLabel, 1, row);
         row++;
 
         // Colormap/LUT selector (density map mode only)
@@ -899,6 +916,10 @@ public class RenderedConfigPane extends VBox {
         mapSharedNoteLabel.setStyle("-fx-font-size: 11; -fx-text-fill: " + ThemeColors.MUTED
                 + "; -fx-font-style: italic;");
         grid.add(mapSharedNoteLabel, 1, row);
+        row++;
+
+        mapHideAtOrBelowMinCheck = new CheckBox(resources.getString("rendered.mapHideAtOrBelowMin"));
+        grid.add(mapHideAtOrBelowMinCheck, 1, row);
         row++;
 
         return SectionBuilder.createSection(
@@ -1477,6 +1498,39 @@ public class RenderedConfigPane extends VBox {
         showNode(mapPercentileLabel, shared);
         showNode(mapPercentileBox, shared);
         showNode(mapSharedNoteLabel, shared);
+        showNode(mapHideAtOrBelowMinCheck, map);
+        updateChannelNote();
+    }
+
+    /** Say how an angle or class channel is drawn, and pick an angle channel's defaults once. */
+    private void updateChannelNote() {
+        if (mapChannelNoteLabel == null) return;
+        boolean file = modeCombo != null
+                && modeCombo.getValue() == RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY
+                && mapSourceCombo.getValue() == RenderedExportConfig.MapSource.IMAGE_FILE;
+        String channel = mapChannelCombo.getValue();
+        Double period = channel == null ? null : mapChannelAxial.get(channel);
+        List<String> classes = channel == null ? null : mapChannelClasses.get(channel);
+        String note = "";
+        if (period != null) {
+            String p = formatRangeValue(period);
+            note = String.format(resources.getString("rendered.mapChannel.angleNote"), p, p);
+            if (file && !restoringPreferences && !channel.equals(angleDefaultsAppliedFor)) {
+                // A per-image or percentile range would turn the color wheel between images
+                angleDefaultsAppliedFor = channel;
+                ColorMaps.getColorMaps().keySet().stream()
+                        .filter(n -> n.equalsIgnoreCase("Angle (cyclic)"))
+                        .findFirst().ifPresent(colormapCombo::setValue);
+                mapRangeCombo.setValue(RenderedExportConfig.MapRangeMode.FIXED);
+                mapRangeMinField.setText("0");
+                mapRangeMaxField.setText(p);
+            }
+        } else if (classes != null) {
+            note = String.format(resources.getString("rendered.mapChannel.classNote"),
+                    classes.size(), String.join(", ", classes));
+        }
+        mapChannelNoteLabel.setText(note);
+        showNode(mapChannelNoteLabel, file && !note.isEmpty());
     }
 
     /**
@@ -1506,16 +1560,23 @@ public class RenderedConfigPane extends VBox {
             String status;
             List<String> channels = new ArrayList<>();
             java.util.Map<String, String> units = new java.util.HashMap<>();
+            java.util.Map<String, Double> axial = new java.util.HashMap<>();
+            java.util.Map<String, List<String>> classes = new java.util.HashMap<>();
             try {
                 var source = (MapOverlaySource.ImageFileSource)
                         MapOverlaySource.ofImageFiles(project, pattern, "");
                 File file = source.findFile(imageData);
                 try (var server = ImageServers.buildServer(file.toURI())) {
-                    var unitByIndex = TiffDescription.channelUnits(TiffDescription.read(file));
+                    String description = TiffDescription.read(file);
+                    var unitByIndex = TiffDescription.channelUnits(description);
+                    var axialByIndex = TiffDescription.channelAxialPeriods(description);
                     for (int c = 0; c < server.nChannels(); c++) {
                         String name = server.getChannel(c).getName();
                         channels.add(name);
                         if (unitByIndex.containsKey(c)) units.put(name, unitByIndex.get(c));
+                        if (axialByIndex.containsKey(c)) axial.put(name, axialByIndex.get(c));
+                        var classNames = MapOverlaySource.classNames(server, c);
+                        if (classNames != null) classes.put(name, classNames);
                     }
                     status = String.format(resources.getString("rendered.mapFile.found"),
                             file.getName(), server.getWidth(), server.getHeight(),
@@ -1531,6 +1592,10 @@ public class RenderedConfigPane extends VBox {
                 if (channels.isEmpty()) return;
                 mapChannelUnits.clear();
                 mapChannelUnits.putAll(units);
+                mapChannelAxial.clear();
+                mapChannelAxial.putAll(axial);
+                mapChannelClasses.clear();
+                mapChannelClasses.putAll(classes);
                 String current = mapChannelCombo.getValue();
                 mapChannelCombo.getItems().setAll(channels);
                 if (current != null && channels.contains(current)) {
@@ -1539,6 +1604,7 @@ public class RenderedConfigPane extends VBox {
                     mapChannelCombo.setValue(channels.get(0));
                 }
                 updateAutoMapLabel();
+                updateChannelNote();
             });
         });
         t.setDaemon(true);
@@ -1579,7 +1645,8 @@ public class RenderedConfigPane extends VBox {
                 mapLowPercentileSpinner.getValue() != null ? mapLowPercentileSpinner.getValue() : 1.0,
                 mapHighPercentileSpinner.getValue() != null ? mapHighPercentileSpinner.getValue() : 99.0,
                 false,
-                mapLabelField.getText() == null ? "" : mapLabelField.getText().trim());
+                mapLabelField.getText() == null ? "" : mapLabelField.getText().trim(),
+                mapHideAtOrBelowMinCheck.isSelected());
     }
 
     private double parseRangeValue(String text, String which) {
@@ -2136,6 +2203,7 @@ public class RenderedConfigPane extends VBox {
         mapPercentileLabel.setTooltip(createTooltip("tooltip.rendered.mapPercentiles"));
         mapLowPercentileSpinner.setTooltip(createTooltip("tooltip.rendered.mapPercentiles"));
         mapHighPercentileSpinner.setTooltip(createTooltip("tooltip.rendered.mapPercentiles"));
+        mapHideAtOrBelowMinCheck.setTooltip(createTooltip("tooltip.rendered.mapHideAtOrBelowMin"));
         mapLabelField.setTooltip(createTooltip("tooltip.rendered.colorScaleBarTitle"));
         mapLabelLabel.setTooltip(createTooltip("tooltip.rendered.colorScaleBarTitle"));
         colormapLabel.setTooltip(createTooltip("tooltip.rendered.colormap"));
@@ -2425,6 +2493,7 @@ public class RenderedConfigPane extends VBox {
         mapHighPercentileSpinner.getValueFactory().setValue(QuietPreferences.getRenderedMapHighPercentile());
         mapLabelField.setText(QuietPreferences.getRenderedMapLabel());
         lastAutoMapLabel = mapLabelField.getText();
+        mapHideAtOrBelowMinCheck.setSelected(QuietPreferences.isRenderedMapHideAtOrBelowMin());
         updateMapVisibility();
 
         // Color scale bar preferences
@@ -2566,6 +2635,7 @@ public class RenderedConfigPane extends VBox {
             QuietPreferences.setRenderedMapHighPercentile(mapHighPercentileSpinner.getValue());
         }
         QuietPreferences.setRenderedMapLabel(mapLabelField.getText());
+        QuietPreferences.setRenderedMapHideAtOrBelowMin(mapHideAtOrBelowMinCheck.isSelected());
         QuietPreferences.setRenderedShowColorScaleBar(showColorScaleBarCheck.isSelected());
         var csPos = colorScaleBarPositionCombo.getValue();
         if (csPos != null) QuietPreferences.setRenderedColorScaleBarPosition(csPos.name());

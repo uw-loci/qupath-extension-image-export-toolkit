@@ -201,16 +201,35 @@ public interface MapOverlaySource {
             try {
                 int c = channelIndex(server, channel);
                 var base = imageData.getServer();
-                double ax = base.getWidth() / (double) base.getHeight();
-                double am = server.getWidth() / (double) server.getHeight();
-                if (Math.abs(am / ax - 1) > 0.02) {
-                    logger.warn("Map {} is {} x {} but the image is {} x {}; it is stretched"
-                                    + " over the whole image", file.getName(), server.getWidth(),
-                            server.getHeight(), base.getWidth(), base.getHeight());
+                String description = TiffDescription.read(file);
+                MapPlacement placement;
+                try {
+                    placement = MapPlacement.parse(description);
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException(file.getName() + ": " + e.getMessage(), e);
                 }
-                String unit = TiffDescription.channelUnits(TiffDescription.read(file)).get(c);
-                logger.debug("Map overlay {} channel {} ({})", file, c, server.getChannel(c).getName());
-                return new MapLayer(server, true, c, unit, base.getWidth(), base.getHeight());
+                if (placement == null) {
+                    double ax = base.getWidth() / (double) base.getHeight();
+                    double am = server.getWidth() / (double) server.getHeight();
+                    if (Math.abs(am / ax - 1) > 0.02) {
+                        logger.warn("Map {} is {} x {} but the image is {} x {}; it is stretched"
+                                        + " over the whole image", file.getName(), server.getWidth(),
+                                server.getHeight(), base.getWidth(), base.getHeight());
+                    }
+                }
+                String unit = TiffDescription.channelUnits(description).get(c);
+                double period = TiffDescription.channelAxialPeriods(description).getOrDefault(c, 0.0);
+                List<String> classes = classNames(server, c);
+                logger.debug("Map overlay {} channel {} ({}){}{}{}", file, c, server.getChannel(c).getName(),
+                        placement == null ? ", stretched" : ", " + placement.describe(),
+                        period > 0 ? ", angle of period " + period : "",
+                        classes == null ? "" : ", classes " + classes);
+                try {
+                    return new MapLayer(server, true, c, unit, base.getWidth(), base.getHeight(),
+                            placement, period, classes);
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException(file.getName() + ": " + e.getMessage(), e);
+                }
             } catch (RuntimeException e) {
                 closeQuietly(server);
                 throw e;
@@ -230,6 +249,29 @@ public interface MapOverlaySource {
             return "map files '" + pattern + "'"
                     + (channel.isEmpty() ? "" : ", channel '" + channel + "'");
         }
+    }
+
+    /**
+     * Class names for a class-index channel: a channel named "... class index" whose classes
+     * are the map's {@code P(<class>)} channels, in channel order.
+     *
+     * @param server  the map server
+     * @param channel the drawn channel
+     * @return the class names by index, or null if the channel is not a class index
+     */
+    public static List<String> classNames(ImageServer<BufferedImage> server, int channel) {
+        String name = server.getChannel(channel).getName();
+        if (name == null || !name.trim().toLowerCase(java.util.Locale.ROOT).endsWith("class index")) {
+            return null;
+        }
+        List<String> names = new java.util.ArrayList<>();
+        for (var ch : server.getMetadata().getChannels()) {
+            String n = ch.getName() == null ? "" : ch.getName().trim();
+            if (n.startsWith("P(") && n.endsWith(")") && n.length() > 3) {
+                names.add(n.substring(2, n.length() - 1));
+            }
+        }
+        return names.isEmpty() ? null : names;
     }
 
     /**

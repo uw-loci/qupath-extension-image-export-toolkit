@@ -220,6 +220,17 @@ public class ExportMetadataWriter {
                         ? " (blended with the image, so the map colors do not exactly match the color scale bar)"
                         : ""));
         lines.add("Values outside the range take the end colors; pixels with no value are transparent.");
+        if (map.hideAtOrBelowMin()) {
+            lines.add("Values at or below the range's minimum are transparent.");
+        }
+        if (map.source() == RenderedExportConfig.MapSource.IMAGE_FILE) {
+            lines.add("A map file with a Placement line is placed on its image as that line says,"
+                    + " and its values are filled per cell (nearest) or blended between cell centers"
+                    + " (bilinear) as it says; a map without one is stretched over the whole image"
+                    + " and blended. A channel marked axial=P is blended as an angle and drawn from"
+                    + " 0 to P unless the range is fixed; a class-index channel is drawn in its"
+                    + " classes' colors.");
+        }
         lines.add("");
         return lines;
     }

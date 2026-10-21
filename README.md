@@ -71,6 +71,14 @@ Every single-image export also generates a **Groovy script** that you can copy, 
 
 ## What's new
 
+**v1.4.0** -- Map files placed where their grid belongs:
+- A map file whose description has a `Placement:` line, as Fiber Analysis now writes, is placed on the image where that line says its grid sits, instead of being stretched over the whole image. Its edges no longer drift by up to one analysis window. Image pixels outside the grid stay uncovered. A map made for an image of a different size is skipped and named.
+- Every map is drawn at the export's resolution. A map marked `nearest` keeps its blocky cells, and a `bilinear` one blends values between cell centers by the same rule as Fiber Analysis's own overlay.
+- An angle channel (`axial=180` in the file) is blended as an angle and drawn from 0 to 180, and picking it selects the **Angle (cyclic)** colormap.
+- A classifier's *Predicted class index* channel is drawn in each class's color, with a class legend.
+- **Hide values at or below the minimum** leaves the background of a map transparent.
+- When the selected images' maps were cut at different thresholds, QuIET says so before exporting.
+
 **v1.3.1** -- Fixes found in a documentation review:
 - Skipped images are named when an export ends, not only counted.
 - `export_info.txt` writes a map's color range in full, with a decimal point in every language, and names the QuIET and QuPath versions, as do the generated scripts.
@@ -200,7 +208,7 @@ Produce **publication-ready figures** -- the image as it looks in QuPath, with y
 
 Draws a map of values over each image, in color. With **Render Mode** (in **Image Settings**) set to **Density / Map Overlay**, the **Overlay Source** and **Color Scale Bar** sections appear, in Simple mode too.
 
-![The Configure Export screen in Simple mode for a map overlay: Render Mode set to Density / Map Overlay with Overlay Opacity 1.00; Overlay Source with Map Source set to Map file per image, the Fiber Analysis density-map pattern in Map File and the Check result below it (10320 x 7720, 11 channels, float32), Map Channel set to Signal density (no threshold), Colormap/LUT Viridis, Color Range Shared with Percentiles 1 to 99; Color Scale Bar ticked, in the upper right, titled Signal density (fraction of full scale)](documentation/images/map-overlay-settings.png)
+![The Configure Export screen in Simple mode for a map overlay: Render Mode set to Density / Map Overlay with Overlay Opacity 1.00; Overlay Source with Map Source set to Map file per image, the Fiber Analysis density-map pattern in Map File and the Check result below it (574 x 429, 11 channels, float32), Map Channel set to Signal density (no threshold), Colormap/LUT Viridis, Color Range Shared with Percentiles 1 to 99, Hide values at or below the minimum unticked; Color Scale Bar ticked, in the upper right, with the title filled in from the channel as Signal density (no threshold) (fraction of full scale)](documentation/images/map-overlay-settings.png)
 
 | Map Source | What it reads |
 |------------|---------------|
@@ -219,6 +227,7 @@ The controls, in screen order:
 | **Color Range** | Each image: its own min to max | How values are given colors (see *Color range*) |
 | **Min / Max** | 0 / 1 | The values given the first and last color (Fixed only). Max must be greater than Min |
 | **Percentiles** | 1 / 99 | Which pooled values set the range (Shared only); 0 to 100 in steps of 0.5, the upper greater than the lower |
+| **Hide values at or below the minimum** | off | Leaves values at or below the range's lower end uncovered instead of giving them the first color, so the image shows through. A background of exactly 0 with a minimum of 0 is the usual case |
 | **Overlay Opacity** (in Image Settings) | 0.5 | How much the map covers the image (see *Comparing colors between images*) |
 
 **Finding each image's map file.** The **Map File** box takes a file path with placeholders in braces, which QuIET fills in for each image:
@@ -242,15 +251,26 @@ The **Map File** box offers four examples:
 | `{project}/fiber-analysis/density-maps/{imageSafe:60}_density.ome.tif` | Fiber Analysis density maps (development version): `slide_1.ome.tif_density.ome.tif`. Fiber Analysis cuts the name to 60 characters before adding `_density`, which `:60` matches |
 | `{project}/fiber-analysis/classifier-maps/{imageSafe:60}_*.ome.tif` | Fiber Analysis window-classifier maps, while one classifier has been applied to each image. With two, `*` matches both files: replace it with the model's part of the file name |
 
-**Check** finds the open image's map file and reports it under the box, for example `Open image: slide_1.ome.tif_density.ome.tif (10320 x 7720, 11 channels, float32)`, then fills **Map Channel** with the file's channel names. Pick a channel of measured values. A channel of class numbers, such as a classifier's *Predicted class index*, is a poor fit: a continuous colormap shades class 3 as if it lay between classes 2 and 4. The same channel name is used for every image.
+**Check** finds the open image's map file and reports it under the box, for example `Open image: slide_1.ome.tif_density.ome.tif (574 x 429, 11 channels, float32)`, then fills **Map Channel** with the file's channel names. The same channel name is used for every image. Two kinds of channel are drawn differently, and a note under **Map Channel** says when one is picked:
 
-**How the map is drawn.** The map must cover the whole image, its top-left corner at the image's top-left. QuIET stretches it to the image's width and height, so a map can be written at full resolution or coarser. A map of a different shape is stretched anyway (the log warns when the shapes differ by more than 2%), and a map made for a crop of the image lands in the wrong place. The map is colored at its own resolution and then enlarged with smoothing, so the colors between map pixels are blends. Pixels with no value (NaN), such as glass outside the tissue, are transparent. Values outside the color range, infinities included, take the end colors. A map too large to read with all its channels at once (over 128 MB) is read in strips of rows, so an 11-channel full-resolution map never has to be in memory whole.
+- **An angle**, marked `axial=180` in the map file (Fiber Analysis marks *Mean angle (deg)* this way). Orientations of 1 and 179 degrees are 2 degrees apart, so the channel is blended as an angle and colored from 0 to 180 unless **Color Range** is **Fixed**: a per-image or percentile range would turn the color wheel between images. Picking the channel selects **Fixed**, 0 to 180, and the **Angle (cyclic)** colormap when one is installed (Fiber Analysis installs it).
+- **A class index**, a channel named *... class index* in a map that also holds one `P(<class>)` channel per class, as a Fiber Analysis window classifier writes. Each whole number is drawn in that class's QuPath color. A NaN (the model abstained), or a number that names no class, is left uncovered. The channel is never blended, and the color scale bar becomes a legend of the classes.
+
+**Where the map is drawn.** A map file can say where it belongs. When its image description has a line such as
+
+```
+Placement: source_width=16952; source_height=18225; source_pixel_um=0.1732; cell_px=36; window_px=144; x0=54; y0=54; grid=467x503; render=bilinear
+```
+
+each map pixel is one cell of a grid on the image: pixel (i, j) covers image pixels `x0 + i*cell_px` to `x0 + (i+1)*cell_px` across, and the same down. The grid can stop short of the image's edges: in this Fiber Analysis map it starts 54 pixels in from the top-left corner and ends 86 pixels short of the right edge and 63 short of the bottom. Image pixels outside the grid have no value and stay uncovered. If `source_width` and `source_height` are not exactly the image's size, the map was made for another image, and the image is skipped. A map without a `Placement:` line must cover the whole image, its top-left corner at the image's top-left, and QuIET stretches it to the image's width and height. A map of a different shape is stretched anyway (the log warns when the shapes differ by more than 2%), and a map made for a crop of the image lands in the wrong place.
+
+**How the map is drawn.** Every exported pixel takes its value from the map at that pixel's center, so a map is exact at any downsample. With `render=nearest` each cell is filled with its value, and coarse cells stay blocky. With `render=bilinear`, and for every map without a `Placement:` line, values are blended between the four nearest cell centers before coloring. Cells with no value are left out of the blend and the other weights scaled up, and beyond the outermost centers the edge value continues. Fiber Analysis's own overlay computes its values the same way. Pixels with no value (NaN), such as glass outside the tissue, are transparent. Values outside the color range, infinities included, take the end colors. A map too large to read with all its channels at once (over 128 MB) is read in strips of rows, so an 11-channel full-resolution map never has to be in memory whole.
 
 **Color range.** This decides which value gets which color, and so whether colors can be compared between images:
 
 | Color Range | Effect |
 |-------------|--------|
-| **Each image: its own min to max** (default, and how earlier versions drew every density map) | Every image, or annotation region, is stretched to its own minimum and maximum. The same color then means different values in different images, so do not use it to compare images. |
+| **Each image: its own min to max** (default, and how earlier versions drew every density map) | Every image, or annotation region, is stretched to the minimum and maximum of the map cells under it. The same color then means different values in different images, so do not use it to compare images. |
 | **Fixed: the same values for every image** | The **Min / Max** you enter, for every image. Use it when the map's values have a known scale, or to repeat an earlier export. |
 | **Shared: percentiles of all exported images** | Before exporting, QuIET reads the map of every selected image and takes the two **Percentiles** of their values. With 1 to 99, the lowest and highest 1% of values take the end colors, so a few extreme pixels do not stretch the scale. Every image is drawn on that one range. |
 
@@ -273,9 +293,11 @@ Overlay opacity: 1
 Values outside the range take the end colors; pixels with no value are transparent.
 ```
 
-**Images without a map.** Before the export starts, QuIET looks for every selected image's map file. If some have none, a **QuIET - Missing Map Files** window lists them (`1 of 4 selected images have no map file and will be skipped: ... Continue?`). If you go on, those images are skipped, never exported without their overlay, and named again in **QuIET - Some Images Skipped** when the export ends. If none of the selected images has a map file, the export does not start.
+**Images without a map.** Before the export starts, QuIET looks for every selected image's map file. If some have none, a **QuIET - Missing Map Files** window lists them (`1 of 4 selected images have no map file and will be skipped: ... Continue?`). If you go on, those images are skipped, never exported without their overlay, and named again in **QuIET - Some Images Skipped** when the export ends. If none of the selected images has a map file, the export does not start. An image whose map was made for an image of another size, or lacks the chosen channel, is skipped when the export reaches it and named in the same window.
 
-**Generated script.** The Groovy script finds the files with the same pattern and reads the same channel. For a shared range it scans every image in the project, not only the ones you selected, before exporting. It prints `Map range for all images: <min> to <max>`, then `SKIP: <reason>` for each image without a map, and ends with a line such as `Export complete: 3 succeeded, 0 failed, 1 skipped (no map)`. A script run on a different set of images computes its own shared range. To repeat an earlier export exactly, set the range by hand, with the numbers from that export's `export_info.txt`:
+**Maps cut at different thresholds.** A map file can record the threshold its values were cut at, in a line such as `Threshold: Otsu 0.07800 | Otsu pooled over 1 image(s), ... | settings 7a3ec246 at 0.1732 um/px` (Fiber Analysis writes one). When the selected images' maps record different cuts, different settings, or pixel sizes more than 2% apart, their values do not measure the same thing. **QuIET - Maps Not Comparable** then lists each group of images and asks whether to go on. How each cut was obtained does not matter; maps without the line are left out of the comparison.
+
+**Generated script.** The Groovy script finds the files with the same pattern and reads the same channel. For a shared range it scans every image in the project, not only the ones you selected, before exporting. It prints `Map range for all images: <min> to <max>`, then `SKIP: <reason>` for each image without a map, and ends with a line such as `Export complete: 3 succeeded, 0 failed, 1 skipped (no usable map)`. It places, blends and colors each map as QuIET does, so its images match QuIET's pixel for pixel. A script run on a different set of images computes its own shared range. To repeat an earlier export exactly, set the range by hand, with the numbers from that export's `export_info.txt`:
 
 ```groovy
 def mapRangeMode = "FIXED"
@@ -283,7 +305,7 @@ def mapRangeMin = 0.02010050229728222d
 def mapRangeMax = 0.6000000238418579d
 ```
 
-The other map settings in the script are `mapSource`, `densityMapName`, `mapFilePattern`, `mapChannel`, `mapLowPercentile`, `mapHighPercentile`, `colorScaleBarTitle` and `overlayOpacity`.
+The other map settings in the script are `mapSource`, `densityMapName`, `mapFilePattern`, `mapChannel`, `mapLowPercentile`, `mapHighPercentile`, `mapHideAtOrBelowMin`, `colorScaleBarTitle` and `overlayOpacity`.
 
 #### If Check reports a problem
 
@@ -295,7 +317,7 @@ The other map settings in the script are `mapSource`, `densityMapName`, `mapFile
 | `Open image: wildcards are allowed only in the file name, not in folders: ...` | A `*` or `?` in a folder name | Write the folder name in full |
 | `Open an image to check which file the pattern finds.` | No image is open | Open a project image, then **Check** |
 
-An image whose map lacks the chosen channel is skipped with `the map has no channel '<name>' (it has ...)`: that map was written with different channel names.
+An image whose map lacks the chosen channel is skipped with `the map has no channel '<name>' (it has ...)`: that map was written with different channel names. An image whose map was made for another image is skipped with `<map file>: the map was made for a 16952 x 18225 image but this image is 16952 x 18224`.
 
 </details>
 
@@ -367,7 +389,14 @@ For map overlays, a color-mapped legend can be burned in showing the value range
 
 The five labels are the range's minimum, quartiles and maximum, rounded to 2 decimals (values below 0.01 in scientific notation). With a fixed or shared range, pixels beyond either end take the end color, so the top label means "this value or more". The color scale bar is only available with Render Mode **Density / Map Overlay**.
 
-For tools that write map files: QuIET reads a channel's unit from rows of the form `[index] name=...; unit=...` in the TIFF's image description (classic TIFF or BigTIFF).
+For tools that write map files, QuIET reads these from the TIFF's image description (classic TIFF or BigTIFF):
+
+- a channel's unit, from a row `[index] name=...; unit=...`;
+- an angle channel, from `; axial=P` on its row (P is the period, 180 for an orientation in degrees);
+- where the grid sits, from a `Placement:` line (see *Where the map is drawn*);
+- the threshold, from a `Threshold:` line (see *Maps cut at different thresholds*).
+
+A channel named *... class index* is drawn in class colors when the map also has `P(<class>)` channels, whose names give the classes in channel order.
 
 </details>
 
@@ -862,9 +891,11 @@ src/main/java/qupath/ext/quiet/
     ColorScaleBarRenderer.java     # Color-mapped legend for map overlays
     MapOverlaySource.java          # Where a map overlay comes from: project density map or map file
     MapFilePattern.java            # Finds each image's map file from a token pattern
-    MapLayer.java                  # One map channel over an image: strip reading, color range, coloring
+    MapLayer.java                  # One map channel over an image: placement, nearest/bilinear drawing, color range
+    MapPlacement.java              # Where a map's grid sits on its image (the Placement: line)
+    MapThreshold.java              # A map's Threshold: line, and whether two maps were cut alike
     MapRangeScanner.java           # One shared map range from percentiles over many images
-    TiffDescription.java           # Reads a TIFF's ImageDescription (classic and BigTIFF) and channel units
+    TiffDescription.java           # Reads a TIFF's ImageDescription (classic and BigTIFF), channel units and angle periods
     PanelLabelRenderer.java        # Panel letter label renderer (A, B, C...)
     InfoLabelRenderer.java         # Per-image metadata text stamp renderer
     InsetRenderer.java             # Magnified-inset / detail-panel renderer (Java2D utility)
@@ -918,7 +949,7 @@ src/main/resources/
 - **Raw channel selection** lists the channels of the open image (or the first project image) and leaves channels out by position, so the selected images should share a channel order.
 - **Tiled GeoJSON** produces one GeoJSON file per tile via QuPath's `TileExporter.exportJson()` API (not a single consolidated file).
 - Rendered export with classifier overlay requires a pixel classifier saved in the QuPath project.
-- A project density map overlay requires a density map saved in the QuPath project (**Analyze > Density maps > Create density map...**). A map file overlay needs one map file per image covering the whole image; QuIET has no colormap for categories such as class numbers.
+- A project density map overlay requires a density map saved in the QuPath project (**Analyze > Density maps > Create density map...**). A map file overlay needs one map file per image, either covering the whole image or placed by a `Placement:` line. Of categorical channels, only a *class index* with `P(<class>)` channels is drawn in class colors.
 - **Display Settings** "Current Viewer" mode requires an image to be open in the viewer at export time. "Saved Preset" mode requires presets saved via QuPath's Brightness & Contrast dialog.
 - **Panel / Montage** composes the whole figure as one in-memory image. Figures at or above 100 megapixels are restricted to OME-TIFF output; very large panels may still need a higher QuPath memory limit (`-Xmx`). See Troubleshooting in the Panel / Montage section.
 - **Panel / Montage** fills cells in the order images appear in the Step 1 selection list (row-major, left to right, top to bottom). Open the Layout preview window to drag any cell onto another and swap their positions; the arrangement you leave the preview in is what the figure is composed in.

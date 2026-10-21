@@ -24,6 +24,10 @@ public final class TiffDescription {
     private static final Pattern UNIT_ROW = Pattern.compile(
             "\\[(\\d+)]\\s*name=[^\\r\\n]*?;\\s*unit=([^;\\r\\n<]+)");
 
+    /** A channel row marked as an angle: {@code [index] name=...; axial=P}. */
+    private static final Pattern AXIAL_ROW = Pattern.compile(
+            "\\[(\\d+)]\\s*name=[^\\r\\n]*?;\\s*axial=([0-9.]+)");
+
     private TiffDescription() {
     }
 
@@ -94,6 +98,28 @@ public final class TiffDescription {
             }
         }
         return units;
+    }
+
+    /**
+     * Channels listed as angles of a period, rows {@code [index] name=...; axial=P}: an
+     * orientation of period 180 degrees, so 1 and 179 are 2 apart.
+     *
+     * @param description the description text, may be null
+     * @return period by zero-based channel index; empty if none are marked
+     */
+    public static Map<Integer, Double> channelAxialPeriods(String description) {
+        Map<Integer, Double> periods = new LinkedHashMap<>();
+        if (description == null) return periods;
+        Matcher m = AXIAL_ROW.matcher(description);
+        while (m.find()) {
+            try {
+                double p = Double.parseDouble(m.group(2));
+                if (p > 0) periods.put(Integer.parseInt(m.group(1)), p);
+            } catch (NumberFormatException e) {
+                // not a period; ignore the mark
+            }
+        }
+        return periods;
     }
 
     private static ByteBuffer readBuf(RandomAccessFile raf, int n, ByteOrder order) throws IOException {
