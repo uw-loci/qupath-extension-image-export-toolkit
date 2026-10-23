@@ -61,6 +61,10 @@ final class PanelScriptGenerator {
         appendLine(sb, "def scaleBarColor = " + quote(toHex(config.getScaleBarColor())));
         appendLine(sb, "def scaleBarFontSize = " + config.getScaleBarFontSize() + "  // 0 = auto");
         appendLine(sb, "def scaleBarBold = " + config.isScaleBarBold());
+        appendLine(sb, "def legendMode = " + quote(config.getLegendMode().name())
+                + "  // EVERY_CELL, RIGHT, BELOW or NONE");
+        appendLine(sb, "def textBackground = " + quote(config.getTextBackground().name())
+                + "  // panel letters and scale bars: OUTLINE, BOX or AUTO");
         appendLine(sb, "def outputFormat = " + quote(config.getFormat().name()));
         appendLine(sb, "def outputFile = " + quote(
                 new java.io.File(config.getOutputDirectory(),
@@ -127,6 +131,12 @@ final class PanelScriptGenerator {
                 appendLine(sb, "//   target DPI  = " + rc.getTargetDpi());
             }
             appendLine(sb, "//   display     = " + rc.getDisplaySettingsMode().name());
+            var style = rc.textStyle();
+            appendLine(sb, "//   text        = " + style.background().name() + " background, "
+                    + (style.isAutoColor() ? "Auto color" : style.colorHex().trim()));
+            appendLine(sb, "//   legends     = channels " + (RenderedImageExporter.wantChannelLegend(rc) ? "on" : "off")
+                    + ", objects " + (rc.isShowObjectLegend() ? "on" : "off")
+                    + ", corner " + rc.getLegendPosition().name());
         } else if (recipe instanceof RawExportConfig raw) {
             appendLine(sb, "//   region type = " + raw.getRegionType().name());
             appendLine(sb, "//   downsample  = " + raw.getDownsample());

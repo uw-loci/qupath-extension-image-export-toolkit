@@ -51,6 +51,34 @@ public class PanelExportConfig {
         }
     }
 
+    /** Where a Rendered recipe's legends go: channel and object legend, color scale bar. */
+    public enum LegendMode {
+        EVERY_CELL("Every cell"),
+        RIGHT("Once, right of the panel"),
+        BELOW("Once, below the panel"),
+        NONE("None");
+
+        private final String displayName;
+
+        LegendMode(String displayName) {
+            this.displayName = displayName;
+        }
+
+        public String getDisplayName() {
+            return displayName;
+        }
+
+        /** True for the modes that draw one legend beside the grid. */
+        public boolean isOnce() {
+            return this == RIGHT || this == BELOW;
+        }
+
+        @Override
+        public String toString() {
+            return displayName;
+        }
+    }
+
     private final ExportCategory recipeCategory;
     private final Object recipeConfig;
     private final int rows;
@@ -82,6 +110,8 @@ public class PanelExportConfig {
     private final Color scaleBarColor;
     private final int scaleBarFontSize;
     private final boolean scaleBarBold;
+    private final LegendMode legendMode;
+    private final TextBackground textBackground;
 
     private PanelExportConfig(Builder b) {
         this.recipeCategory = b.recipeCategory;
@@ -116,6 +146,8 @@ public class PanelExportConfig {
         this.scaleBarColor = b.scaleBarColor;
         this.scaleBarFontSize = b.scaleBarFontSize;
         this.scaleBarBold = b.scaleBarBold;
+        this.legendMode = b.legendMode;
+        this.textBackground = b.textBackground;
     }
 
     public ExportCategory getRecipeCategory() {
@@ -277,6 +309,16 @@ public class PanelExportConfig {
     }
 
     /** Whether per-cell labels (A,B,C / a,b,c / 1,2,3) should be drawn. */
+    /** Where a Rendered recipe's legends go. */
+    public LegendMode getLegendMode() {
+        return legendMode;
+    }
+
+    /** How the panel letters and the montage's scale bars are kept readable. */
+    public TextBackground getTextBackground() {
+        return textBackground;
+    }
+
     public boolean hasPanelLabel() {
         return panelLabelStyle != null
                 && panelLabelStyle != PanelLabelRenderer.PanelLabelStyle.NONE;
@@ -357,7 +399,9 @@ public class PanelExportConfig {
                 .scaleBarLengthMicrons(scaleBarLengthMicrons)
                 .scaleBarColor(scaleBarColor)
                 .scaleBarFontSize(scaleBarFontSize)
-                .scaleBarBold(scaleBarBold);
+                .scaleBarBold(scaleBarBold)
+                .legendMode(legendMode)
+                .textBackground(textBackground);
     }
 
     /**
@@ -398,6 +442,8 @@ public class PanelExportConfig {
         private Color scaleBarColor = Color.WHITE;
         private int scaleBarFontSize = 0;
         private boolean scaleBarBold = true;
+        private LegendMode legendMode = LegendMode.RIGHT;
+        private TextBackground textBackground = TextBackground.AUTO;
 
         public Builder recipeCategory(ExportCategory c) {
             this.recipeCategory = c;
@@ -554,6 +600,16 @@ public class PanelExportConfig {
             return this;
         }
 
+        public Builder legendMode(LegendMode mode) {
+            this.legendMode = mode;
+            return this;
+        }
+
+        public Builder textBackground(TextBackground background) {
+            this.textBackground = background;
+            return this;
+        }
+
         /**
          * Build the panel export configuration, validating and clamping fields.
          *
@@ -640,6 +696,12 @@ public class PanelExportConfig {
                 scaleBarLengthMicrons = 0;
             }
             scaleBarFontSize = Math.max(0, Math.min(scaleBarFontSize, 200));
+            if (legendMode == null) {
+                legendMode = LegendMode.RIGHT;
+            }
+            if (textBackground == null) {
+                textBackground = TextBackground.AUTO;
+            }
             return new PanelExportConfig(this);
         }
     }

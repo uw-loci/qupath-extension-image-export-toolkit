@@ -71,6 +71,13 @@ Every single-image export also generates a **Groovy script** that you can copy, 
 
 ## What's new
 
+**v1.5.0** -- Readable text, one legend per panel, and legends for the objects drawn:
+- **Text background** (**Outline**, **Box** or **Auto**, the default) applies to every piece of text on the image: scale bar, info label, panel label, legends and color scale bar. **Auto** reads the image under each block. It keeps the plain outline only where the text already reaches a 4.5:1 contrast (the WCAG level for normal text) on everything behind it, and adds a semi-transparent box everywhere else. **Text color** can be **Auto**: black on light areas, white on dark ones. Before, the info label and legends were always white, which was hard to read on pale H&E.
+- **Show object class legend** adds a legend of what the overlay draws: one swatch per class, in the class color and drawn the way the objects are (outline, fill, line or point). The channel or stain legend can still be turned off on its own.
+- A Panel / Montage draws its legends **once**, beside the grid, instead of in every cell (**Legend**: *Once, right of the panel*, the default; *Once, below the panel*; *Every cell*; *None*). If the cells' channels or color ranges differ, those parts stay on each cell and `panel_figure_info.txt` says so.
+- Copied scripts draw this text with the same code as QuIET, pixel for pixel. They now also draw the channel/stain legend, which they used to leave out. Also fixed: a per-annotation script with a scale bar no longer fails on every image.
+- `export_info.txt` and `panel_figure_info.txt` record the text and legend settings, so a figure can be made again from its record.
+
 **v1.4.2** -- Panel / Montage and wizard fixes from a real figure run:
 - A panel cell honors the recipe's annotation region: it shows the bounding box of the image's matching annotations instead of the whole image. Before, a Tissue-rectangle recipe gave whole slides shrunk to about 1/65 scale.
 - **Add to Workflow** is shown in panel mode and is respected. Unticked, a panel export leaves the source images untouched; before, it always recorded a workflow step and saved every source image.
@@ -375,7 +382,7 @@ Rendered exports can optionally include a burned-in scale bar with text label. T
 | **Color** | Any hex color via color picker -- **smart default** auto-detected from project images (black for brightfield, white for fluorescence). Drawn with a luminance-based contrast outline for visibility on any background. |
 | **Font size** | Auto (computed from image dimensions) or explicit size in points |
 | **Bold text** | Enable/disable (default: on) |
-| **Background box** | Draw a semi-transparent contrasting box behind the scale bar and label (default: off). Recommended for highly multiplexed fluorescence images where the scale bar may overlap bright signal regions. |
+| **Background box** | Always draw a semi-transparent contrasting box behind the scale bar and label (default: off). Off, the scale bar follows **Text background** (see *Readable Text and Legends*). Recommended for highly multiplexed fluorescence images where the scale bar may overlap bright signal regions. |
 
 The scale bar color is auto-detected from your project's images when the wizard opens for the first time: brightfield-dominant projects default to black (for contrast against white tissue backgrounds), and fluorescence projects default to white (for contrast against dark backgrounds). A hint label below the color picker reminds you to choose high contrast with the image background.
 
@@ -424,7 +431,7 @@ Add automatic letter labels (A, B, C, ...) to exported images for multi-panel pu
 | **Font size** | Auto (computed from image dimensions) or explicit size in points |
 | **Bold text** | Enable/disable (default: on) |
 
-Panel labels are drawn with a luminance-based contrast outline for visibility on any background. In batch export with auto-increment, the first image receives "A", the second "B", and so on (extending to "AA", "AB"... after "Z").
+Panel labels follow **Text background** and **Text color** (see *Readable Text and Legends*). In batch export with auto-increment, the first image receives "A", the second "B", and so on (extending to "AA", "AB"... after "Z").
 
 </details>
 
@@ -454,6 +461,25 @@ Add a per-image metadata text stamp to exported images. The template is resolved
 | `{height}` | Image height in pixels |
 
 A **live preview** below the template field resolves the template against the currently open image and warns about empty or unrecognized placeholders. An inline placeholder reference is always visible (not hidden behind a tooltip).
+
+</details>
+
+<details>
+<summary><b>Readable Text and Legends</b></summary>
+
+One setting decides how every piece of text on the image is kept readable: the scale bar label, info label, panel label, channel and object legend, and the color scale bar's labels and title.
+
+| Option | Values |
+|--------|--------|
+| **Text background** | **Auto** (default): for each block of text, QuIET reads the image under it. Where the outlined text reaches a 4.5:1 contrast (the WCAG level for normal text) on all of that area, it keeps the plain outline; elsewhere it draws a box at 65% opacity in the contrasting color behind the block. On H&E, where dark nuclei sit under most labels, that usually means a box; on a dark image with no bright structure under the text, the outline. **Box**: always the box. **Outline**: a 1-pixel outline only, as before v1.5.0. |
+| **Text color** | **Auto** (default): black where the area under the block is light, white where it is dark (the switch is at a mean relative luminance of 0.179, where black and white contrast equally). Untick Auto to pick one color. The scale bar keeps its own color. |
+| **Show channel/stain legend** | The image's channels in their display colors, or a brightfield image's stains. For brightfield it is often better off: the stain colors can be mistaken for overlay colors. |
+| **Show object class legend** | One row per class of object drawn on the image, annotations first, in the class color. The swatch is drawn the way the objects are: an outline, a filled square, a line for line and polyline objects, a dot for points. Unclassified objects are listed as *Annotations* or *Detections*. Only objects drawn in the exported region are listed. |
+| **Legend position** | Corner of the channel and object legend, which share one block (default: Upper Left). With split channels on, the split-channel legend corner is used. |
+
+With a box, the swatch edges take the text color, so a white swatch still shows on a light box. A box is clamped to the image.
+
+The settings are written to `export_info.txt` under *Text and Legends*, and to the generated script, whose drawing code is a copy of QuIET's (a test checks both draw the same pixels).
 
 </details>
 
@@ -649,6 +675,15 @@ QuIET's panel/montage layout follows conventions established by figure-assembly 
 
 A scale bar set in a Rendered recipe is drawn on each image *before* fitting, so it is resized with the image and Fill can crop it. When a montage scale bar is chosen, the recipe's own bar is turned off automatically.
 
+**Legends** -- With a Rendered recipe, **Legend** decides where its channel/stain legend, object class legend and color scale bar go:
+
+- **Once, right of the panel** (default) and **Once, below the panel** draw one legend in a band beside the grid, at the caption font size, in the color that contrasts with the background. The cells are drawn without legends.
+- One legend is drawn only when it is true for every cell. The channel legend must list the same channels in the same colors, and the color scale bar must have the same range (a Fixed or Shared map range). Object classes are pooled over the cells, unless one class is drawn in two colors.
+- A part that differs between cells is drawn on each cell instead, and `panel_figure_info.txt` says which part and why. A mixed H&E and birefringence panel, for example, keeps each image's own channel legend.
+- **Every cell** draws each cell's legends on the cell, as before v1.5.0. **None** draws none.
+
+**Text background** in the same section applies the Outline, Box or Auto style to the panel letters and the montage's scale bars.
+
 The **Layout preview** window uses the same placement and scale-bar arithmetic as the export, so each cell shows where its image lands, at what scale, and with which bar. Point at a panel to read its image name, microns per figure pixel, visible image size and scale-bar length; enlarge the window to see each cell bigger.
 
 **Reading the size estimate** -- Step 3 shows the composed pixel dimensions (from grid x cell size x gutters) and a rough output file-size estimate. The file-size figure is an estimate and varies with image content.
@@ -712,6 +747,8 @@ All panel settings persist across QuPath sessions, like every other QuIET settin
 | **Image fit** | Fit (letterbox), Fill (crop), or Actual size -- aspect ratio always preserved |
 | **Cell size / Same scale** | Optional fixed cell size in pixels; optionally draw every image at one microns-per-pixel |
 | **Scale bar** | Drawn after fitting: none, every cell, or last cell only; corner, length, color, font size, bold |
+| **Legend** | A Rendered recipe's legends: once right of or below the grid (when true for every cell), on every cell, or none |
+| **Text background** | Outline, Box or Auto for the panel letters and scale bars |
 | **Captions** | Optional per-image filename caption plus metadata lines, drawn above or below each panel |
 | **Panel labels** | Optional per-cell label inside the image area: A,B,C / a,b,c / 1,2,3, configurable corner, font size, bold, color |
 | **Format** | PNG, TIFF, JPEG, OME-TIFF, OME-TIFF Pyramid, SVG -- restricted to OME-TIFF at or above 100 megapixels |
@@ -735,10 +772,11 @@ All panel settings persist across QuPath sessions, like every other QuIET settin
 - Channel names and colors (fluorescence) or stain vectors (brightfield H&E/H-DAB)
 - Display settings: each channel's minimum and maximum for Current Viewer Settings, Saved Preset and Global Matched; for Per-Image Saved Settings only a note that each image used its own
 - The map overlay: source, channel, colormap, color range and opacity (map overlays only)
+- Text and legends (rendered exports): text background and color, and each text element's settings
 - Pixel size with downsample factor, for example `Pixel Size: 0.5 um/px (downsample 1x from 0.5 um/px)`
 - Tile size and overlap (for tiled exports)
 
-**Panel / Montage exports** produce `panel_figure_info.txt` beside the figure: the versions, the layout, the recipe, the map overlay (for a map recipe), and the source images in placement order.
+**Panel / Montage exports** produce `panel_figure_info.txt` beside the figure: the versions, the layout, the recipe, the map overlay (for a map recipe), the recipe's text and legend settings, where each legend went (once beside the grid, or on every cell and why), and the source images in placement order.
 
 Images with different channel configurations are automatically grouped in the metadata file. Metadata writing never interrupts the export -- failures are logged but silently ignored.
 
@@ -756,6 +794,7 @@ Every single-image export (Rendered, Mask, Raw, Tiled, Object Crops) produces a 
 - Contains all configuration as editable variables at the top
 - Rendered, Mask, Raw and Tiled scripts process the images you selected, in a batch loop. The list is the `exportImageNames` block at the end of the script, and images are matched by name. Empty the list to process every image in the project; a selection of the whole project writes no list. The Object Crops script works on the open image, so use the script editor's **Run for project** to run it on several
 - Reports progress and error counts
+- Draws scale bars, labels, legends and color scale bars with a copy of QuIET's own drawing code (the `quiet...` functions in the script), so its images match QuIET's pixel for pixel
 - Can be saved, version-controlled, and shared
 
 What a script does not reproduce:

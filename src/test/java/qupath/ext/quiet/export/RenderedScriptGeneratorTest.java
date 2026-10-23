@@ -95,9 +95,9 @@ class RenderedScriptGeneratorTest {
         assertTrue(script.contains("scaleBarColorB = 0"), "Blue should be 0");
         assertTrue(script.contains("scaleBarFontSize = 24"), "Font size should be 24");
         assertTrue(script.contains("scaleBarBoldText = false"), "Bold should be false");
-        // Verify luminance-based outline in the function
-        assertTrue(script.contains("new Color(colR, colG, colB)"),
-                "Function should construct Color from RGB");
+        // Verify the color reaches the drawing helper, which picks the outline by luminance
+        assertTrue(script.contains("new java.awt.Color(scaleBarColorR, scaleBarColorG, scaleBarColorB)"),
+                "Settings should construct the Color from RGB");
         assertTrue(script.contains("0.299"),
                 "Function should use luminance formula");
     }
@@ -310,8 +310,8 @@ class RenderedScriptGeneratorTest {
 
         String script = ScriptGenerator.generate(ExportCategory.RENDERED, config);
 
-        assertTrue(script.contains("drawColorScaleBar"),
-                "Script should contain drawColorScaleBar function");
+        assertTrue(script.contains("quietDrawColorScaleBar"),
+                "Script should contain the color scale bar function");
         assertTrue(script.contains("showColorScaleBar = true"),
                 "Script should set showColorScaleBar");
         assertTrue(script.contains("colorScaleBarFontSize = 16"),
@@ -350,7 +350,7 @@ class RenderedScriptGeneratorTest {
 
         String script = ScriptGenerator.generate(ExportCategory.RENDERED, config);
 
-        assertTrue(script.contains("drawPanelLabel"),
+        assertTrue(script.contains("quietDrawPanelLabel"),
                 "Script should contain drawPanelLabel function");
         assertTrue(script.contains("showPanelLabel = true"),
                 "Script should set showPanelLabel");
@@ -367,8 +367,6 @@ class RenderedScriptGeneratorTest {
         // Default config has showPanelLabel=false
         String script = ScriptGenerator.generate(ExportCategory.RENDERED, classifierConfig);
 
-        assertFalse(script.contains("drawPanelLabel"),
-                "Script should not contain drawPanelLabel function when disabled");
         assertTrue(script.contains("showPanelLabel = false"),
                 "Script should still have the config variable");
     }
@@ -385,7 +383,7 @@ class RenderedScriptGeneratorTest {
 
         String script = ScriptGenerator.generate(ExportCategory.RENDERED, config);
 
-        assertTrue(script.contains("drawPanelLabel"),
+        assertTrue(script.contains("quietDrawPanelLabel"),
                 "Density map script should contain drawPanelLabel function");
         assertTrue(script.contains("showPanelLabel = true"),
                 "Script should set showPanelLabel");
@@ -402,7 +400,7 @@ class RenderedScriptGeneratorTest {
 
         String script = ScriptGenerator.generate(ExportCategory.RENDERED, config);
 
-        assertTrue(script.contains("drawPanelLabel"),
+        assertTrue(script.contains("quietDrawPanelLabel"),
                 "Object overlay script should contain drawPanelLabel function");
     }
 

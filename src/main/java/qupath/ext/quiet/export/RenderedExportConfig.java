@@ -175,6 +175,38 @@ public class RenderedExportConfig {
     ) {}
 
     /**
+     * How the text on the image is kept readable: info label, panel label, legends, color
+     * scale bar labels and (with its own color) the scale bar label.
+     *
+     * @param background outline, box, or chosen from the image under each block
+     * @param colorHex   text color as {@code #RRGGBB}; blank for Auto (black on light areas,
+     *                   white on dark ones)
+     */
+    public record TextStyleConfig(TextBackground background, String colorHex) {
+        /** Auto background, Auto color. */
+        public static TextStyleConfig defaults() {
+            return new TextStyleConfig(TextBackground.AUTO, "");
+        }
+
+        /** The text color, or null for Auto. */
+        public Color colorOrNull() {
+            if (colorHex == null || colorHex.isBlank()) {
+                return null;
+            }
+            try {
+                return Color.decode(colorHex.trim());
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+
+        /** True when the color is chosen from the image. */
+        public boolean isAutoColor() {
+            return colorOrNull() == null;
+        }
+    }
+
+    /**
      * Object overlay configuration (classifiers, density maps, annotations/detections).
      */
     public record ObjectOverlayConfig(
@@ -266,6 +298,9 @@ public class RenderedExportConfig {
     private final boolean addToWorkflow;
     private final double matchedDisplayPercentile;
     private final boolean showChannelLegend;
+    private final boolean showObjectLegend;
+    private final ScaleBarRenderer.Position legendPosition;
+    private final TextStyleConfig textStyle;
     private final int svgMaxVectorDetections;
 
     // -----------------------------------------------------------------------
@@ -304,6 +339,10 @@ public class RenderedExportConfig {
         this.addToWorkflow = builder.addToWorkflow;
         this.matchedDisplayPercentile = builder.matchedDisplayPercentile;
         this.showChannelLegend = builder.showChannelLegend;
+        this.showObjectLegend = builder.showObjectLegend;
+        this.legendPosition = builder.legendPosition != null
+                ? builder.legendPosition : ScaleBarRenderer.Position.UPPER_LEFT;
+        this.textStyle = builder.textStyle != null ? builder.textStyle : TextStyleConfig.defaults();
         this.svgMaxVectorDetections = builder.svgMaxVectorDetections;
 
         // Sub-configs assembled from individual builder fields
@@ -456,6 +495,24 @@ public class RenderedExportConfig {
      */
     public boolean isShowChannelLegend() {
         return showChannelLegend;
+    }
+
+    /**
+     * Whether to draw a legend of the object classes drawn on the image: one swatch per
+     * class, drawn the way the objects are (outline, fill, line or point).
+     */
+    public boolean isShowObjectLegend() {
+        return showObjectLegend;
+    }
+
+    /** Corner of the channel and object legend (split-channel exports use their own corner). */
+    public ScaleBarRenderer.Position getLegendPosition() {
+        return legendPosition;
+    }
+
+    /** How the text on the image is kept readable. */
+    public TextStyleConfig textStyle() {
+        return textStyle;
     }
 
     /**
@@ -653,6 +710,9 @@ public class RenderedExportConfig {
                     .addToWorkflow(config.isAddToWorkflow())
                     .matchedDisplayPercentile(config.getMatchedDisplayPercentile())
                     .showChannelLegend(config.isShowChannelLegend())
+                    .showObjectLegend(config.isShowObjectLegend())
+                    .legendPosition(config.getLegendPosition())
+                    .textStyle(config.textStyle())
                     .svgMaxVectorDetections(config.getSvgMaxVectorDetections())
                     .overlays(config.overlays())
                     .mapOverlay(config.mapOverlay())
@@ -681,6 +741,9 @@ public class RenderedExportConfig {
         private boolean addToWorkflow = true;
         private double matchedDisplayPercentile = 0.1;
         private boolean showChannelLegend = false;
+        private boolean showObjectLegend = false;
+        private ScaleBarRenderer.Position legendPosition = ScaleBarRenderer.Position.UPPER_LEFT;
+        private TextStyleConfig textStyle = TextStyleConfig.defaults();
         private int svgMaxVectorDetections = 1000;
 
         // -- Object overlay fields --
@@ -824,6 +887,33 @@ public class RenderedExportConfig {
 
         public Builder showChannelLegend(boolean show) {
             this.showChannelLegend = show;
+            return this;
+        }
+
+        public Builder showObjectLegend(boolean show) {
+            this.showObjectLegend = show;
+            return this;
+        }
+
+        public Builder legendPosition(ScaleBarRenderer.Position position) {
+            this.legendPosition = position;
+            return this;
+        }
+
+        public Builder textStyle(TextStyleConfig cfg) {
+            this.textStyle = cfg != null ? cfg : TextStyleConfig.defaults();
+            return this;
+        }
+
+        public Builder textBackground(TextBackground background) {
+            this.textStyle = new TextStyleConfig(
+                    background != null ? background : TextBackground.AUTO, textStyle.colorHex());
+            return this;
+        }
+
+        /** @param hex text color as {@code #RRGGBB}; null or blank for Auto */
+        public Builder textColorHex(String hex) {
+            this.textStyle = new TextStyleConfig(textStyle.background(), hex == null ? "" : hex);
             return this;
         }
 

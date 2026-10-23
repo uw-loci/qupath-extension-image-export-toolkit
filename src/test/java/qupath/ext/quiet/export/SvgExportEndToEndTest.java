@@ -74,4 +74,17 @@ class SvgExportEndToEndTest {
     void svgDrawsInfoLabel() throws Exception {
         assertTrue(export().contains(">sample_42.tif</text>"), "info label text missing from SVG");
     }
+
+    @Test
+    void svgDrawsTheTextBoxAndObjectLegendAsVectors() throws Exception {
+        var config = RenderedExportConfig.Builder.from(config())
+                .textBackground(TextBackground.BOX).showObjectLegend(true).build();
+        RenderedImageExporter.exportWithObjectOverlay(imageWithPointsAndPolygon(), config, "sample_42.tif", 0);
+        String svg = Files.readString(new File(tempDir.toFile(),
+                config.buildOutputFilename("sample_42.tif")).toPath(), StandardCharsets.UTF_8);
+        // The box is a vector path at the box opacity, not baked into the embedded raster
+        assertTrue(svg.contains("fill-opacity:0.649"), "no box at 65% opacity");
+        assertTrue(svg.contains(">Tumor</text>") && svg.contains(">macrophage</text>"),
+                "object legend text missing");
+    }
 }

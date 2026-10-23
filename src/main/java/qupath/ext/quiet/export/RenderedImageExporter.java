@@ -3,7 +3,6 @@ package qupath.ext.quiet.export;
 import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.Color;
-import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.Shape;
@@ -20,7 +19,9 @@ import java.nio.file.Files;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -408,6 +409,30 @@ public class RenderedImageExporter {
                                               MapOverlaySource mapSource,
                                               RenderedExportConfig config,
                                               String entryName) throws IOException {
+        return renderCell(imageData, classifier, mapSource, config, null, entryName).image();
+    }
+
+    /**
+     * A panel cell: the rendered image, and what its legends would say.
+     *
+     * @param image  the rendered image
+     * @param legend the legend content under the legend configuration; null if not asked for
+     */
+    public record CellRender(BufferedImage image, LegendContent legend) {}
+
+    /**
+     * As {@link #renderToImage}, and also the legend content the image would carry under
+     * {@code legendConfig}: a panel renders its cells without legends and draws one beside
+     * the grid when every cell's legend is the same.
+     *
+     * @param legendConfig the configuration whose legend settings apply; null to skip
+     */
+    public static CellRender renderCell(ImageData<BufferedImage> imageData,
+                                        PixelClassifier classifier,
+                                        MapOverlaySource mapSource,
+                                        RenderedExportConfig config,
+                                        RenderedExportConfig legendConfig,
+                                        String entryName) throws IOException {
         ImageServer<BufferedImage> baseServer = imageData.getServer();
         ImageServer<BufferedImage> displayServer = null;
         PixelClassificationImageServer classificationServer = null;
@@ -428,6 +453,8 @@ public class RenderedImageExporter {
             displayServer = resolveDisplayServer(imageData, baseServer, config);
             String panelLabel = resolvePanelLabel(config, 0);
 
+            BufferedImage image;
+            boolean objectsDrawn = true;
             if (region != null) {
                 if (config.getRenderMode() == RenderedExportConfig.RenderMode.CLASSIFIER_OVERLAY
                         && classifier != null && classifier.supportsImage(imageData)) {
@@ -436,38 +463,32 @@ public class RenderedImageExporter {
                         && mapSource != null) {
                     mapLayer = mapSource.open(imageData);
                 }
-                return renderRegion(imageData, baseServer, classificationServer, mapLayer,
+                image = renderRegion(imageData, baseServer, classificationServer, mapLayer,
                         displayServer, config, region[0], region[1], region[2], region[3],
                         panelLabel, entryName);
+            } else if (config.getRenderMode() == RenderedExportConfig.RenderMode.CLASSIFIER_OVERLAY
+                    && classifier != null && classifier.supportsImage(imageData)) {
+                classificationServer = new PixelClassificationImageServer(imageData, classifier);
+                image = renderClassifierComposite(imageData, baseServer,
+                        classificationServer, displayServer, config, panelLabel, entryName);
+            } else if (config.getRenderMode() == RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY
+                    && mapSource != null) {
+                mapLayer = mapSource.open(imageData);
+                image = renderDensityMapComposite(imageData, baseServer,
+                        mapLayer, displayServer, config, panelLabel, entryName);
+            } else {
+                image = renderObjectComposite(imageData, baseServer,
+                        displayServer, config, panelLabel, entryName);
+                objectsDrawn = config.getOverlayOpacity() > 0;
             }
-
-            switch (config.getRenderMode()) {
-                case CLASSIFIER_OVERLAY -> {
-                    if (classifier != null && classifier.supportsImage(imageData)) {
-                        classificationServer =
-                                new PixelClassificationImageServer(imageData, classifier);
-                        return renderClassifierComposite(imageData, baseServer,
-                                classificationServer, displayServer, config,
-                                panelLabel, entryName);
-                    }
-                    return renderObjectComposite(imageData, baseServer,
-                            displayServer, config, panelLabel, entryName);
-                }
-                case DENSITY_MAP_OVERLAY -> {
-                    if (mapSource != null) {
-                        mapLayer = mapSource.open(imageData);
-                        return renderDensityMapComposite(imageData, baseServer,
-                                mapLayer, displayServer, config,
-                                panelLabel, entryName);
-                    }
-                    return renderObjectComposite(imageData, baseServer,
-                            displayServer, config, panelLabel, entryName);
-                }
-                default -> {
-                    return renderObjectComposite(imageData, baseServer,
-                            displayServer, config, panelLabel, entryName);
-                }
+            LegendContent legend = null;
+            if (legendConfig != null) {
+                int[] r = region != null ? region
+                        : new int[]{0, 0, baseServer.getWidth(), baseServer.getHeight()};
+                legend = legendContent(imageData, mapLayer, legendConfig, r[0], r[1], r[2], r[3],
+                        resolveEffectiveDownsample(config, baseServer), objectsDrawn);
             }
+            return new CellRender(image, legend);
         } catch (IOException | IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {
@@ -537,51 +558,12 @@ public class RenderedImageExporter {
 
     /**
      * Draw all vector-appropriate overlays onto a Graphics2D context.
-     * This includes object overlays, scale bar, color scale bar, and panel label.
-     */
-    private static void drawVectorOverlays(
-            Graphics2D g2d,
-            ImageData<BufferedImage> imageData,
-            MapLayer mapLayer,
-            RenderedExportConfig config,
-            int regionX, int regionY, int regionW, int regionH,
-            int imageWidth, int imageHeight,
-            String panelLabel,
-            double downsample) throws Exception {
-        drawVectorOverlays(g2d, imageData, mapLayer, config,
-                regionX, regionY, regionW, regionH,
-                imageWidth, imageHeight, panelLabel, downsample, false);
-    }
-
-    /**
-     * Draw all vector-appropriate overlays onto a Graphics2D context.
-     *
-     * @param skipObjectPainting if true, skip painting objects (used when SVG vector
-     *                           objects are painted separately via paintObjectsAsSvg)
-     */
-    private static void drawVectorOverlays(
-            Graphics2D g2d,
-            ImageData<BufferedImage> imageData,
-            MapLayer mapLayer,
-            RenderedExportConfig config,
-            int regionX, int regionY, int regionW, int regionH,
-            int imageWidth, int imageHeight,
-            String panelLabel,
-            double downsample,
-            boolean skipObjectPainting) throws Exception {
-        drawVectorOverlays(g2d, imageData, mapLayer, config,
-                regionX, regionY, regionW, regionH,
-                imageWidth, imageHeight, panelLabel, downsample,
-                skipObjectPainting, null, null);
-    }
-
-    /**
-     * Draw all vector-appropriate overlays onto a Graphics2D context.
      *
      * @param skipObjectPainting if true, skip painting objects (used when SVG vector
      *                           objects are painted separately via paintObjectsAsSvg)
      * @param resolvedInfoLabel  pre-resolved info label text (null if not applicable)
      * @param entryName          image entry name for info label template resolution
+     * @param backdrop           the image under the text, for Auto text styles; may be null
      */
     private static void drawVectorOverlays(
             Graphics2D g2d,
@@ -594,7 +576,8 @@ public class RenderedImageExporter {
             double downsample,
             boolean skipObjectPainting,
             String resolvedInfoLabel,
-            String entryName) throws Exception {
+            String entryName,
+            TextRenderUtils.Backdrop backdrop) throws Exception {
 
         // Paint object overlays with region offset (skip when done via SVG vector path)
         if (!skipObjectPainting && (config.overlays().includeAnnotations() || config.overlays().includeDetections())) {
@@ -606,26 +589,128 @@ public class RenderedImageExporter {
                     config.overlays().fillAnnotations(), config.overlays().showNames());
         }
 
-        // Scale bar -- must use effective downsample for correct pixel size
-        maybeDrawScaleBar(g2d, imageData, config, imageWidth, imageHeight, downsample);
-
-        // Color scale bar for density map mode
-        if (mapLayer != null && config.colorScaleBar().show()) {
-            // The raster pass read this region at this downsample; the layer returns it cached
-            maybeDrawMapScale(g2d, config, mapLayer, regionX, regionY, regionW, regionH,
-                    downsample, imageWidth, imageHeight);
-        }
-
-        maybeDrawPanelLabel(g2d, config, panelLabel, imageWidth, imageHeight);
-
         // Info label (resolve template if not pre-resolved)
         String infoText = resolvedInfoLabel;
         if (infoText == null && config.infoLabel().show()) {
             infoText = resolveInfoLabelTemplate(
                     config.infoLabel().text(), entryName, imageData, config);
         }
-        maybeDrawChannelLegend(g2d, imageData, config, imageWidth, imageHeight);
-        maybeDrawInfoLabel(g2d, config, infoText, imageWidth, imageHeight);
+        // The raster pass read this region at this downsample; the map layer returns it cached
+        drawTextOverlays(g2d, imageData, mapLayer, config,
+                regionX, regionY, regionW, regionH, imageWidth, imageHeight, downsample,
+                panelLabel, infoText, backdrop, true);
+    }
+
+    /**
+     * Draw the text elements in their fixed order: scale bar, map scale, panel label,
+     * channel and object legend, info label.
+     *
+     * @param x            region left, full-resolution pixels
+     * @param y            region top
+     * @param w            region width
+     * @param h            region height
+     * @param outW         output image width
+     * @param outH         output image height
+     * @param objectsDrawn false when the object overlay was skipped (zero opacity)
+     */
+    private static void drawTextOverlays(Graphics2D g2d, ImageData<BufferedImage> imageData,
+                                         MapLayer mapLayer, RenderedExportConfig config,
+                                         int x, int y, int w, int h, int outW, int outH,
+                                         double downsample, String panelLabel, String infoText,
+                                         TextRenderUtils.Backdrop backdrop,
+                                         boolean objectsDrawn) throws IOException {
+        maybeDrawScaleBar(g2d, imageData, config, outW, outH, downsample, backdrop);
+        LegendContent legend = legendContent(imageData, mapLayer, config,
+                x, y, w, h, downsample, objectsDrawn);
+        drawMapScale(g2d, config, legend.map(), outW, outH, backdrop);
+        maybeDrawPanelLabel(g2d, config, panelLabel, outW, outH, backdrop);
+        drawLegendRows(g2d, config, legend.rows(), outW, outH, backdrop);
+        maybeDrawInfoLabel(g2d, config, infoText, outW, outH, backdrop);
+    }
+
+    /**
+     * What the legends of one image say, for the export's settings.
+     *
+     * @param objectsDrawn false when the object overlay was skipped (zero opacity)
+     */
+    static LegendContent legendContent(ImageData<BufferedImage> imageData, MapLayer mapLayer,
+                                       RenderedExportConfig config, int x, int y, int w, int h,
+                                       double downsample, boolean objectsDrawn) throws IOException {
+        List<LegendRenderer.Entry> channels = wantChannelLegend(config)
+                ? channelEntries(imageData, config) : List.of();
+        List<LegendRenderer.Entry> objects = config.isShowObjectLegend() && objectsDrawn
+                ? LegendContent.objectEntries(imageData, x, y, w, h,
+                        config.overlays().includeAnnotations(),
+                        config.overlays().includeDetections(),
+                        config.overlays().fillAnnotations())
+                : List.of();
+        LegendContent.MapScale map = null;
+        if (mapLayer != null && config.colorScaleBar().show()) {
+            if (mapLayer.isClassChannel()) {
+                var classes = new ArrayList<LegendRenderer.Entry>();
+                var names = mapLayer.classNames();
+                var colors = mapLayer.classColors();
+                for (int i = 0; i < names.size(); i++) {
+                    classes.add(new LegendRenderer.Entry(names.get(i), colors[i] & 0xFFFFFF,
+                            LegendRenderer.SwatchKind.FILL));
+                }
+                map = new LegendContent.MapScale(null, 0, 0, null, classes);
+            } else {
+                double[] minMax = mapLayer.range(x, y, w, h, downsample, config.mapOverlay());
+                map = new LegendContent.MapScale(config.overlays().colormapName(),
+                        minMax[0], minMax[1], config.mapOverlay().label(), List.of());
+            }
+        }
+        return new LegendContent(channels, objects, map);
+    }
+
+    /**
+     * Draw the legends of {@code legend}: the map scale in the color scale bar's corner,
+     * then the channel and object rows in the legend's corner.
+     */
+    static void drawLegend(Graphics2D g2d, RenderedExportConfig config, LegendContent legend,
+                           int w, int h, TextRenderUtils.Backdrop backdrop) {
+        drawMapScale(g2d, config, legend.map(), w, h, backdrop);
+        drawLegendRows(g2d, config, legend.rows(), w, h, backdrop);
+    }
+
+    /** Draw a map's color scale bar, or the classes of a class-index map. */
+    private static void drawMapScale(Graphics2D g2d, RenderedExportConfig config,
+                                     LegendContent.MapScale map, int w, int h,
+                                     TextRenderUtils.Backdrop backdrop) {
+        if (map == null) {
+            return;
+        }
+        var style = config.textStyle();
+        g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
+        if (!map.classes().isEmpty()) {
+            LegendRenderer.drawCornerLegend(g2d, map.classes(), config.colorScaleBar().position(),
+                    w, h, style.background(), style.colorOrNull(), backdrop);
+            return;
+        }
+        ColorScaleBarRenderer.drawColorScaleBar(g2d, w, h, resolveColorMap(map.colormapName()),
+                map.min(), map.max(),
+                config.colorScaleBar().position(),
+                config.colorScaleBar().fontSize(),
+                config.colorScaleBar().bold(),
+                map.title(), style.background(), style.colorOrNull(), backdrop);
+    }
+
+    /** Draw the channel and object rows in the legend's corner. */
+    private static void drawLegendRows(Graphics2D g2d, RenderedExportConfig config,
+                                       List<LegendRenderer.Entry> rows, int w, int h,
+                                       TextRenderUtils.Backdrop backdrop) {
+        if (rows.isEmpty()) {
+            return;
+        }
+        // With split channels on, the swatch corner is the source of truth, so the
+        // per-channel swatches and the merge legend sit in the same corner
+        ScaleBarRenderer.Position pos = config.splitChannel().enabled()
+                ? config.splitChannel().colorLegendPosition()
+                : config.getLegendPosition();
+        var style = config.textStyle();
+        LegendRenderer.drawCornerLegend(g2d, rows, pos, w, h,
+                style.background(), style.colorOrNull(), backdrop);
     }
 
     /**
@@ -671,7 +756,7 @@ public class RenderedImageExporter {
                 x, y, w, h,
                 raster.getWidth(), raster.getHeight(),
                 panelLabel, effectiveDs,
-                false, null, entryName);
+                false, null, entryName, TextRenderUtils.Backdrop.of(raster));
 
         maybeDrawInset(g2d, raster, config);
 
@@ -766,7 +851,8 @@ public class RenderedImageExporter {
                 x, y, w, h,
                 raster.getWidth(), raster.getHeight(),
                 panelLabel, effectiveDs,
-                true, null, null);  // skipObjectPainting = true
+                true, null, null,  // skipObjectPainting = true
+                TextRenderUtils.Backdrop.of(raster));
 
         svgG2d.dispose();
         return svgG2d.getSVGDocument();
@@ -999,13 +1085,32 @@ public class RenderedImageExporter {
                 gCopy.scale(1.0 / downsample, 1.0 / downsample);
                 gCopy.translate(-regionX, -regionY);
                 PathObjectPainter.paintSpecifiedObjects(
-                        gCopy, paintable, overlayOptions, null, downsample);
+                        gCopy, paintOrder(paintable), overlayOptions, null, downsample);
             } finally {
                 gCopy.dispose();
             }
         } catch (Exception e) {
             logger.warn("Failed to paint objects in region: {}", e.getMessage());
         }
+    }
+
+    /**
+     * Objects in the order QuPath's viewer paints them: detections by level and position,
+     * then annotations from the outermost and largest. The hierarchy's own order is not
+     * fixed, so overlapping outlines would otherwise come out on top in either order.
+     */
+    static List<PathObject> paintOrder(Collection<PathObject> objects) {
+        var base = qupath.lib.objects.DefaultPathObjectComparator.getInstance();
+        var detections = objects.stream().filter(PathObject::isDetection)
+                .sorted(Comparator.comparingInt(PathObject::getLevel).thenComparing(base))
+                .toList();
+        var others = objects.stream().filter(o -> !o.isDetection())
+                .sorted(Comparator.comparingInt(PathObject::getLevel).reversed()
+                        .thenComparing((PathObject o) -> -o.getROI().getArea()))
+                .toList();
+        var ordered = new ArrayList<PathObject>(detections);
+        ordered.addAll(others);
+        return ordered;
     }
 
     /**
@@ -1161,6 +1266,23 @@ public class RenderedImageExporter {
                 .build();
     }
 
+    /**
+     * A copy of {@code config} drawing no channel or object legend and no color scale bar,
+     * for a panel that draws its legends beside the grid.
+     */
+    static RenderedExportConfig withoutLegends(RenderedExportConfig config) {
+        var cs = config.colorScaleBar();
+        var split = config.splitChannel();
+        return copyForRender(config)
+                .showChannelLegend(false)
+                .showObjectLegend(false)
+                .colorScaleBar(new RenderedExportConfig.ColorScaleBarConfig(false,
+                        cs.position(), cs.fontSize(), cs.bold()))
+                .splitChannel(new RenderedExportConfig.SplitChannelConfig(split.enabled(),
+                        split.grayscale(), split.colorBorder(), false, split.colorLegendPosition()))
+                .build();
+    }
+
     /** A builder carrying every setting that affects rendering. */
     private static RenderedExportConfig.Builder copyForRender(RenderedExportConfig config) {
         return RenderedExportConfig.Builder.from(config);
@@ -1296,19 +1418,13 @@ public class RenderedImageExporter {
                     config.overlays().fillAnnotations(), config.overlays().showNames());
         }
 
-        maybeDrawScaleBar(g2d, imageData, config,
-                baseImage.getWidth(), baseImage.getHeight(), downsample);
-
-        maybeDrawPanelLabel(g2d, config, panelLabel,
-                baseImage.getWidth(), baseImage.getHeight());
-
         String infoText = config.infoLabel().show()
                 ? resolveInfoLabelTemplate(config.infoLabel().text(), entryName, imageData, config)
                 : null;
-        maybeDrawChannelLegend(g2d, imageData, config,
-                baseImage.getWidth(), baseImage.getHeight());
-        maybeDrawInfoLabel(g2d, config, infoText,
-                baseImage.getWidth(), baseImage.getHeight());
+        drawTextOverlays(g2d, imageData, null, config,
+                0, 0, baseServer.getWidth(), baseServer.getHeight(),
+                baseImage.getWidth(), baseImage.getHeight(), downsample,
+                panelLabel, infoText, TextRenderUtils.Backdrop.of(result), true);
 
         maybeDrawInset(g2d, result, config);
 
@@ -1365,19 +1481,13 @@ public class RenderedImageExporter {
                     config.overlays().fillAnnotations(), config.overlays().showNames());
         }
 
-        maybeDrawScaleBar(g2d, imageData, config,
-                baseImage.getWidth(), baseImage.getHeight(), downsample);
-
-        maybeDrawPanelLabel(g2d, config, panelLabel,
-                baseImage.getWidth(), baseImage.getHeight());
-
         String infoText = config.infoLabel().show()
                 ? resolveInfoLabelTemplate(config.infoLabel().text(), entryName, imageData, config)
                 : null;
-        maybeDrawChannelLegend(g2d, imageData, config,
-                baseImage.getWidth(), baseImage.getHeight());
-        maybeDrawInfoLabel(g2d, config, infoText,
-                baseImage.getWidth(), baseImage.getHeight());
+        drawTextOverlays(g2d, imageData, null, config,
+                0, 0, baseServer.getWidth(), baseServer.getHeight(),
+                baseImage.getWidth(), baseImage.getHeight(), downsample,
+                panelLabel, infoText, TextRenderUtils.Backdrop.of(result), opacity > 0);
 
         maybeDrawInset(g2d, result, config);
 
@@ -1429,12 +1539,12 @@ public class RenderedImageExporter {
                             channelColor);
                 }
                 if (wantChannelSwatch(config)) {
-                    drawChannelColorLegend(g2d, result.getWidth(), result.getHeight(),
-                            channelColor, channelLegendName(channel, baseServer),
-                            config.splitChannel().colorLegendPosition());
+                    drawChannelColorLegend(g2d, result, channelColor,
+                            channelLegendName(channel, baseServer), config);
                 }
                 maybeDrawScaleBar(g2d, imageData, config,
-                        result.getWidth(), result.getHeight(), previewDownsample);
+                        result.getWidth(), result.getHeight(), previewDownsample,
+                        TextRenderUtils.Backdrop.of(result));
             } finally {
                 g2d.dispose();
             }
@@ -1600,7 +1710,8 @@ public class RenderedImageExporter {
                                            ImageData<BufferedImage> imageData,
                                            RenderedExportConfig config,
                                            int w, int h,
-                                           double effectiveDownsample) {
+                                           double effectiveDownsample,
+                                           TextRenderUtils.Backdrop backdrop) {
         if (!config.scaleBar().show()) return;
         var cal = imageData.getServer().getPixelCalibration();
         if (!cal.hasPixelSizeMicrons()) {
@@ -1614,17 +1725,13 @@ public class RenderedImageExporter {
                 config.scaleBar().colorAsAwt(),
                 config.scaleBar().fontSize(),
                 config.scaleBar().bold(),
-                config.scaleBar().backgroundBox());
+                scaleBarBackground(config), backdrop, 0);
     }
 
-    /**
-     * Draw a scale bar if enabled -- convenience overload using config downsample.
-     */
-    private static void maybeDrawScaleBar(Graphics2D g2d,
-                                           ImageData<BufferedImage> imageData,
-                                           RenderedExportConfig config,
-                                           int w, int h) {
-        maybeDrawScaleBar(g2d, imageData, config, w, h, config.getDownsample());
+    /** The scale bar's own box setting forces a box; otherwise it follows the text style. */
+    static TextBackground scaleBarBackground(RenderedExportConfig config) {
+        return config.scaleBar().backgroundBox()
+                ? TextBackground.BOX : config.textStyle().background();
     }
 
     /**
@@ -1692,23 +1799,13 @@ public class RenderedImageExporter {
                     config.overlays().fillAnnotations(), config.overlays().showNames());
         }
 
-        maybeDrawScaleBar(g2d, imageData, config,
-                baseImage.getWidth(), baseImage.getHeight(), downsample);
-
-        maybeDrawMapScale(g2d, config, mapLayer,
-                0, 0, baseServer.getWidth(), baseServer.getHeight(), downsample,
-                baseImage.getWidth(), baseImage.getHeight());
-
-        maybeDrawPanelLabel(g2d, config, panelLabel,
-                baseImage.getWidth(), baseImage.getHeight());
-
         String infoText = config.infoLabel().show()
                 ? resolveInfoLabelTemplate(config.infoLabel().text(), entryName, imageData, config)
                 : null;
-        maybeDrawChannelLegend(g2d, imageData, config,
-                baseImage.getWidth(), baseImage.getHeight());
-        maybeDrawInfoLabel(g2d, config, infoText,
-                baseImage.getWidth(), baseImage.getHeight());
+        drawTextOverlays(g2d, imageData, mapLayer, config,
+                0, 0, baseServer.getWidth(), baseServer.getHeight(),
+                baseImage.getWidth(), baseImage.getHeight(), downsample,
+                panelLabel, infoText, TextRenderUtils.Backdrop.of(result), true);
 
         maybeDrawInset(g2d, result, config);
 
@@ -1720,7 +1817,7 @@ public class RenderedImageExporter {
      * Look up a ColorMap by name from QuPath's registered color maps.
      * Falls back to the first available map if the name is not found.
      */
-    private static ColorMaps.ColorMap resolveColorMap(String name) {
+    static ColorMaps.ColorMap resolveColorMap(String name) {
         Map<String, ColorMaps.ColorMap> maps = ColorMaps.getColorMaps();
         if (name != null && maps.containsKey(name)) {
             return maps.get(name);
@@ -1755,48 +1852,12 @@ public class RenderedImageExporter {
     }
 
     /**
-     * Draw the map's color scale bar, or for a class-index channel a legend of its classes.
-     */
-    private static void maybeDrawMapScale(Graphics2D g2d, RenderedExportConfig config,
-                                          MapLayer mapLayer, int x, int y, int w, int h,
-                                          double downsample, int imageWidth, int imageHeight)
-            throws IOException {
-        if (!config.colorScaleBar().show()) return;
-        if (mapLayer.isClassChannel()) {
-            var entries = new java.util.ArrayList<int[]>();
-            for (int rgb : mapLayer.classColors()) {
-                entries.add(new int[]{(rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF});
-            }
-            g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
-            drawSwatchLegend(g2d, entries, mapLayer.classNames(),
-                    config.colorScaleBar().position(), imageWidth, imageHeight);
-            return;
-        }
-        double[] minMax = mapLayer.range(x, y, w, h, downsample, config.mapOverlay());
-        maybeDrawColorScaleBar(g2d, config, resolveColorMap(config.overlays().colormapName()),
-                minMax[0], minMax[1], imageWidth, imageHeight);
-    }
-
-    private static void maybeDrawColorScaleBar(Graphics2D g2d,
-                                                RenderedExportConfig config,
-                                                ColorMaps.ColorMap colorMap,
-                                                double min, double max,
-                                                int w, int h) {
-        if (!config.colorScaleBar().show()) return;
-        g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
-        ColorScaleBarRenderer.drawColorScaleBar(g2d, w, h, colorMap, min, max,
-                config.colorScaleBar().position(),
-                config.colorScaleBar().fontSize(),
-                config.colorScaleBar().bold(),
-                config.mapOverlay().label());
-    }
-
-    /**
      * Draw a panel label if enabled in the config.
      */
     private static void maybeDrawPanelLabel(Graphics2D g2d,
                                              RenderedExportConfig config,
-                                             String label, int w, int h) {
+                                             String label, int w, int h,
+                                             TextRenderUtils.Backdrop backdrop) {
         if (!config.panelLabel().show()) return;
         if (label == null || label.isEmpty()) return;
         g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
@@ -1804,7 +1865,7 @@ public class RenderedImageExporter {
                 config.panelLabel().position(),
                 config.panelLabel().fontSize(),
                 config.panelLabel().bold(),
-                Color.WHITE);
+                config.textStyle().colorOrNull(), config.textStyle().background(), backdrop);
     }
 
     /**
@@ -1932,12 +1993,11 @@ public class RenderedImageExporter {
                             channelColor);
                 }
                 if (wantChannelSwatch(config)) {
-                    drawChannelColorLegend(g2d, result.getWidth(), result.getHeight(),
-                            channelColor, legendName,
-                            config.splitChannel().colorLegendPosition());
+                    drawChannelColorLegend(g2d, result, channelColor, legendName, config);
                 }
                 maybeDrawScaleBar(g2d, imageData, config,
-                        result.getWidth(), result.getHeight());
+                        result.getWidth(), result.getHeight(), config.getDownsample(),
+                        TextRenderUtils.Backdrop.of(result));
                 g2d.dispose();
 
                 String chName = channel.getName();
@@ -2034,12 +2094,11 @@ public class RenderedImageExporter {
                     if (config.splitStains().colorLegend()) {
                         // Split-stains shares the split-channel legend position
                         // for consistency on the per-stain panel.
-                        drawChannelColorLegend(g2d, result.getWidth(), result.getHeight(),
-                                packedColor, stain.getName(),
-                                config.splitChannel().colorLegendPosition());
+                        drawChannelColorLegend(g2d, result, packedColor, stain.getName(), config);
                     }
                     maybeDrawScaleBar(g2d, imageData, config,
-                            result.getWidth(), result.getHeight());
+                            result.getWidth(), result.getHeight(), config.getDownsample(),
+                            TextRenderUtils.Backdrop.of(result));
                 } finally {
                     g2d.dispose();
                 }
@@ -2093,79 +2152,21 @@ public class RenderedImageExporter {
     }
 
     /**
-     * Draw a small colored rectangle (swatch) with the channel name in the
-     * configured corner of the image.
+     * Draw the swatch and name of the one channel or stain a split-channel file shows, in
+     * the split-channel legend's corner.
+     *
+     * @param image the per-channel image being drawn on
      */
-    private static void drawChannelColorLegend(Graphics2D g2d, int w, int h,
+    private static void drawChannelColorLegend(Graphics2D g2d, BufferedImage image,
                                                 int packedColor, String channelName,
-                                                ScaleBarRenderer.Position position) {
-        int r = (packedColor >> 16) & 0xFF;
-        int g = (packedColor >> 8) & 0xFF;
-        int b = packedColor & 0xFF;
-        Color chColor = new Color(r, g, b);
-
-        int minDim = Math.min(w, h);
-        int swatchSize = Math.max(8, minDim / 25);
-        int margin = Math.max(4, minDim / 50);
-        int fontSize = Math.max(10, minDim / 40);
-
-        g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
-        g2d.setFont(new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD, fontSize));
-        FontMetrics fm = g2d.getFontMetrics();
-        int textW = (channelName == null || channelName.isEmpty())
-                ? 0 : fm.stringWidth(channelName);
-
-        // Compute the legend's bounding origin from the chosen corner.
-        ScaleBarRenderer.Position pos = position != null
-                ? position : ScaleBarRenderer.Position.UPPER_LEFT;
-        int contentW = swatchSize + (textW > 0 ? margin + textW : 0);
-        int contentH = swatchSize;
-        int x0, y0;
-        switch (pos) {
-            case UPPER_RIGHT -> {
-                x0 = Math.max(margin, w - margin - contentW);
-                y0 = margin;
-            }
-            case LOWER_LEFT -> {
-                x0 = margin;
-                y0 = Math.max(margin, h - margin - contentH);
-            }
-            case LOWER_RIGHT -> {
-                x0 = Math.max(margin, w - margin - contentW);
-                y0 = Math.max(margin, h - margin - contentH);
-            }
-            case UPPER_LEFT -> {
-                x0 = margin;
-                y0 = margin;
-            }
-            default -> {
-                x0 = margin;
-                y0 = margin;
-            }
-        }
-
-        // Draw swatch
-        g2d.setColor(chColor);
-        g2d.fillRect(x0, y0, swatchSize, swatchSize);
-        g2d.setColor(Color.WHITE);
-        g2d.drawRect(x0, y0, swatchSize, swatchSize);
-
-        // Draw channel name to the right of the swatch
-        if (textW > 0) {
-            int textX = x0 + swatchSize + margin;
-            int textY = y0 + swatchSize - 2;
-
-            g2d.setColor(Color.BLACK);
-            for (int dx = -1; dx <= 1; dx++) {
-                for (int dy = -1; dy <= 1; dy++) {
-                    if (dx != 0 || dy != 0) {
-                        g2d.drawString(channelName, textX + dx, textY + dy);
-                    }
-                }
-            }
-            g2d.setColor(Color.WHITE);
-            g2d.drawString(channelName, textX, textY);
-        }
+                                                RenderedExportConfig config) {
+        var entry = new LegendRenderer.Entry(channelName == null ? "" : channelName,
+                packedColor & 0xFFFFFF, LegendRenderer.SwatchKind.FILL);
+        var style = config.textStyle();
+        LegendRenderer.drawCornerLegend(g2d, List.of(entry),
+                config.splitChannel().colorLegendPosition(),
+                image.getWidth(), image.getHeight(),
+                style.background(), style.colorOrNull(), TextRenderUtils.Backdrop.of(image));
     }
 
     /**
@@ -2228,42 +2229,31 @@ public class RenderedImageExporter {
     }
 
     /**
-     * Draw a channel/stain legend if enabled in the config.
-     * For fluorescence: channel names + colors.
-     * For brightfield: stain names + colors from color deconvolution.
+     * Whether the whole image carries a channel/stain legend: asked for, or split channels
+     * with a color legend, so the merge carries the legend the per-channel files do.
      */
-    private static void maybeDrawChannelLegend(Graphics2D g2d,
-                                                ImageData<BufferedImage> imageData,
-                                                RenderedExportConfig config,
-                                                int w, int h) {
-        // Draw the whole-image legend when the user explicitly asked for it
-        // OR when split-channel + "Channel color legend swatch" is on -- so
-        // the merge picks up the same legend the per-channel files do.
-        boolean wantLegend = config.isShowChannelLegend()
-                || (config.splitChannel().enabled()
-                        && config.splitChannel().colorLegend());
-        if (!wantLegend) return;
+    static boolean wantChannelLegend(RenderedExportConfig config) {
+        return config.isShowChannelLegend()
+                || (config.splitChannel().enabled() && config.splitChannel().colorLegend());
+    }
 
-        var server = imageData.getServer();
-        var entries = new java.util.ArrayList<int[]>();
-        var names = new java.util.ArrayList<String>();
-
-        // Try color deconvolution stains first (brightfield)
+    /**
+     * Legend rows for the image's channels: the color deconvolution stains of a brightfield
+     * image, otherwise the visible channels in their display colors.
+     */
+    static List<LegendRenderer.Entry> channelEntries(ImageData<BufferedImage> imageData,
+                                                     RenderedExportConfig config) {
+        var entries = new ArrayList<LegendRenderer.Entry>();
         var stains = imageData.getColorDeconvolutionStains();
         if (stains != null) {
             for (int i = 1; i <= 3; i++) {
                 var stain = stains.getStain(i);
                 if (stain != null && !stain.isResidual()) {
-                    int packed = stain.getColor();
-                    entries.add(new int[]{
-                            (packed >> 16) & 0xFF,
-                            (packed >> 8) & 0xFF,
-                            packed & 0xFF});
-                    names.add(stain.getName());
+                    entries.add(new LegendRenderer.Entry(stain.getName(),
+                            stain.getColor() & 0xFFFFFF, LegendRenderer.SwatchKind.FILL));
                 }
             }
         }
-
         // Fluorescence: the visible channels, in the display's colors. (Matching
         // display names against server names never worked: QuPath appends
         // " (C1)" to display names, so no channel matched and no legend drew.)
@@ -2271,140 +2261,15 @@ public class RenderedImageExporter {
             ImageDisplay display = resolveImageDisplay(imageData, config);
             if (display != null && display.selectedChannels() != null) {
                 for (var ch : display.selectedChannels()) {
-                    if (ch == null) {
-                        continue;
+                    if (ch != null) {
+                        entries.add(new LegendRenderer.Entry(
+                                channelLegendName(ch, imageData.getServer()),
+                                channelColor(ch), LegendRenderer.SwatchKind.FILL));
                     }
-                    int packed = channelColor(ch);
-                    entries.add(new int[]{
-                            (packed >> 16) & 0xFF,
-                            (packed >> 8) & 0xFF,
-                            packed & 0xFF});
-                    names.add(channelLegendName(ch, server));
                 }
             }
         }
-
-        if (entries.isEmpty()) return;
-
-        // Origin of the legend bounding box for the chosen corner. When
-        // split-channel is on, the swatch position is the source of truth
-        // (so swatch + merge legend stay in the same corner); otherwise
-        // default to UPPER_LEFT.
-        ScaleBarRenderer.Position pos = config.splitChannel().enabled()
-                ? config.splitChannel().colorLegendPosition()
-                : ScaleBarRenderer.Position.UPPER_LEFT;
-        drawSwatchLegend(g2d, entries, names, pos, w, h);
-    }
-
-    /**
-     * Draw a legend of color swatches and names in a corner, wrapped into columns and
-     * shrunk so it covers at most half the image in each direction.
-     *
-     * @param entries {r, g, b} per row
-     * @param names   the name per row
-     * @param pos     the corner
-     * @param w       image width
-     * @param h       image height
-     */
-    private static void drawSwatchLegend(Graphics2D g2d, List<int[]> entries,
-                                         List<String> names, ScaleBarRenderer.Position pos,
-                                         int w, int h) {
-        if (entries.isEmpty()) return;
-        // Lay the legend out so it does not overrun the image. With many
-        // channels (e.g. a 20-channel multiplex) a single column at the default
-        // size would obscure the figure entirely; instead, wrap to columns and
-        // shrink the row pitch until both axes fit inside a sensible budget.
-        // Budget: half the image height, half the image width.
-        int minDim = Math.min(w, h);
-        int baseSwatch = Math.max(8, minDim / 30);
-        int margin = Math.max(6, minDim / 50);
-        int baseFont = Math.max(10, minDim / 45);
-        int baseLineSpacing = Math.max(2, baseSwatch / 4);
-        int n = entries.size();
-        int maxLegendH = Math.max(1, (int) (h * 0.5));
-        int maxLegendW = Math.max(1, (int) (w * 0.5));
-
-        // 1. Decide column count so each column fits maxLegendH at the base
-        //    row pitch. Cap at 4 to keep readability.
-        int baseRow = baseSwatch + baseLineSpacing;
-        int rowsPerColAtBase = Math.max(1, maxLegendH / baseRow);
-        int columns = Math.max(1, Math.min(4, (n + rowsPerColAtBase - 1) / rowsPerColAtBase));
-        int rowsPerCol = (n + columns - 1) / columns;
-
-        // 2. Measure the widest label so we can plan column widths.
-        g2d.setFont(new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD, baseFont));
-        FontMetrics fmProbe = g2d.getFontMetrics();
-        int widestText = 0;
-        for (String nm : names) {
-            widestText = Math.max(widestText, fmProbe.stringWidth(nm));
-        }
-        int colWidthAtBase = baseSwatch + margin + widestText + margin;
-        int legendWAtBase = columns * colWidthAtBase;
-        int legendHAtBase = rowsPerCol * baseRow;
-
-        // 3. If either axis still exceeds the budget, shrink proportionally.
-        double scale = Math.min(
-                (double) maxLegendW / Math.max(1, legendWAtBase),
-                (double) maxLegendH / Math.max(1, legendHAtBase));
-        scale = Math.min(1.0, scale);
-        int swatchSize = Math.max(6, (int) Math.round(baseSwatch * scale));
-        int lineSpacing = Math.max(1, (int) Math.round(baseLineSpacing * scale));
-        int fontSize = Math.max(8, (int) Math.round(baseFont * scale));
-
-        g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
-        g2d.setFont(new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD, fontSize));
-        FontMetrics fm = g2d.getFontMetrics();
-        int actualWidest = 0;
-        for (String nm : names) {
-            actualWidest = Math.max(actualWidest, fm.stringWidth(nm));
-        }
-        int colWidth = swatchSize + margin / 2 + actualWidest + margin / 2;
-        int rowPitch = swatchSize + lineSpacing;
-
-        int legendW = columns * colWidth;
-        int legendH = rowsPerCol * rowPitch;
-        int originX, originY;
-        switch (pos != null ? pos : ScaleBarRenderer.Position.UPPER_LEFT) {
-            case UPPER_RIGHT -> {
-                originX = Math.max(margin, w - margin - legendW);
-                originY = margin;
-            }
-            case LOWER_LEFT -> {
-                originX = margin;
-                originY = Math.max(margin, h - margin - legendH);
-            }
-            case LOWER_RIGHT -> {
-                originX = Math.max(margin, w - margin - legendW);
-                originY = Math.max(margin, h - margin - legendH);
-            }
-            case UPPER_LEFT -> {
-                originX = margin;
-                originY = margin;
-            }
-            default -> {
-                originX = margin;
-                originY = margin;
-            }
-        }
-
-        for (int i = 0; i < n; i++) {
-            int col = i / rowsPerCol;
-            int row = i % rowsPerCol;
-            int x0 = originX + col * colWidth;
-            int y0 = originY + row * rowPitch;
-
-            int[] rgb = entries.get(i);
-            Color chColor = new Color(rgb[0], rgb[1], rgb[2]);
-            g2d.setColor(chColor);
-            g2d.fillRect(x0, y0, swatchSize, swatchSize);
-            g2d.setColor(Color.WHITE);
-            g2d.drawRect(x0, y0, swatchSize, swatchSize);
-
-            int textX = x0 + swatchSize + margin / 2;
-            int textY = y0 + swatchSize - 2;
-            TextRenderUtils.drawOutlinedText(g2d, names.get(i),
-                    textX, textY, Color.WHITE, Color.BLACK);
-        }
+        return entries;
     }
 
     /**
@@ -2412,7 +2277,8 @@ public class RenderedImageExporter {
      */
     private static void maybeDrawInfoLabel(Graphics2D g2d,
                                             RenderedExportConfig config,
-                                            String resolvedText, int w, int h) {
+                                            String resolvedText, int w, int h,
+                                            TextRenderUtils.Backdrop backdrop) {
         if (!config.infoLabel().show()) return;
         if (resolvedText == null || resolvedText.isEmpty()) return;
         g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
@@ -2420,7 +2286,7 @@ public class RenderedImageExporter {
                 config.infoLabel().position(),
                 config.infoLabel().fontSize(),
                 config.infoLabel().bold(),
-                Color.WHITE);
+                config.textStyle().colorOrNull(), config.textStyle().background(), backdrop);
     }
 
     /**
@@ -2494,7 +2360,7 @@ public class RenderedImageExporter {
             try {
                 gCopy.scale(1.0 / downsample, 1.0 / downsample);
                 PathObjectPainter.paintSpecifiedObjects(
-                        gCopy, paintable, overlayOptions, null, downsample);
+                        gCopy, paintOrder(paintable), overlayOptions, null, downsample);
             } finally {
                 gCopy.dispose();
             }

@@ -476,56 +476,6 @@ def paintMapRegion(layer, region, int x, int y, int w, int h, int outW, int outH
     return img
 }
 
-// A legend of the class channel's colors and names in a corner, as QuIET draws it
-def drawMapClassLegend(Graphics2D g2d, layer, int w, int h, String pos) {
-    def names = layer.classNames
-    def colors = layer.classColors
-    int n = names.size()
-    if (n == 0) return
-    int minDim = Math.min(w, h)
-    int baseSwatch = Math.max(8, (int) (minDim / 30))
-    int margin = Math.max(6, (int) (minDim / 50))
-    int baseFont = Math.max(10, (int) (minDim / 45))
-    int baseLineSpacing = Math.max(2, (int) (baseSwatch / 4))
-    int maxLegendH = Math.max(1, (int) (h * 0.5))
-    int maxLegendW = Math.max(1, (int) (w * 0.5))
-    int baseRow = baseSwatch + baseLineSpacing
-    int rowsPerColAtBase = Math.max(1, (int) (maxLegendH / baseRow))
-    int columns = Math.max(1, Math.min(4, (int) ((n + rowsPerColAtBase - 1) / rowsPerColAtBase)))
-    int rowsPerCol = (int) ((n + columns - 1) / columns)
-    g2d.setFont(new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD, baseFont))
-    int widestText = names.collect { g2d.getFontMetrics().stringWidth(it) }.max()
-    int legendWAtBase = columns * (baseSwatch + margin + widestText + margin)
-    int legendHAtBase = rowsPerCol * baseRow
-    double scale = Math.min(1.0d, Math.min((double) maxLegendW / Math.max(1, legendWAtBase), (double) maxLegendH / Math.max(1, legendHAtBase)))
-    int swatchSize = Math.max(6, (int) Math.round(baseSwatch * scale))
-    int lineSpacing = Math.max(1, (int) Math.round(baseLineSpacing * scale))
-    int fontSize = Math.max(8, (int) Math.round(baseFont * scale))
-    g2d.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, 1.0f))
-    g2d.setFont(new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD, fontSize))
-    def fm = g2d.getFontMetrics()
-    int actualWidest = names.collect { fm.stringWidth(it) }.max()
-    int colWidth = swatchSize + (int) (margin / 2) + actualWidest + (int) (margin / 2)
-    int rowPitch = swatchSize + lineSpacing
-    int legendW = columns * colWidth, legendH = rowsPerCol * rowPitch
-    int originX = pos in ['UPPER_RIGHT', 'LOWER_RIGHT'] ? Math.max(margin, w - margin - legendW) : margin
-    int originY = pos in ['LOWER_LEFT', 'LOWER_RIGHT'] ? Math.max(margin, h - margin - legendH) : margin
-    for (int i = 0; i < n; i++) {
-        int x0 = originX + ((int) (i / rowsPerCol)) * colWidth
-        int y0 = originY + (i % rowsPerCol) * rowPitch
-        g2d.setColor(new java.awt.Color((int) colors[i]))
-        g2d.fillRect(x0, y0, swatchSize, swatchSize)
-        g2d.setColor(java.awt.Color.WHITE)
-        g2d.drawRect(x0, y0, swatchSize, swatchSize)
-        int textX = x0 + swatchSize + (int) (margin / 2)
-        int textY = y0 + swatchSize - 2
-        g2d.setColor(java.awt.Color.BLACK)
-        for (int dx = -1; dx <= 1; dx++) for (int dy = -1; dy <= 1; dy++) if (dx != 0 || dy != 0) g2d.drawString(names[i], textX + dx, textY + dy)
-        g2d.setColor(java.awt.Color.WHITE)
-        g2d.drawString(names[i], textX, textY)
-    }
-}
-
 // One range over all images: percentiles of their pooled map values
 def computeSharedMapRange(project, entries, String source, densityBuilder, String pattern,
                           String channelName, double downsample, double lowP, double highP) {

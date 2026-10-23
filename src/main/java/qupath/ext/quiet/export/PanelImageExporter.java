@@ -70,12 +70,12 @@ public final class PanelImageExporter {
         private final List<String> errors;
         private final int figureWidth;
         private final int figureHeight;
-        private final List<String> mapOverlayLines;
+        private final List<String> recordLines;
 
         PanelResult(File outputFile, int composedCells, int skipped,
                     List<String> errors, int figureWidth, int figureHeight,
-                    List<String> mapOverlayLines) {
-            this.mapOverlayLines = List.copyOf(mapOverlayLines);
+                    List<String> recordLines) {
+            this.recordLines = List.copyOf(recordLines);
             this.outputFile = outputFile;
             this.composedCells = composedCells;
             this.skipped = skipped;
@@ -96,9 +96,12 @@ public final class PanelImageExporter {
             return skipped;
         }
 
-        /** The map overlay and color range every cell was drawn with; empty if none. */
-        public List<String> getMapOverlayLines() {
-            return mapOverlayLines;
+        /**
+         * Record lines for the figure's info file: the map overlay and color range, the
+         * recipe's text and legend settings, and where the legends went.
+         */
+        public List<String> getRecordLines() {
+            return recordLines;
         }
 
         public List<String> getErrors() {
@@ -162,6 +165,13 @@ public final class PanelImageExporter {
             logger.info("Panel scale bar is on; the recipe's own scale bar is turned off");
             renderConfig = withRecipe(config, RenderedImageExporter.withoutScaleBar(rc));
         }
+        var legendMode = config.getLegendMode();
+        if (legendMode != PanelExportConfig.LegendMode.EVERY_CELL
+                && renderConfig.getRecipeConfig() instanceof RenderedExportConfig rc) {
+            // Cells render without legends; one is drawn beside the grid, or on each cell
+            // afterwards for the parts that differ between cells
+            renderConfig = withRecipe(renderConfig, RenderedImageExporter.withoutLegends(rc));
+        }
         if (renderConfig.getRecipeConfig() instanceof RenderedExportConfig rc
                 && rc.mapOverlay().rangeMode() == RenderedExportConfig.MapRangeMode.SHARED) {
             // Every cell is drawn on one map range, computed over all the panel's images
@@ -174,6 +184,14 @@ public final class PanelImageExporter {
                     },
                     cancel == null ? null : cancel::isCancelled);
             renderConfig = withRecipe(renderConfig, resolved);
+        }
+
+        // The recipe's legend settings, with the panel's shared map range
+        RenderedExportConfig legendConfig = null;
+        if (legendMode.isOnce() && config.getRecipeConfig() instanceof RenderedExportConfig orig
+                && renderConfig.getRecipeConfig() instanceof RenderedExportConfig resolved) {
+            legendConfig = RenderedExportConfig.Builder.from(orig)
+                    .mapOverlay(resolved.mapOverlay()).build();
         }
 
         // Global Matched: one display range per kind of image, over the panel's images
@@ -216,17 +234,22 @@ public final class PanelImageExporter {
             try {
                 imageData = entry.readImageData();
                 PanelExportConfig cellConfig = renderConfig;
+                RenderedExportConfig cellLegendConfig = legendConfig;
                 var matched = matchedSettings.get(i);
                 if (matched != null
                         && renderConfig.getRecipeConfig() instanceof RenderedExportConfig rc) {
                     cellConfig = withRecipe(renderConfig, RenderedExportConfig.Builder.from(rc)
                             .capturedDisplaySettings(matched).build());
+                    if (legendConfig != null) {
+                        cellLegendConfig = RenderedExportConfig.Builder.from(legendConfig)
+                                .capturedDisplaySettings(matched).build();
+                    }
                 }
-                BufferedImage cellImage = renderCell(imageData, cellConfig,
+                var cell = renderCell(imageData, cellConfig, cellLegendConfig,
                         classifier, mapSource, name);
                 Map<String, String> metadata = readMetadata(entry, imageData);
-                rendered.add(new RenderedCell(name, cellImage, metadata,
-                        micronsPerPixel(imageData, config.getRecipeConfig())));
+                rendered.add(new RenderedCell(name, cell.image(), metadata,
+                        micronsPerPixel(imageData, config.getRecipeConfig()), cell.legend()));
             } catch (IOException e) {
                 skipped++;
                 errors.add(name + ": " + e.getMessage());
@@ -251,6 +274,10 @@ public final class PanelImageExporter {
             throw new IOException(
                     "No images could be rendered for the panel. See the error list.");
         }
+
+        List<String> legendLines = new ArrayList<>();
+        LegendContent sharedLegend = legendConfig == null ? null
+                : shareLegend(rendered, legendConfig, legendMode, legendLines);
 
         // Phase 2 -- compose.
         if (cancel != null && cancel.isCancelled()) {
@@ -293,7 +320,7 @@ public final class PanelImageExporter {
         BufferedImage figure;
         try {
             figure = PanelComposer.compose(config, cells, cellWidth, cellHeight,
-                    maxCaptionLines);
+                    maxCaptionLines, sharedLegend);
         } catch (OutOfMemoryError oom) {
             // Free the rendered cells before rethrowing so the caller's handler
             // has headroom to show a dialog.
@@ -322,10 +349,86 @@ public final class PanelImageExporter {
         writeFigure(figure, config, outputFile);
         logger.info("Wrote panel figure: {}", outputFile.getAbsolutePath());
 
-        List<String> mapLines = renderConfig.getRecipeConfig() instanceof RenderedExportConfig rc
-                ? ExportMetadataWriter.mapOverlayLines(rc) : List.of();
+        List<String> recordLines = new ArrayList<>();
+        if (renderConfig.getRecipeConfig() instanceof RenderedExportConfig rc) {
+            recordLines.addAll(ExportMetadataWriter.mapOverlayLines(rc));
+        }
+        if (config.getRecipeConfig() instanceof RenderedExportConfig orig) {
+            for (String line : ExportMetadataWriter.textOverlayLines(orig)) {
+                if (line.startsWith("Scale bar: ") && config.hasScaleBar() && orig.scaleBar().show()) {
+                    line = "Scale bar: drawn by the panel after fitting (see Layout); the recipe's is off";
+                }
+                recordLines.add(line);
+            }
+        }
+        recordLines.addAll(ExportMetadataWriter.panelLegendLines(config, legendLines));
         return new PanelResult(outputFile, composedCellCount, skipped, errors,
-                figure.getWidth(), figure.getHeight(), mapLines);
+                figure.getWidth(), figure.getHeight(), recordLines);
+    }
+
+    /**
+     * Decide which legends the panel draws once: the channel legend and the color scale bar
+     * when every cell's is the same, the object legend pooled over the cells when no class
+     * is drawn in two colors. A part that differs between cells is drawn on each cell
+     * instead, and said so in {@code lines}.
+     *
+     * @return the legend to draw beside the grid
+     */
+    static LegendContent shareLegend(List<RenderedCell> cells, RenderedExportConfig legendConfig,
+                                     PanelExportConfig.LegendMode mode, List<String> lines) {
+        var channels = new ArrayList<List<LegendRenderer.Entry>>();
+        var objects = new ArrayList<List<LegendRenderer.Entry>>();
+        var maps = new ArrayList<LegendContent.MapScale>();
+        for (var cell : cells) {
+            var legend = cell.legend() != null ? cell.legend() : LegendContent.EMPTY;
+            channels.add(legend.channels());
+            objects.add(legend.objects());
+            maps.add(legend.map());
+        }
+        var sharedChannels = LegendContent.shared(channels);
+        var pooledObjects = LegendContent.poolObjects(objects);
+        var sharedMap = LegendContent.shared(maps);
+        boolean anyMap = maps.stream().anyMatch(m -> m != null);
+        String where = mode.getDisplayName().toLowerCase();
+        if (RenderedImageExporter.wantChannelLegend(legendConfig)) {
+            lines.add(sharedChannels != null
+                    ? "Channel legend: " + where + ", the same for every cell"
+                    : "Channel legend: on every cell -- the cells show different channels or colors");
+        }
+        if (legendConfig.isShowObjectLegend()) {
+            lines.add(pooledObjects != null
+                    ? "Object legend: " + where + ", the classes drawn in any cell"
+                    : "Object legend: on every cell -- a class is drawn in different colors in different cells");
+        }
+        if (anyMap) {
+            lines.add(sharedMap != null
+                    ? "Color scale bar: " + where + ", the same range for every cell"
+                    : "Color scale bar: on every cell -- the cells have different ranges");
+        }
+        // Parts that differ go back on their cells
+        for (var cell : cells) {
+            if (cell.legend() == null) {
+                continue;
+            }
+            var own = new LegendContent(
+                    sharedChannels == null ? cell.legend().channels() : List.of(),
+                    pooledObjects == null ? cell.legend().objects() : List.of(),
+                    sharedMap == null ? cell.legend().map() : null);
+            if (!own.isEmpty()) {
+                var g2d = cell.image().createGraphics();
+                try {
+                    RenderedImageExporter.drawLegend(g2d, legendConfig, own,
+                            cell.image().getWidth(), cell.image().getHeight(),
+                            TextRenderUtils.Backdrop.of(cell.image()));
+                } finally {
+                    g2d.dispose();
+                }
+            }
+        }
+        return new LegendContent(
+                sharedChannels != null ? sharedChannels : List.of(),
+                pooledObjects != null ? pooledObjects : List.of(),
+                sharedMap);
     }
 
     /**
@@ -337,11 +440,10 @@ public final class PanelImageExporter {
      * and applicable -- the panel never silently falls back to a plain
      * object-overlay render that would drop the recipe's headline content.
      */
-    private static BufferedImage renderCell(ImageData<BufferedImage> imageData,
-                                            PanelExportConfig config,
-                                            PixelClassifier classifier,
-                                            MapOverlaySource mapSource,
-                                            String entryName) throws IOException {
+    private static RenderedImageExporter.CellRender renderCell(
+            ImageData<BufferedImage> imageData, PanelExportConfig config,
+            RenderedExportConfig legendConfig, PixelClassifier classifier,
+            MapOverlaySource mapSource, String entryName) throws IOException {
         Object recipe = config.getRecipeConfig();
         return switch (config.getRecipeCategory()) {
             case RENDERED -> {
@@ -364,26 +466,29 @@ public final class PanelImageExporter {
                     throw new IOException("the recipe renders a map overlay but"
                             + " no map source is available");
                 }
-                yield RenderedImageExporter.renderToImage(imageData, classifier,
-                        mapSource, rc, entryName);
+                yield RenderedImageExporter.renderCell(imageData, classifier,
+                        mapSource, rc, legendConfig, entryName);
             }
             case RAW -> {
                 if (!(recipe instanceof RawExportConfig rawc)) {
                     throw new IOException("recipe configuration type mismatch (raw)");
                 }
-                yield RawImageExporter.renderToImage(imageData, rawc, entryName);
+                yield new RenderedImageExporter.CellRender(
+                        RawImageExporter.renderToImage(imageData, rawc, entryName), null);
             }
             case MASK -> {
                 if (!(recipe instanceof MaskExportConfig mc)) {
                     throw new IOException("recipe configuration type mismatch (mask)");
                 }
-                yield MaskImageExporter.renderToImage(imageData, mc, entryName);
+                yield new RenderedImageExporter.CellRender(
+                        MaskImageExporter.renderToImage(imageData, mc, entryName), null);
             }
             case OBJECT_CROPS -> {
                 if (!(recipe instanceof ObjectCropConfig occ)) {
                     throw new IOException("recipe configuration type mismatch (object crop)");
                 }
-                yield ObjectCropExporter.renderToImage(imageData, occ, entryName);
+                yield new RenderedImageExporter.CellRender(
+                        ObjectCropExporter.renderToImage(imageData, occ, entryName), null);
             }
             case TILED, PANEL -> throw new IOException(
                     "unsupported recipe category: " + config.getRecipeCategory());
@@ -557,7 +662,8 @@ public final class PanelImageExporter {
     /**
      * One image rendered to a cell, with resolved metadata.
      */
-    private record RenderedCell(String name, BufferedImage image,
-                                Map<String, String> metadata, double micronsPerPixel) {
+    record RenderedCell(String name, BufferedImage image,
+                        Map<String, String> metadata, double micronsPerPixel,
+                        LegendContent legend) {
     }
 }

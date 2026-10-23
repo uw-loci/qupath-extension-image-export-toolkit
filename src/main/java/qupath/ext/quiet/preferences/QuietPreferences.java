@@ -101,6 +101,20 @@ public class QuietPreferences {
     private static final BooleanProperty renderedShowChannelLegend =
             PathPrefs.createPersistentPreference(PREFIX + "rendered.showChannelLegend", false);
 
+    private static final BooleanProperty renderedShowObjectLegend =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.showObjectLegend", false);
+
+    private static final StringProperty renderedLegendPosition =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.legendPosition", "UPPER_LEFT");
+
+    /** OUTLINE, BOX or AUTO. */
+    private static final StringProperty renderedTextBackground =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.textBackground", "AUTO");
+
+    /** {@code #RRGGBB}, or blank for Auto. */
+    private static final StringProperty renderedTextColor =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.textColor", "");
+
     // --- Rendered region type preferences ---
 
     private static final StringProperty renderedRegionType =
@@ -454,6 +468,12 @@ public class QuietPreferences {
     private static final BooleanProperty panelMatchScale =
             PathPrefs.createPersistentPreference(PREFIX + "panel.matchScale", false);
 
+    private static final StringProperty panelLegendMode =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.legendMode", "RIGHT");
+
+    private static final StringProperty panelTextBackground =
+            PathPrefs.createPersistentPreference(PREFIX + "panel.textBackground", "AUTO");
+
     private static final StringProperty panelScaleBarMode =
             PathPrefs.createPersistentPreference(PREFIX + "panel.scaleBar.mode", "NONE");
 
@@ -593,6 +613,18 @@ public class QuietPreferences {
     public static BooleanProperty renderedShowChannelLegendProperty() { return renderedShowChannelLegend; }
     public static boolean isRenderedShowChannelLegend() { return renderedShowChannelLegend.get(); }
     public static void setRenderedShowChannelLegend(boolean value) { renderedShowChannelLegend.set(value); }
+
+    public static boolean isRenderedShowObjectLegend() { return renderedShowObjectLegend.get(); }
+    public static void setRenderedShowObjectLegend(boolean value) { renderedShowObjectLegend.set(value); }
+
+    public static String getRenderedLegendPosition() { return renderedLegendPosition.get(); }
+    public static void setRenderedLegendPosition(String value) { renderedLegendPosition.set(value != null ? value : "UPPER_LEFT"); }
+
+    public static String getRenderedTextBackground() { return renderedTextBackground.get(); }
+    public static void setRenderedTextBackground(String value) { renderedTextBackground.set(value != null ? value : "AUTO"); }
+
+    public static String getRenderedTextColor() { return renderedTextColor.get(); }
+    public static void setRenderedTextColor(String value) { renderedTextColor.set(value != null ? value : ""); }
 
     // --- Region type ---
 
@@ -1031,6 +1063,12 @@ public class QuietPreferences {
     public static boolean isPanelMatchScale() { return panelMatchScale.get(); }
     public static void setPanelMatchScale(boolean value) { panelMatchScale.set(value); }
 
+    public static String getPanelLegendMode() { return panelLegendMode.get(); }
+    public static void setPanelLegendMode(String value) { panelLegendMode.set(value != null ? value : "RIGHT"); }
+
+    public static String getPanelTextBackground() { return panelTextBackground.get(); }
+    public static void setPanelTextBackground(String value) { panelTextBackground.set(value != null ? value : "AUTO"); }
+
     public static String getPanelScaleBarMode() { return panelScaleBarMode.get(); }
     public static void setPanelScaleBarMode(String value) { panelScaleBarMode.set(value != null ? value : "NONE"); }
 
@@ -1079,6 +1117,10 @@ public class QuietPreferences {
                 map.put(PREFIX + "rendered.scaleBarBold", renderedScaleBarBold);
                 map.put(PREFIX + "rendered.scaleBarBackgroundBox", renderedScaleBarBackgroundBox);
                 map.put(PREFIX + "rendered.showChannelLegend", renderedShowChannelLegend);
+                map.put(PREFIX + "rendered.showObjectLegend", renderedShowObjectLegend);
+                map.put(PREFIX + "rendered.legendPosition", renderedLegendPosition);
+                map.put(PREFIX + "rendered.textBackground", renderedTextBackground);
+                map.put(PREFIX + "rendered.textColor", renderedTextColor);
                 map.put(PREFIX + "rendered.regionType", renderedRegionType);
                 map.put(PREFIX + "rendered.padding", renderedPadding);
                 map.put(PREFIX + "rendered.densityMapName", renderedDensityMapName);

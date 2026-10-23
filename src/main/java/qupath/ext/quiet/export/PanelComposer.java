@@ -1,5 +1,8 @@
 package qupath.ext.quiet.export;
 
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
@@ -83,6 +86,52 @@ public final class PanelComposer {
     public static long[] computeFigureSize(PanelExportConfig config,
                                            int cellWidth, int cellHeight,
                                            int maxCaptionLines) {
+        return computeFigureSize(config, cellWidth, cellHeight, maxCaptionLines, null);
+    }
+
+    /**
+     * As {@link #computeFigureSize(PanelExportConfig, int, int, int)}, with room for one
+     * legend beside the grid.
+     *
+     * @param legend the legend drawn once beside the grid, or null for none
+     */
+    public static long[] computeFigureSize(PanelExportConfig config,
+                                           int cellWidth, int cellHeight,
+                                           int maxCaptionLines, LegendContent legend) {
+        long[] grid = gridSize(config, cellWidth, cellHeight, maxCaptionLines);
+        int[] band = legendBlockSize(config, legend);
+        if (band[0] == 0) {
+            return grid;
+        }
+        int[] origin = legendOrigin(config, grid);
+        int gx = bandGap(config.getGutterX(), config);
+        int gy = bandGap(config.getGutterY(), config);
+        if (config.getLegendMode() == PanelExportConfig.LegendMode.BELOW) {
+            return new long[]{Math.max(grid[0], (long) origin[0] + band[0] + gx),
+                    (long) origin[1] + band[1] + gy};
+        }
+        return new long[]{(long) origin[0] + band[0] + gx,
+                Math.max(grid[1], (long) origin[1] + band[1] + gy)};
+    }
+
+    /** Top-left of the legend beside the grid, {@link #bandGap} from it. */
+    private static int[] legendOrigin(PanelExportConfig config, long[] grid) {
+        int gx = config.getGutterX();
+        int gy = config.getGutterY();
+        if (config.getLegendMode() == PanelExportConfig.LegendMode.BELOW) {
+            return new int[]{bandGap(gx, config), (int) (grid[1] - gy + bandGap(gy, config))};
+        }
+        return new int[]{(int) (grid[0] - gx + bandGap(gx, config)), bandGap(gy, config)};
+    }
+
+    /** Space around the legend beside the grid: the gutter, at least half the caption font. */
+    private static int bandGap(int gutter, PanelExportConfig config) {
+        return Math.max(Math.max(gutter, MIN_BAND_GAP), config.getCaptionFontSize() / 2);
+    }
+
+    /** Width and height of the grid of cells with gutters and caption bands. */
+    private static long[] gridSize(PanelExportConfig config, int cellWidth, int cellHeight,
+                                   int maxCaptionLines) {
         int cols = config.getCols();
         int rows = config.getRows();
         int gx = config.getGutterX();
@@ -111,6 +160,19 @@ public final class PanelComposer {
                                         List<Cell> cells,
                                         int cellWidth, int cellHeight,
                                         int maxCaptionLines) {
+        return compose(config, cells, cellWidth, cellHeight, maxCaptionLines, null);
+    }
+
+    /**
+     * Compose the panel figure with one legend beside the grid.
+     *
+     * @param legend the legend every cell shares, drawn right of or below the grid as the
+     *               configuration's legend mode says; null for none
+     */
+    public static BufferedImage compose(PanelExportConfig config,
+                                        List<Cell> cells,
+                                        int cellWidth, int cellHeight,
+                                        int maxCaptionLines, LegendContent legend) {
         int cols = config.getCols();
         int rows = config.getRows();
         int gx = config.getGutterX();
@@ -122,7 +184,8 @@ public final class PanelComposer {
         boolean captionAbove =
                 config.getCaptionPosition() == PanelExportConfig.CaptionPosition.ABOVE;
 
-        long[] size = computeFigureSize(config, cellWidth, cellHeight, maxCaptionLines);
+        long[] size = computeFigureSize(config, cellWidth, cellHeight, maxCaptionLines, legend);
+        long[] grid = gridSize(config, cellWidth, cellHeight, maxCaptionLines);
         int figW = (int) Math.min(size[0], Integer.MAX_VALUE);
         int figH = (int) Math.min(size[1], Integer.MAX_VALUE);
 
@@ -167,7 +230,7 @@ public final class PanelComposer {
                         cell.getMicronsPerPixel(), common);
                 drawCellImage(g2d, img, slotX, imageAreaY, cellWidth, cellHeight, placement);
                 if (showsScaleBar(config, idx, cellCount)) {
-                    drawCellScaleBar(g2d, slotX, imageAreaY, cellWidth, cellHeight,
+                    drawCellScaleBar(g2d, figure, slotX, imageAreaY, cellWidth, cellHeight,
                             placement, sharedBarLength, config);
                 }
                 if (captionBand > 0) {
@@ -186,11 +249,16 @@ public final class PanelComposer {
                                 config.getPanelLabelPosition(),
                                 config.getPanelLabelFontSize(),
                                 config.isPanelLabelBold(),
-                                config.getPanelLabelColor());
+                                config.getPanelLabelColor(), config.getTextBackground(),
+                                new TextRenderUtils.Backdrop(figure, slotX, imageAreaY));
                     } finally {
                         labelG2d.dispose();
                     }
                 }
+            }
+            if (legend != null && !legend.isEmpty() && config.getLegendMode().isOnce()) {
+                int[] origin = legendOrigin(config, grid);
+                drawLegendBlock(g2d, config, legend, origin[0], origin[1], false);
             }
         } finally {
             g2d.dispose();
@@ -257,7 +325,8 @@ public final class PanelComposer {
      * Draw a scale bar inside the visible part of the image, so it never lands in the
      * letterbox margin or outside a cropped image.
      */
-    private static void drawCellScaleBar(Graphics2D g2d, int areaX, int areaY,
+    private static void drawCellScaleBar(Graphics2D g2d, BufferedImage figure,
+                                         int areaX, int areaY,
                                          int areaW, int areaH,
                                          PanelCellGeometry.Placement placement,
                                          double lengthMicrons, PanelExportConfig config) {
@@ -275,10 +344,130 @@ public final class PanelComposer {
             barG.clipRect(0, 0, v[2], v[3]);
             ScaleBarRenderer.drawScaleBar(barG, v[2], v[3], um,
                     config.getScaleBarPosition(), config.getScaleBarColor(),
-                    config.getScaleBarFontSize(), config.isScaleBarBold(), false,
+                    config.getScaleBarFontSize(), config.isScaleBarBold(),
+                    config.getTextBackground(),
+                    new TextRenderUtils.Backdrop(figure, areaX + v[0], areaY + v[1]),
                     lengthMicrons > 0 ? lengthMicrons : 0);
         } finally {
             barG.dispose();
         }
+    }
+
+    /** Smallest space between the grid and the legend beside it. */
+    private static final int MIN_BAND_GAP = 10;
+
+    /**
+     * Width and height of the legend block drawn beside the grid, at the caption font
+     * size; {0, 0} when there is none.
+     */
+    static int[] legendBlockSize(PanelExportConfig config, LegendContent legend) {
+        if (legend == null || legend.isEmpty() || !config.getLegendMode().isOnce()) {
+            return new int[]{0, 0};
+        }
+        var scratch = new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = scratch.createGraphics();
+        try {
+            return drawLegendBlock(g, config, legend, 0, 0, true);
+        } finally {
+            g.dispose();
+        }
+    }
+
+    /**
+     * Draw (or measure) the shared legend: channel and object rows, then the map's classes
+     * or color scale bar; stacked for a legend right of the grid, side by side below it.
+     * Plain text in the color that contrasts with the figure background.
+     *
+     * @return {width, height} of the block
+     */
+    private static int[] drawLegendBlock(Graphics2D g, PanelExportConfig config,
+                                         LegendContent legend, int x, int y,
+                                         boolean measureOnly) {
+        int fontSize = config.getCaptionFontSize();
+        Font font = new Font(Font.SANS_SERIF, Font.PLAIN, fontSize);
+        Color background = config.getBackgroundColor();
+        Color text = TextRenderUtils.computeOutlineColor(background);
+        boolean below = config.getLegendMode() == PanelExportConfig.LegendMode.BELOW;
+        int gap = below ? 2 * fontSize : fontSize;
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
+                RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+        int width = 0;
+        int height = 0;
+        int cx = x;
+        int cy = y;
+        var blocks = new java.util.ArrayList<List<LegendRenderer.Entry>>();
+        if (!legend.rows().isEmpty()) {
+            blocks.add(legend.rows());
+        }
+        var map = legend.map();
+        if (map != null && !map.classes().isEmpty()) {
+            blocks.add(map.classes());
+        }
+        int items = 0;
+        for (var rows : blocks) {
+            int[] size = drawRows(g, rows, font, text, cx, cy, measureOnly);
+            if (items++ > 0) {
+                if (below) {
+                    width += gap;
+                } else {
+                    height += gap;
+                }
+            }
+            if (below) {
+                width += size[0];
+                height = Math.max(height, size[1]);
+                cx += size[0] + gap;
+            } else {
+                width = Math.max(width, size[0]);
+                height += size[1];
+                cy += size[1] + gap;
+            }
+        }
+        if (map != null && map.classes().isEmpty()) {
+            int[] size = ColorScaleBarRenderer.drawInBand(g, cx, cy,
+                    measureOnly ? null : RenderedImageExporter.resolveColorMap(map.colormapName()),
+                    map.min(), map.max(), map.title(), font, 8 * fontSize, text, background,
+                    measureOnly);
+            if (items > 0) {
+                if (below) {
+                    width += gap;
+                } else {
+                    height += gap;
+                }
+            }
+            if (below) {
+                width += size[0];
+                height = Math.max(height, size[1]);
+            } else {
+                width = Math.max(width, size[0]);
+                height += size[1];
+            }
+        }
+        return new int[]{width, height};
+    }
+
+    /** Draw (or measure) swatch rows in one column. */
+    private static int[] drawRows(Graphics2D g, List<LegendRenderer.Entry> rows, Font font,
+                                  Color text, int x, int y, boolean measureOnly) {
+        g.setFont(font);
+        FontMetrics fm = g.getFontMetrics();
+        int swatch = font.getSize();
+        int pitch = swatch + swatch / 2;
+        int textGap = Math.max(4, swatch / 2);
+        int widest = 0;
+        for (var row : rows) {
+            widest = Math.max(widest, fm.stringWidth(row.name()));
+        }
+        if (!measureOnly) {
+            for (int i = 0; i < rows.size(); i++) {
+                int ry = y + i * pitch;
+                LegendRenderer.drawSwatch(g, rows.get(i), x, ry, swatch, text);
+                g.setColor(text);
+                g.drawString(rows.get(i).name(), x + swatch + textGap,
+                        ry + (swatch + fm.getAscent() - fm.getDescent()) / 2);
+            }
+        }
+        return new int[]{swatch + textGap + widest, rows.size() * pitch - (pitch - swatch)};
     }
 }

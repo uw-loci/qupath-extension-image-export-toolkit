@@ -389,7 +389,7 @@ public class BatchExportTask extends Task<ExportResult> {
             ExportMetadataWriter.writePanelInfo(panelConfig, entries,
                     result.getOutputFile(), result.getFigureWidth(),
                     result.getFigureHeight(), result.getComposedCells(),
-                    result.getSkipped(), result.getMapOverlayLines());
+                    result.getSkipped(), result.getRecordLines());
             // Record the panel export as a workflow step on every source image.
             if (workflowScript != null && !entries.isEmpty()) {
                 addPanelWorkflowStep();

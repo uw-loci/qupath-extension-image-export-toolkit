@@ -21,6 +21,8 @@ import qupath.lib.color.ColorMaps;
  */
 public class ColorScaleBarRenderer {
 
+    private static final int TICK_COUNT = 5;
+
     private ColorScaleBarRenderer() {
         // Utility class
     }
@@ -64,6 +66,24 @@ public class ColorScaleBarRenderer {
                                           ScaleBarRenderer.Position position,
                                           int fontSize, boolean boldText,
                                           String title) {
+        drawColorScaleBar(g2d, imageWidth, imageHeight, colorMap, minValue, maxValue,
+                position, fontSize, boldText, title, TextBackground.OUTLINE, Color.WHITE, null);
+    }
+
+    /**
+     * Draw a color scale bar in the readable-text style; a box covers bar, labels and title.
+     *
+     * @param background how the labels are kept readable
+     * @param fixedText  label color, or null for Auto
+     * @param backdrop   the image under the bar, or null
+     */
+    public static void drawColorScaleBar(Graphics2D g2d, int imageWidth, int imageHeight,
+                                          ColorMaps.ColorMap colorMap,
+                                          double minValue, double maxValue,
+                                          ScaleBarRenderer.Position position,
+                                          int fontSize, boolean boldText,
+                                          String title, TextBackground background,
+                                          Color fixedText, TextRenderUtils.Backdrop backdrop) {
         if (imageWidth <= 0 || imageHeight <= 0 || colorMap == null) {
             return;
         }
@@ -94,15 +114,10 @@ public class ColorScaleBarRenderer {
             FontMetrics fm = g2d.getFontMetrics();
 
             // Tick labels: min, 25%, 50%, 75%, max
-            int tickCount = 5;
-            String[] tickLabels = new String[tickCount];
-            double[] tickValues = new double[tickCount];
+            String[] tickLabels = tickLabels(minValue, maxValue);
             int maxLabelWidth = 0;
-            for (int i = 0; i < tickCount; i++) {
-                double t = (double) i / (tickCount - 1);
-                tickValues[i] = minValue + t * (maxValue - minValue);
-                tickLabels[i] = formatValue(tickValues[i]);
-                maxLabelWidth = Math.max(maxLabelWidth, fm.stringWidth(tickLabels[i]));
+            for (String label : tickLabels) {
+                maxLabelWidth = Math.max(maxLabelWidth, fm.stringWidth(label));
             }
 
             int tickLength = 4;
@@ -112,31 +127,26 @@ public class ColorScaleBarRenderer {
             int totalWidth = barWidth + tickLength + labelGap + maxLabelWidth;
             int textHeight = fm.getAscent();
 
-            // Compute bar position
-            int barX, barY;
-            boolean labelsOnRight;
-            switch (position) {
-                case LOWER_LEFT:
+            // Compute bar position; labels go on the right of the bar
+            int barX;
+            int barY;
+            switch (position != null ? position : ScaleBarRenderer.Position.LOWER_RIGHT) {
+                case LOWER_LEFT -> {
                     barX = margin;
                     barY = imageHeight - margin - barHeight;
-                    labelsOnRight = true;
-                    break;
-                case UPPER_RIGHT:
+                }
+                case UPPER_RIGHT -> {
                     barX = imageWidth - margin - totalWidth;
                     barY = margin;
-                    labelsOnRight = true;
-                    break;
-                case UPPER_LEFT:
+                }
+                case UPPER_LEFT -> {
                     barX = margin;
                     barY = margin;
-                    labelsOnRight = true;
-                    break;
-                case LOWER_RIGHT:
-                default:
+                }
+                default -> {
                     barX = imageWidth - margin - totalWidth;
                     barY = imageHeight - margin - barHeight;
-                    labelsOnRight = true;
-                    break;
+                }
             }
 
             // Title: above a bar in a lower corner, below one in an upper corner
@@ -161,49 +171,31 @@ public class ColorScaleBarRenderer {
                 titleX = Math.max(margin, Math.min(titleX, imageWidth - margin - titleWidth));
             }
 
-            // Draw gradient bar line by line (top = max, bottom = min)
-            double range = maxValue - minValue;
-            for (int row = 0; row < barHeight; row++) {
-                double t = 1.0 - (double) row / Math.max(1, barHeight - 1);
-                double value = minValue + t * range;
-                int packedRgb = colorMap.getColor(value, minValue, maxValue);
-                g2d.setColor(new Color(packedRgb));
-                g2d.fillRect(barX, barY + row, barWidth, 1);
+            int pad = TextRenderUtils.boxPad(effectiveFontSize);
+            int boxLeft = barX - 1;
+            int boxRight = barX + totalWidth;
+            int boxTop = barY - 1;
+            int boxBottom = barY + barHeight + 1 + fm.getDescent();
+            if (hasTitle) {
+                boxLeft = Math.min(boxLeft, titleX);
+                boxRight = Math.max(boxRight, titleX + fm.stringWidth(title));
+                boxTop = Math.min(boxTop, titleY - textHeight);
+                boxBottom = Math.max(boxBottom, titleY + fm.getDescent());
             }
+            boxLeft -= pad;
+            boxTop -= pad;
+            boxRight += pad;
+            boxBottom += pad;
+            TextRenderUtils.Ink ink = TextRenderUtils.resolveInk(background, fixedText, backdrop,
+                    boxLeft, boxTop, boxRight - boxLeft, boxBottom - boxTop);
+            TextRenderUtils.fillBox(g2d, ink, boxLeft, boxTop, boxRight - boxLeft,
+                    boxBottom - boxTop, imageWidth, imageHeight, pad);
 
-            // Outline around bar
-            Color outlineColor = TextRenderUtils.computeOutlineColor(new Color(colorMap.getColor(
-                    (minValue + maxValue) / 2.0, minValue, maxValue)));
-            g2d.setColor(outlineColor);
-            g2d.drawRect(barX - 1, barY - 1, barWidth + 1, barHeight + 1);
-
-            // Draw tick marks and labels
-            Color labelPrimary = Color.WHITE;
-            Color labelOutline = TextRenderUtils.computeOutlineColor(labelPrimary);
-
-            for (int i = 0; i < tickCount; i++) {
-                double t = (double) i / (tickCount - 1);
-                int tickY = barY + barHeight - 1 - (int) Math.round(t * (barHeight - 1));
-
-                // Tick mark
-                g2d.setColor(outlineColor);
-                int tickStartX = barX + barWidth;
-                g2d.drawLine(tickStartX, tickY, tickStartX + tickLength, tickY);
-
-                // Label
-                int labelX = tickStartX + tickLength + labelGap;
-                int labelY = tickY + textHeight / 2 - 1;
-
-                // Clamp label Y to stay within bar bounds
-                labelY = Math.max(barY + textHeight, Math.min(labelY, barY + barHeight));
-
-                TextRenderUtils.drawOutlinedText(g2d, tickLabels[i], labelX, labelY,
-                        labelPrimary, labelOutline);
-            }
+            paintBar(g2d, barX, barY, barWidth, barHeight, colorMap, minValue, maxValue,
+                    tickLabels, tickLength, labelGap, textHeight, ink);
 
             if (hasTitle) {
-                TextRenderUtils.drawOutlinedText(g2d, title, titleX, titleY,
-                        labelPrimary, labelOutline);
+                TextRenderUtils.drawText(g2d, title, titleX, titleY, ink);
             }
 
         } finally {
@@ -215,6 +207,97 @@ public class ColorScaleBarRenderer {
             g2d.setFont(savedFont);
             g2d.setColor(savedColor);
         }
+    }
+
+    /** Labels for the five ticks, min to max. */
+    static String[] tickLabels(double minValue, double maxValue) {
+        String[] labels = new String[TICK_COUNT];
+        for (int i = 0; i < TICK_COUNT; i++) {
+            double t = (double) i / (TICK_COUNT - 1);
+            labels[i] = formatValue(minValue + t * (maxValue - minValue));
+        }
+        return labels;
+    }
+
+    /** Draw the gradient (top = max), its border, the ticks and their labels. */
+    private static void paintBar(Graphics2D g2d, int barX, int barY, int barWidth, int barHeight,
+                                 ColorMaps.ColorMap colorMap, double minValue, double maxValue,
+                                 String[] labels, int tickLength, int labelGap, int textHeight,
+                                 TextRenderUtils.Ink ink) {
+        double range = maxValue - minValue;
+        for (int row = 0; row < barHeight; row++) {
+            double t = 1.0 - (double) row / Math.max(1, barHeight - 1);
+            double value = minValue + t * range;
+            g2d.setColor(new Color(colorMap.getColor(value, minValue, maxValue)));
+            g2d.fillRect(barX, barY + row, barWidth, 1);
+        }
+        g2d.setColor(ink.text());
+        g2d.drawRect(barX - 1, barY - 1, barWidth + 1, barHeight + 1);
+        for (int i = 0; i < TICK_COUNT; i++) {
+            double t = (double) i / (TICK_COUNT - 1);
+            int tickY = barY + barHeight - 1 - (int) Math.round(t * (barHeight - 1));
+            int tickStartX = barX + barWidth;
+            g2d.setColor(ink.text());
+            g2d.drawLine(tickStartX, tickY, tickStartX + tickLength, tickY);
+            int labelX = tickStartX + tickLength + labelGap;
+            int labelY = tickY + textHeight / 2 - 1;
+            labelY = Math.max(barY + textHeight, Math.min(labelY, barY + barHeight));
+            TextRenderUtils.drawText(g2d, labels[i], labelX, labelY, ink);
+        }
+    }
+
+    /**
+     * Draw a color scale bar in a figure margin: title above, bar of
+     * {@code barHeight} below, labels to the right, plain text.
+     *
+     * @param measureOnly true to return the size without drawing
+     * @return {width, height} in pixels
+     */
+    public static int[] drawInBand(Graphics2D g2d, int x, int y, ColorMaps.ColorMap colorMap,
+                                   double minValue, double maxValue, String title, Font font,
+                                   int barHeight, Color text, Color background,
+                                   boolean measureOnly) {
+        g2d.setFont(font);
+        FontMetrics fm = g2d.getFontMetrics();
+        String[] labels = tickLabels(minValue, maxValue);
+        int widest = 0;
+        for (String label : labels) {
+            widest = Math.max(widest, fm.stringWidth(label));
+        }
+        int barWidth = Math.max(8, font.getSize());
+        int tickLength = Math.max(4, font.getSize() / 3);
+        int labelGap = 4;
+        int ascent = fm.getAscent();
+        boolean hasTitle = title != null && !title.isBlank();
+        int titleH = hasTitle ? fm.getHeight() + Math.max(4, ascent / 2) : 0;
+        int width = Math.max(barWidth + tickLength + labelGap + widest,
+                hasTitle ? fm.stringWidth(title) : 0);
+        int height = titleH + ascent / 2 + barHeight + ascent / 2 + fm.getDescent();
+        if (measureOnly || colorMap == null) {
+            return new int[]{width, height};
+        }
+        if (hasTitle) {
+            g2d.setColor(text);
+            g2d.drawString(title, x, y + ascent);
+        }
+        var ink = new TextRenderUtils.Ink(text, background, null);
+        int barY = y + titleH + ascent / 2;
+        double range = maxValue - minValue;
+        for (int row = 0; row < barHeight; row++) {
+            double t = 1.0 - (double) row / Math.max(1, barHeight - 1);
+            g2d.setColor(new Color(colorMap.getColor(minValue + t * range, minValue, maxValue)));
+            g2d.fillRect(x, barY + row, barWidth, 1);
+        }
+        g2d.setColor(text);
+        g2d.drawRect(x - 1, barY - 1, barWidth + 1, barHeight + 1);
+        for (int i = 0; i < TICK_COUNT; i++) {
+            double t = (double) i / (TICK_COUNT - 1);
+            int tickY = barY + barHeight - 1 - (int) Math.round(t * (barHeight - 1));
+            g2d.setColor(text);
+            g2d.drawLine(x + barWidth, tickY, x + barWidth + tickLength, tickY);
+            g2d.drawString(labels[i], x + barWidth + tickLength + labelGap, tickY + ascent / 2 - 1);
+        }
+        return new int[]{width, height};
     }
 
     /**

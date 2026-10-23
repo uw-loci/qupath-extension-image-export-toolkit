@@ -105,6 +105,8 @@ public class PanelLayoutPane extends VBox {
     private Spinner<Integer> cellHeightSpinner;
     private CheckBox matchScaleCheck;
     private ComboBox<PanelExportConfig.ScaleBarMode> scaleBarModeCombo;
+    private ComboBox<PanelExportConfig.LegendMode> legendModeCombo;
+    private ComboBox<qupath.ext.quiet.export.TextBackground> textBackgroundCombo;
     private ComboBox<ScaleBarRenderer.Position> scaleBarPositionCombo;
     private Spinner<Double> scaleBarLengthSpinner;
     private ColorPicker scaleBarColorPicker;
@@ -315,6 +317,15 @@ public class PanelLayoutPane extends VBox {
         scaleBarBoldCheck = new CheckBox(resources.getString("panel.step4.labelBold"));
         scaleBarBoldCheck.setSelected(true);
 
+        legendModeCombo = new ComboBox<>(FXCollections.observableArrayList(
+                PanelExportConfig.LegendMode.values()));
+        legendModeCombo.setValue(PanelExportConfig.LegendMode.RIGHT);
+        legendModeCombo.setTooltip(tooltip("tooltip.panel.legendMode"));
+        textBackgroundCombo = new ComboBox<>(FXCollections.observableArrayList(
+                qupath.ext.quiet.export.TextBackground.values()));
+        textBackgroundCombo.setValue(qupath.ext.quiet.export.TextBackground.AUTO);
+        textBackgroundCombo.setTooltip(tooltip("tooltip.panel.textBackground"));
+
         scaleNoticeLabel = new Label();
         scaleNoticeLabel.setWrapText(true);
         scaleNoticeLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + ";");
@@ -337,6 +348,10 @@ public class PanelLayoutPane extends VBox {
         grid.add(new Label(resources.getString("panel.step4.labelFontSizeLabel")), 0, 4);
         grid.add(scaleBarFontSizeSpinner, 1, 4);
         grid.add(scaleBarBoldCheck, 2, 4);
+        grid.add(new Label(resources.getString("panel.step4.legendModeLabel")), 0, 5);
+        grid.add(legendModeCombo, 1, 5);
+        grid.add(new Label(resources.getString("panel.step4.textBackgroundLabel")), 2, 5);
+        grid.add(textBackgroundCombo, 3, 5);
 
         Runnable update = () -> {
             boolean bar = scaleBarModeCombo.getValue() != PanelExportConfig.ScaleBarMode.NONE;
@@ -360,6 +375,8 @@ public class PanelLayoutPane extends VBox {
         scaleBarColorPicker.valueProperty().addListener((o, a, b) -> update.run());
         scaleBarFontSizeSpinner.valueProperty().addListener((o, a, b) -> update.run());
         scaleBarBoldCheck.selectedProperty().addListener((o, a, b) -> update.run());
+        legendModeCombo.valueProperty().addListener((o, a, b) -> update.run());
+        textBackgroundCombo.valueProperty().addListener((o, a, b) -> update.run());
         update.run();
 
         var note = new Label(resources.getString("panel.step4.scaleNote"));
@@ -858,6 +875,14 @@ public class PanelLayoutPane extends VBox {
             scaleBarModeCombo.setValue(PanelExportConfig.ScaleBarMode.NONE);
         }
         try {
+            legendModeCombo.setValue(PanelExportConfig.LegendMode.valueOf(
+                    QuietPreferences.getPanelLegendMode()));
+        } catch (IllegalArgumentException e) {
+            legendModeCombo.setValue(PanelExportConfig.LegendMode.RIGHT);
+        }
+        textBackgroundCombo.setValue(qupath.ext.quiet.export.TextBackground.parse(
+                QuietPreferences.getPanelTextBackground()));
+        try {
             scaleBarPositionCombo.setValue(ScaleBarRenderer.Position.valueOf(
                     QuietPreferences.getPanelScaleBarPosition()));
         } catch (IllegalArgumentException e) {
@@ -909,6 +934,8 @@ public class PanelLayoutPane extends VBox {
         QuietPreferences.setPanelCellHeight(cellHeightSpinner.getValue());
         QuietPreferences.setPanelMatchScale(matchScaleCheck.isSelected());
         QuietPreferences.setPanelScaleBarMode(scaleBarModeCombo.getValue().name());
+        QuietPreferences.setPanelLegendMode(legendModeCombo.getValue().name());
+        QuietPreferences.setPanelTextBackground(textBackgroundCombo.getValue().name());
         QuietPreferences.setPanelScaleBarPosition(scaleBarPositionCombo.getValue().name());
         QuietPreferences.setPanelScaleBarLength(scaleBarLengthSpinner.getValue());
         QuietPreferences.setPanelScaleBarColor(toHex(scaleBarColorPicker.getValue()));
@@ -1314,7 +1341,9 @@ public class PanelLayoutPane extends VBox {
                 .scaleBarLengthMicrons(scaleBarLengthSpinner.getValue())
                 .scaleBarColor(toAwt(scaleBarColorPicker.getValue()))
                 .scaleBarFontSize(scaleBarFontSizeSpinner.getValue())
-                .scaleBarBold(scaleBarBoldCheck.isSelected());
+                .scaleBarBold(scaleBarBoldCheck.isSelected())
+                .legendMode(legendModeCombo.getValue())
+                .textBackground(textBackgroundCombo.getValue());
         return builder;
     }
 

@@ -74,6 +74,23 @@ public class ScaleBarRenderer {
                                      double pixelSizeMicrons, Position position,
                                      Color barColor, int fontSize, boolean boldText,
                                      boolean backgroundBox, double lengthMicrons) {
+        drawScaleBar(g2d, imageWidth, imageHeight, pixelSizeMicrons, position, barColor,
+                fontSize, boldText, backgroundBox ? TextBackground.BOX : TextBackground.OUTLINE,
+                null, lengthMicrons);
+    }
+
+    /**
+     * Draw a scale bar in the readable-text style.
+     *
+     * @param background how the label is kept readable; the box covers bar and label
+     * @param backdrop   the image under the bar, or null
+     * @param lengthMicrons bar length in microns; 0 = pick a "nice" length
+     */
+    public static void drawScaleBar(Graphics2D g2d, int imageWidth, int imageHeight,
+                                     double pixelSizeMicrons, Position position,
+                                     Color barColor, int fontSize, boolean boldText,
+                                     TextBackground background, TextRenderUtils.Backdrop backdrop,
+                                     double lengthMicrons) {
         if (pixelSizeMicrons <= 0 || imageWidth <= 0 || imageHeight <= 0) {
             return;
         }
@@ -143,29 +160,17 @@ public class ScaleBarRenderer {
             int textY = barY - 4;
 
             Color primary = barColor != null ? barColor : Color.WHITE;
-            Color outline = TextRenderUtils.computeOutlineColor(primary);
 
-            // Draw semi-transparent contrasting background box if requested
-            if (backgroundBox) {
-                int boxPad = Math.max(6, margin / 4);
-                int boxLeft = Math.min(barX, textX) - boxPad;
-                int boxTop = textY - textHeight - boxPad;
-                int boxRight = Math.max(barX + barLengthPx, textX + textWidth) + boxPad;
-                int boxBottom = barY + barHeight + boxPad;
-                // Clamp to image bounds
-                boxLeft = Math.max(0, boxLeft);
-                boxTop = Math.max(0, boxTop);
-                boxRight = Math.min(imageWidth, boxRight);
-                boxBottom = Math.min(imageHeight, boxBottom);
-
-                Composite prevComposite = g2d.getComposite();
-                g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.65f));
-                g2d.setColor(outline);
-                g2d.fillRoundRect(boxLeft, boxTop,
-                        boxRight - boxLeft, boxBottom - boxTop,
-                        boxPad, boxPad);
-                g2d.setComposite(prevComposite);
-            }
+            int boxPad = Math.max(6, margin / 4);
+            int boxLeft = Math.min(barX, textX) - boxPad;
+            int boxTop = textY - textHeight - boxPad;
+            int boxRight = Math.max(barX + barLengthPx, textX + textWidth) + boxPad;
+            int boxBottom = barY + barHeight + boxPad;
+            TextRenderUtils.Ink ink = TextRenderUtils.resolveInk(background, primary, backdrop,
+                    boxLeft, boxTop, boxRight - boxLeft, boxBottom - boxTop);
+            Color outline = ink.outline();
+            TextRenderUtils.fillBox(g2d, ink, boxLeft, boxTop, boxRight - boxLeft,
+                    boxBottom - boxTop, imageWidth, imageHeight, boxPad);
 
             // Draw bar with contrast outline
             g2d.setColor(outline);

@@ -51,6 +51,7 @@ import qupath.ext.quiet.export.RenderedExportConfig;
 import qupath.ext.quiet.export.RenderedExportConfig.DisplaySettingsMode;
 import qupath.ext.quiet.export.RenderedImageExporter;
 import qupath.ext.quiet.export.ScaleBarRenderer;
+import qupath.ext.quiet.export.TextBackground;
 import qupath.ext.quiet.export.TiffDescription;
 import qupath.ext.quiet.preferences.QuietPreferences;
 import qupath.fx.utils.FXUtils;
@@ -112,6 +113,15 @@ public class RenderedConfigPane extends VBox {
     private CheckBox scaleBarBackgroundBoxCheck;
     private Label scaleBarColorHintLabel;
     private CheckBox showChannelLegendCheck;
+    private CheckBox showObjectLegendCheck;
+    private Label legendPositionLabel;
+    private ComboBox<ScaleBarRenderer.Position> legendPositionCombo;
+    private Label textBackgroundLabel;
+    private ComboBox<TextBackground> textBackgroundCombo;
+    private Label textColorLabel;
+    private CheckBox textColorAutoCheck;
+    private ColorPicker textColorPicker;
+    private HBox textColorBox;
     private Button previewButton;
 
     // Density map controls
@@ -438,6 +448,8 @@ public class RenderedConfigPane extends VBox {
         showInfoLabelCheck.selectedProperty().addListener((o, a, b) -> warn.run());
         infoLabelPositionCombo.valueProperty().addListener((o, a, b) -> warn.run());
         showChannelLegendCheck.selectedProperty().addListener((o, a, b) -> warn.run());
+        showObjectLegendCheck.selectedProperty().addListener((o, a, b) -> warn.run());
+        legendPositionCombo.valueProperty().addListener((o, a, b) -> warn.run());
         splitChannelsCheck.selectedProperty().addListener((o, a, b) -> warn.run());
         channelColorLegendPositionCombo.valueProperty().addListener((o, a, b) -> warn.run());
         updateOverlayCollisionWarning();
@@ -687,6 +699,37 @@ public class RenderedConfigPane extends VBox {
         grid.add(showChannelLegendCheck, 0, row, 2, 1);
         row++;
 
+        // Object class legend, sharing the legend corner
+        showObjectLegendCheck = new CheckBox(resources.getString("rendered.label.showObjectLegend"));
+        grid.add(showObjectLegendCheck, 0, row, 2, 1);
+        row++;
+        legendPositionLabel = new Label(resources.getString("rendered.label.legendPosition"));
+        grid.add(legendPositionLabel, 0, row);
+        legendPositionCombo = new ComboBox<>(FXCollections.observableArrayList(
+                ScaleBarRenderer.Position.values()));
+        legendPositionCombo.setValue(ScaleBarRenderer.Position.UPPER_LEFT);
+        legendPositionCombo.setConverter(positionConverter(ScaleBarRenderer.Position.UPPER_LEFT));
+        grid.add(legendPositionCombo, 1, row);
+        row++;
+
+        // How every text block on the image is kept readable
+        textBackgroundLabel = new Label(resources.getString("rendered.label.textBackground"));
+        grid.add(textBackgroundLabel, 0, row);
+        textBackgroundCombo = new ComboBox<>(FXCollections.observableArrayList(TextBackground.values()));
+        textBackgroundCombo.setValue(TextBackground.AUTO);
+        grid.add(textBackgroundCombo, 1, row);
+        row++;
+        textColorLabel = new Label(resources.getString("rendered.label.textColor"));
+        grid.add(textColorLabel, 0, row);
+        textColorAutoCheck = new CheckBox(resources.getString("rendered.textColor.auto"));
+        textColorAutoCheck.setSelected(true);
+        textColorPicker = new ColorPicker(javafx.scene.paint.Color.WHITE);
+        textColorPicker.disableProperty().bind(textColorAutoCheck.selectedProperty());
+        textColorBox = new HBox(10, textColorAutoCheck, textColorPicker);
+        textColorBox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        grid.add(textColorBox, 1, row);
+        row++;
+
         // Format combo
         formatLabel = new Label(resources.getString("rendered.label.format"));
         grid.add(formatLabel, 0, row);
@@ -734,6 +777,37 @@ public class RenderedConfigPane extends VBox {
 
         return SectionBuilder.createSection(
                 resources.getString("rendered.section.imageSettings"), true, grid);
+    }
+
+    /** A saved corner name, or {@code fallback} if it is not one. */
+    private static ScaleBarRenderer.Position parsePosition(String name,
+                                                           ScaleBarRenderer.Position fallback) {
+        try {
+            return ScaleBarRenderer.Position.valueOf(name);
+        } catch (IllegalArgumentException | NullPointerException e) {
+            return fallback;
+        }
+    }
+
+    /** Corner names for a position combo box. */
+    private StringConverter<ScaleBarRenderer.Position> positionConverter(
+            ScaleBarRenderer.Position fallback) {
+        return new StringConverter<>() {
+            @Override
+            public String toString(ScaleBarRenderer.Position pos) {
+                if (pos == null) return "";
+                return switch (pos) {
+                    case LOWER_RIGHT -> resources.getString("rendered.scaleBar.lowerRight");
+                    case LOWER_LEFT -> resources.getString("rendered.scaleBar.lowerLeft");
+                    case UPPER_RIGHT -> resources.getString("rendered.scaleBar.upperRight");
+                    case UPPER_LEFT -> resources.getString("rendered.scaleBar.upperLeft");
+                };
+            }
+            @Override
+            public ScaleBarRenderer.Position fromString(String s) {
+                return fallback;
+            }
+        };
     }
 
     private TitledPane buildOverlaySourceSection() {
@@ -1971,6 +2045,13 @@ public class RenderedConfigPane extends VBox {
         setVisibleManaged(fillAnnotationsCheck, true);
         setVisibleManaged(showNamesCheck, true);
         setVisibleManaged(showChannelLegendCheck, true);
+        setVisibleManaged(showObjectLegendCheck, true);
+        setVisibleManaged(legendPositionLabel, true);
+        setVisibleManaged(legendPositionCombo, true);
+        setVisibleManaged(textBackgroundLabel, true);
+        setVisibleManaged(textBackgroundCombo, true);
+        setVisibleManaged(textColorLabel, true);
+        setVisibleManaged(textColorBox, true);
         setVisibleManaged(formatInfoLabel, true);
         setVisibleManaged(infoLabelSection, true);
 
@@ -2088,9 +2169,13 @@ public class RenderedConfigPane extends VBox {
         // Info label section
         infoLabelSection.setVisible(false);
         infoLabelSection.setManaged(false);
-        // Channel legend
-        showChannelLegendCheck.setVisible(false);
-        showChannelLegendCheck.setManaged(false);
+        // Legends and text style (Auto readable text is the default)
+        for (var node : new javafx.scene.Node[]{showChannelLegendCheck, showObjectLegendCheck,
+                legendPositionLabel, legendPositionCombo, textBackgroundLabel,
+                textBackgroundCombo, textColorLabel, textColorBox}) {
+            node.setVisible(false);
+            node.setManaged(false);
+        }
         // Format info note
         formatInfoLabel.setVisible(false);
         formatInfoLabel.setManaged(false);
@@ -2246,6 +2331,14 @@ public class RenderedConfigPane extends VBox {
         scaleBarBoldCheck.setTooltip(createTooltip("tooltip.rendered.scaleBarBold"));
         scaleBarBackgroundBoxCheck.setTooltip(createTooltip("tooltip.rendered.scaleBarBackgroundBox"));
         showChannelLegendCheck.setTooltip(createTooltip("tooltip.rendered.showChannelLegend"));
+        showObjectLegendCheck.setTooltip(createTooltip("tooltip.rendered.showObjectLegend"));
+        legendPositionCombo.setTooltip(createTooltip("tooltip.rendered.legendPosition"));
+        legendPositionLabel.setTooltip(createTooltip("tooltip.rendered.legendPosition"));
+        textBackgroundCombo.setTooltip(createTooltip("tooltip.rendered.textBackground"));
+        textBackgroundLabel.setTooltip(createTooltip("tooltip.rendered.textBackground"));
+        textColorAutoCheck.setTooltip(createTooltip("tooltip.rendered.textColor"));
+        textColorPicker.setTooltip(createTooltip("tooltip.rendered.textColor"));
+        textColorLabel.setTooltip(createTooltip("tooltip.rendered.textColor"));
         previewButton.setTooltip(createTooltip("tooltip.rendered.previewImage"));
 
         // Color scale bar controls + labels
@@ -2480,6 +2573,19 @@ public class RenderedConfigPane extends VBox {
         scaleBarBoldCheck.setSelected(QuietPreferences.isRenderedScaleBarBold());
         scaleBarBackgroundBoxCheck.setSelected(QuietPreferences.isRenderedScaleBarBackgroundBox());
         showChannelLegendCheck.setSelected(QuietPreferences.isRenderedShowChannelLegend());
+        showObjectLegendCheck.setSelected(QuietPreferences.isRenderedShowObjectLegend());
+        legendPositionCombo.setValue(parsePosition(QuietPreferences.getRenderedLegendPosition(),
+                ScaleBarRenderer.Position.UPPER_LEFT));
+        textBackgroundCombo.setValue(TextBackground.parse(QuietPreferences.getRenderedTextBackground()));
+        String savedTextColor = QuietPreferences.getRenderedTextColor();
+        textColorAutoCheck.setSelected(savedTextColor == null || savedTextColor.isBlank());
+        if (savedTextColor != null && !savedTextColor.isBlank()) {
+            try {
+                textColorPicker.setValue(javafx.scene.paint.Color.web(savedTextColor));
+            } catch (IllegalArgumentException e) {
+                textColorAutoCheck.setSelected(true);
+            }
+        }
 
         // Smart default: auto-detect scale bar color from project image types
         // Only applies when the color is still the default white (#FFFFFF)
@@ -2635,6 +2741,13 @@ public class RenderedConfigPane extends VBox {
         QuietPreferences.setRenderedScaleBarBold(scaleBarBoldCheck.isSelected());
         QuietPreferences.setRenderedScaleBarBackgroundBox(scaleBarBackgroundBoxCheck.isSelected());
         QuietPreferences.setRenderedShowChannelLegend(showChannelLegendCheck.isSelected());
+        QuietPreferences.setRenderedShowObjectLegend(showObjectLegendCheck.isSelected());
+        QuietPreferences.setRenderedLegendPosition(legendPositionCombo.getValue() != null
+                ? legendPositionCombo.getValue().name() : "UPPER_LEFT");
+        QuietPreferences.setRenderedTextBackground(textBackgroundCombo.getValue() != null
+                ? textBackgroundCombo.getValue().name() : "AUTO");
+        QuietPreferences.setRenderedTextColor(textColorAutoCheck.isSelected()
+                ? "" : fxColorToHex(textColorPicker.getValue()));
         var densityMap = densityMapCombo.getValue();
         if (densityMap != null) QuietPreferences.setRenderedDensityMapName(densityMap);
         var colormap = colormapCombo.getValue();
@@ -2743,6 +2856,11 @@ public class RenderedConfigPane extends VBox {
                 .downsample(downsampleCombo.getValue() != null ? downsampleCombo.getValue() : 4.0)
                 .format(formatCombo.getValue())
                 .showChannelLegend(showChannelLegendCheck.isSelected())
+                .showObjectLegend(showObjectLegendCheck.isSelected())
+                .legendPosition(legendPositionCombo.getValue())
+                .textBackground(textBackgroundCombo.getValue())
+                .textColorHex(textColorAutoCheck.isSelected()
+                        ? "" : fxColorToHex(textColorPicker.getValue()))
                 .outputDirectory(outputDir)
                 .includeAnnotations(includeAnnotationsCheck.isSelected())
                 .includeDetections(includeDetectionsCheck.isSelected())
@@ -2899,17 +3017,18 @@ public class RenderedConfigPane extends VBox {
                 showInfoLabelCheck != null && showInfoLabelCheck.isSelected(),
                 infoLabelPositionCombo != null ? infoLabelPositionCombo.getValue() : null,
                 "Info label");
-        // Channel/stain legend either via top-level toggle or the split-channel
-        // swatch toggle. Both place themselves at the channel-legend position.
+        // Channel/stain and object legend: one block, in the split-channel legend's
+        // corner when split channels are on, otherwise in the legend corner
+        boolean split = splitChannelsCheck != null && splitChannelsCheck.isSelected();
         boolean legendOn = (showChannelLegendCheck != null
                 && showChannelLegendCheck.isSelected())
-                || (splitChannelsCheck != null && splitChannelsCheck.isSelected()
-                        && channelColorLegendCheck != null
+                || (showObjectLegendCheck != null && showObjectLegendCheck.isSelected())
+                || (split && channelColorLegendCheck != null
                         && channelColorLegendCheck.isSelected());
-        addOverlayPlacement(byCorner, legendOn,
-                channelColorLegendPositionCombo != null
-                        ? channelColorLegendPositionCombo.getValue() : null,
-                "Channel/stain legend");
+        var legendCorner = split
+                ? (channelColorLegendPositionCombo != null ? channelColorLegendPositionCombo.getValue() : null)
+                : (legendPositionCombo != null ? legendPositionCombo.getValue() : null);
+        addOverlayPlacement(byCorner, legendOn, legendCorner, "Legend");
 
         var collisions = new java.util.ArrayList<String>();
         for (var entry : byCorner.entrySet()) {

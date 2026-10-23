@@ -153,6 +153,11 @@ public class ExportMetadataWriter {
             for (String line : mapOverlayLines(renderedConfig)) {
                 pw.println(line);
             }
+            if (category == ExportCategory.RENDERED) {
+                for (String line : textOverlayLines(renderedConfig)) {
+                    pw.println(line);
+                }
+            }
 
             // Tiled export parameters
             if (category == ExportCategory.TILED && tiledConfig != null) {
@@ -239,6 +244,96 @@ public class ExportMetadataWriter {
     }
 
     /**
+     * Lines recording the text drawn on a rendered export and how it is kept readable, so
+     * the figure can be made again from its record.
+     *
+     * @param config the rendered configuration, may be null
+     * @return the lines, ending with a blank line; empty if config is null
+     */
+    static List<String> textOverlayLines(RenderedExportConfig config) {
+        if (config == null) {
+            return List.of();
+        }
+        var lines = new java.util.ArrayList<String>();
+        lines.add("Text and Legends");
+        lines.add("----------------");
+        var style = config.textStyle();
+        lines.add("Text background: " + style.background().getDisplayName() + switch (style.background()) {
+            case OUTLINE -> " (a 1 px outline in the contrasting color)";
+            case BOX -> " (a box at 65% opacity in the contrasting color behind each block)";
+            case AUTO -> " (outline only where the text reaches 4.5:1 contrast on all of the image"
+                    + " under it, otherwise a box at 65% opacity)";
+        });
+        lines.add("Text color: " + (style.isAutoColor()
+                ? "Auto (black on light areas, white on dark ones, by the mean luminance under each block)"
+                : toHex(style.colorOrNull())));
+        var sb = config.scaleBar();
+        lines.add("Scale bar: " + (sb.show()
+                ? sb.position().name() + ", color " + sb.colorHex() + ", font "
+                        + fontSize(sb.fontSize()) + (sb.bold() ? ", bold" : "")
+                        + (sb.backgroundBox() ? ", box always" : ", background as the text")
+                : "off"));
+        var info = config.infoLabel();
+        lines.add("Info label: " + (info.show()
+                ? "\"" + nullToEmpty(info.text()) + "\", " + info.position().name() + ", font "
+                        + fontSize(info.fontSize()) + (info.bold() ? ", bold" : "")
+                : "off"));
+        var panel = config.panelLabel();
+        lines.add("Panel label: " + (panel.show()
+                ? (panel.text() == null || panel.text().isBlank()
+                        ? "letters A, B, C..." : "\"" + panel.text() + "\"")
+                        + ", " + panel.position().name() + ", font " + fontSize(panel.fontSize())
+                        + (panel.bold() ? ", bold" : "")
+                : "off"));
+        boolean channelLegend = RenderedImageExporter.wantChannelLegend(config);
+        lines.add("Channel/stain legend: " + (channelLegend ? "on" : "off"));
+        lines.add("Object class legend: " + (config.isShowObjectLegend() ? "on" : "off"));
+        if (channelLegend || config.isShowObjectLegend()) {
+            lines.add("Legend corner: " + (config.splitChannel().enabled()
+                    ? config.splitChannel().colorLegendPosition().name()
+                    : config.getLegendPosition().name()));
+        }
+        if (config.getRenderMode() == RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY) {
+            var cs = config.colorScaleBar();
+            lines.add("Color scale bar: " + (cs.show()
+                    ? cs.position().name() + ", font " + fontSize(cs.fontSize())
+                            + (cs.bold() ? ", bold" : "")
+                            + (config.mapOverlay().label() == null
+                                    || config.mapOverlay().label().isBlank()
+                                    ? "" : ", title \"" + config.mapOverlay().label() + "\"")
+                    : "off"));
+        }
+        lines.add("");
+        return lines;
+    }
+
+    /**
+     * Lines recording where a panel put its legends.
+     *
+     * @param outcome what the panel did with each legend part, from the export
+     * @return the lines, ending with a blank line
+     */
+    static List<String> panelLegendLines(PanelExportConfig config, List<String> outcome) {
+        var lines = new java.util.ArrayList<String>();
+        lines.add("Panel Legends and Text");
+        lines.add("----------------------");
+        lines.add("Legend: " + config.getLegendMode().getDisplayName());
+        lines.addAll(outcome);
+        lines.add("Panel letters and scale bars: text background "
+                + config.getTextBackground().getDisplayName());
+        lines.add("");
+        return lines;
+    }
+
+    private static String fontSize(int size) {
+        return size > 0 ? size + " px" : "auto";
+    }
+
+    private static String nullToEmpty(String s) {
+        return s == null ? "" : s;
+    }
+
+    /**
      * Write a {@code panel_figure_info.txt} provenance sidecar next to a
      * composed panel / montage figure.
      * <p>
@@ -262,7 +357,7 @@ public class ExportMetadataWriter {
                                        int figureHeight,
                                        int composedCells,
                                        int skipped,
-                                       List<String> mapOverlayLines) {
+                                       List<String> recordLines) {
         if (figureFile == null) {
             return;
         }
@@ -328,7 +423,7 @@ public class ExportMetadataWriter {
             writeRecipeSettings(pw, config);
             pw.println();
 
-            for (String line : mapOverlayLines) {
+            for (String line : recordLines) {
                 pw.println(line);
             }
 

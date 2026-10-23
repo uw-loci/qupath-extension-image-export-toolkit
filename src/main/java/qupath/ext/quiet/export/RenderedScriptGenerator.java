@@ -161,102 +161,6 @@ class RenderedScriptGenerator {
     }
 
     /**
-     * Emit a self-contained drawScaleBar Groovy function.
-     * Accepts RGB ints, font size (0 = auto), and bold flag.
-     */
-    private static void emitScaleBarFunction(StringBuilder sb) {
-        appendLine(sb, "// Scale bar drawing function");
-        appendLine(sb, "def drawScaleBar(Graphics2D g2d, int imgW, int imgH, double pxSize, String pos, int colR, int colG, int colB, int fSize, boolean bold, boolean bgBox) {");
-        appendLine(sb, "    if (pxSize <= 0) return");
-        appendLine(sb, "    def niceLengths = [0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 250, 500, 1000, 2000, 5000, 10000, 20000, 50000]");
-        appendLine(sb, "    double target = imgW * pxSize * 0.15");
-        appendLine(sb, "    double barUm = niceLengths.min { Math.abs(it - target) }");
-        appendLine(sb, "    int barPx = (int) Math.round(barUm / pxSize)");
-        appendLine(sb, "    if (barPx < 2) return");
-        appendLine(sb, "    int barH = Math.max(4, imgH / 150)");
-        appendLine(sb, "    int minDim = Math.min(imgW, imgH)");
-        appendLine(sb, "    int fontSize = fSize > 0 ? Math.max(4, Math.min(fSize, 200)) : Math.max(12, minDim / 50)");
-        appendLine(sb, "    int margin = Math.max(10, minDim / 40)");
-        appendLine(sb, "    // Shrink the bar to fit inside the image (bar + 2 * margin <= imgW).");
-        appendLine(sb, "    int maxBarPx = Math.max(2, imgW - 2 * margin)");
-        appendLine(sb, "    while (barPx > maxBarPx) {");
-        appendLine(sb, "        double shorter = niceLengths.findAll { it < barUm }.max() ?: 0");
-        appendLine(sb, "        if (shorter <= 0 || shorter >= barUm) {");
-        appendLine(sb, "            barPx = maxBarPx");
-        appendLine(sb, "            barUm = barPx * pxSize");
-        appendLine(sb, "            break");
-        appendLine(sb, "        }");
-        appendLine(sb, "        barUm = shorter");
-        appendLine(sb, "        barPx = (int) Math.round(barUm / pxSize)");
-        appendLine(sb, "        if (barPx < 2) return");
-        appendLine(sb, "    }");
-        appendLine(sb, "    String label = barUm >= 1000 ? String.format('%d mm', (int)(barUm / 1000)) : (barUm == Math.floor(barUm) ? String.format('%d \\u00B5m', (int)barUm) : String.format('%.1f \\u00B5m', barUm))");
-        appendLine(sb, "    int fontStyle = bold ? Font.BOLD : Font.PLAIN");
-        appendLine(sb, "    g2d.setFont(new Font(Font.SANS_SERIF, fontStyle, fontSize))");
-        appendLine(sb, "    def fm = g2d.getFontMetrics()");
-        appendLine(sb, "    int tw = fm.stringWidth(label)");
-        appendLine(sb, "    int th = fm.getAscent()");
-        appendLine(sb, "    int bx, by");
-        appendLine(sb, "    switch (pos) {");
-        appendLine(sb, "        case 'LOWER_LEFT': bx = margin; by = imgH - margin - barH; break");
-        appendLine(sb, "        case 'UPPER_RIGHT': bx = imgW - margin - barPx; by = margin + th + 4; break");
-        appendLine(sb, "        case 'UPPER_LEFT': bx = margin; by = margin + th + 4; break");
-        appendLine(sb, "        default: bx = imgW - margin - barPx; by = imgH - margin - barH; break");
-        appendLine(sb, "    }");
-        appendLine(sb, "    int tx = bx + (barPx - tw) / 2");
-        appendLine(sb, "    // Clamp text X so the label cannot overflow the image edges.");
-        appendLine(sb, "    tx = Math.max(margin, Math.min(tx, imgW - tw - margin))");
-        appendLine(sb, "    int ty = by - 4");
-        appendLine(sb, "    def primary = new Color(colR, colG, colB)");
-        appendLine(sb, "    double lum = (0.299 * colR + 0.587 * colG + 0.114 * colB) / 255.0");
-        appendLine(sb, "    def outline = lum > 0.5 ? Color.BLACK : Color.WHITE");
-        appendLine(sb, "    if (bgBox) {");
-        appendLine(sb, "        int boxPad = Math.max(6, margin / 4)");
-        appendLine(sb, "        int boxL = Math.max(0, Math.min(bx, tx) - boxPad)");
-        appendLine(sb, "        int boxT = Math.max(0, ty - th - boxPad)");
-        appendLine(sb, "        int boxR = Math.min(imgW, Math.max(bx + barPx, tx + tw) + boxPad)");
-        appendLine(sb, "        int boxB = Math.min(imgH, by + barH + boxPad)");
-        appendLine(sb, "        def prevComp = g2d.getComposite()");
-        appendLine(sb, "        g2d.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, 0.65f))");
-        appendLine(sb, "        g2d.setColor(outline)");
-        appendLine(sb, "        g2d.fillRoundRect(boxL, boxT, boxR - boxL, boxB - boxT, boxPad, boxPad)");
-        appendLine(sb, "        g2d.setComposite(prevComp)");
-        appendLine(sb, "    }");
-        appendLine(sb, "    g2d.setColor(outline)");
-        appendLine(sb, "    g2d.fillRect(bx - 1, by - 1, barPx + 2, barH + 2)");
-        appendLine(sb, "    g2d.setColor(primary)");
-        appendLine(sb, "    g2d.fillRect(bx, by, barPx, barH)");
-        appendLine(sb, "    for (int dx = -1; dx <= 1; dx++) {");
-        appendLine(sb, "        for (int dy = -1; dy <= 1; dy++) {");
-        appendLine(sb, "            if (dx != 0 || dy != 0) { g2d.setColor(outline); g2d.drawString(label, tx + dx, ty + dy) }");
-        appendLine(sb, "        }");
-        appendLine(sb, "    }");
-        appendLine(sb, "    g2d.setColor(primary)");
-        appendLine(sb, "    g2d.drawString(label, tx, ty)");
-        appendLine(sb, "}");
-        appendLine(sb, "");
-    }
-
-    /**
-     * Emit per-image scale bar drawing code (after overlay painting, before g2d.dispose).
-     * Expects variables: baseServer, imageData, g2d, downsample, showScaleBar,
-     * scaleBarPosition, scaleBarColorR/G/B, scaleBarFontSize, scaleBarBoldText
-     * and outW, outH (output image dimensions).
-     */
-    private static void emitScaleBarDrawing(StringBuilder sb) {
-        appendLine(sb, "        if (showScaleBar) {");
-        appendLine(sb, "            def cal = imageData.getServer().getPixelCalibration()");
-        appendLine(sb, "            if (cal.hasPixelSizeMicrons()) {");
-        appendLine(sb, "                double pxSize = cal.getAveragedPixelSizeMicrons() * downsample");
-        appendLine(sb, "                g2d.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, 1.0f))");
-        appendLine(sb, "                drawScaleBar(g2d, outW, outH, pxSize, scaleBarPosition, scaleBarColorR, scaleBarColorG, scaleBarColorB, scaleBarFontSize, scaleBarBoldText, scaleBarBackgroundBox)");
-        appendLine(sb, "            } else {");
-        appendLine(sb, "                println \"  WARNING: Scale bar skipped -- no pixel calibration\"");
-        appendLine(sb, "            }");
-        appendLine(sb, "        }");
-    }
-
-    /**
      * Emit per-image display server wrapping code (inside the try block, after baseServer).
      * Sets up readServer variable that should be used instead of baseServer for image reads.
      */
@@ -298,112 +202,6 @@ class RenderedScriptGenerator {
         appendLine(sb, "def colorScaleBarPosition = " + quote(config.colorScaleBar().position().name()));
         appendLine(sb, "def colorScaleBarFontSize = " + config.colorScaleBar().fontSize());
         appendLine(sb, "def colorScaleBarBoldText = " + config.colorScaleBar().bold());
-    }
-
-    /**
-     * Emit a self-contained drawColorScaleBar Groovy function.
-     * Draws a vertical gradient bar with tick labels using the colorMap.
-     */
-    private static void emitColorScaleBarFunction(StringBuilder sb) {
-        appendLine(sb, "// Color scale bar drawing function");
-        appendLine(sb, "def drawColorScaleBar(Graphics2D g2d, int imgW, int imgH, colorMap, double minVal, double maxVal, String pos, int fSize, boolean bold, String title) {");
-        appendLine(sb, "    if (imgW <= 0 || imgH <= 0) return");
-        appendLine(sb, "    int minDim = Math.min(imgW, imgH)");
-        appendLine(sb, "    int fontSize = fSize > 0 ? Math.max(4, Math.min(fSize, 200)) : Math.max(12, minDim / 50)");
-        appendLine(sb, "    int margin = Math.max(10, minDim / 40)");
-        appendLine(sb, "    int barH = Math.min(imgH / 4, Math.max(60, imgH / 4))");
-        appendLine(sb, "    int barW = Math.max(10, barH / 6)");
-        appendLine(sb, "    int fontStyle = bold ? Font.BOLD : Font.PLAIN");
-        appendLine(sb, "    g2d.setFont(new Font(Font.SANS_SERIF, fontStyle, fontSize))");
-        appendLine(sb, "    def fm = g2d.getFontMetrics()");
-        appendLine(sb, "    int tickCount = 5");
-        appendLine(sb, "    def tickLabels = []");
-        appendLine(sb, "    int maxLabelW = 0");
-        appendLine(sb, "    for (int i = 0; i < tickCount; i++) {");
-        appendLine(sb, "        double t = (double) i / (tickCount - 1)");
-        appendLine(sb, "        double v = minVal + t * (maxVal - minVal)");
-        appendLine(sb, "        String lbl = (v == 0) ? '0' : (Math.abs(v) >= 1 && v == Math.floor(v) ? String.format('%d', (long)v) : (Math.abs(v) < 0.01 ? String.format('%.1e', v) : String.format('%.2f', v)))");
-        appendLine(sb, "        tickLabels.add(lbl)");
-        appendLine(sb, "        maxLabelW = Math.max(maxLabelW, fm.stringWidth(lbl))");
-        appendLine(sb, "    }");
-        appendLine(sb, "    int tickLen = 4");
-        appendLine(sb, "    int labelGap = 4");
-        appendLine(sb, "    int totalW = barW + tickLen + labelGap + maxLabelW");
-        appendLine(sb, "    int th = fm.getAscent()");
-        appendLine(sb, "    int bx, by");
-        appendLine(sb, "    switch (pos) {");
-        appendLine(sb, "        case 'LOWER_LEFT': bx = margin; by = imgH - margin - barH; break");
-        appendLine(sb, "        case 'UPPER_RIGHT': bx = imgW - margin - totalW; by = margin; break");
-        appendLine(sb, "        case 'UPPER_LEFT': bx = margin; by = margin; break");
-        appendLine(sb, "        default: bx = imgW - margin - totalW; by = imgH - margin - barH; break");
-        appendLine(sb, "    }");
-        appendLine(sb, "    boolean hasTitle = title != null && !title.isBlank()");
-        appendLine(sb, "    int titleX = 0, titleY = 0");
-        appendLine(sb, "    if (hasTitle) {");
-        appendLine(sb, "        int titleGap = Math.max(4, (int) (th / 2))");
-        appendLine(sb, "        int titleW = fm.stringWidth(title)");
-        appendLine(sb, "        boolean upper = pos == 'UPPER_LEFT' || pos == 'UPPER_RIGHT'");
-        appendLine(sb, "        boolean right = !(pos == 'UPPER_LEFT' || pos == 'LOWER_LEFT')");
-        appendLine(sb, "        if (upper) {");
-        appendLine(sb, "            titleY = by + barH + titleGap + th");
-        appendLine(sb, "        } else {");
-        appendLine(sb, "            by -= th + titleGap");
-        appendLine(sb, "            titleY = by - titleGap");
-        appendLine(sb, "        }");
-        appendLine(sb, "        titleX = right ? bx + totalW - titleW : bx");
-        appendLine(sb, "        titleX = Math.max(margin, Math.min(titleX, imgW - margin - titleW))");
-        appendLine(sb, "    }");
-        appendLine(sb, "    double range = maxVal - minVal");
-        appendLine(sb, "    for (int row = 0; row < barH; row++) {");
-        appendLine(sb, "        double t = 1.0 - (double) row / Math.max(1, barH - 1)");
-        appendLine(sb, "        double v = minVal + t * range");
-        appendLine(sb, "        int rgb = colorMap.getColor(v, minVal, maxVal)");
-        appendLine(sb, "        g2d.setColor(new Color(rgb))");
-        appendLine(sb, "        g2d.fillRect(bx, by + row, barW, 1)");
-        appendLine(sb, "    }");
-        appendLine(sb, "    g2d.setColor(Color.WHITE)");
-        appendLine(sb, "    g2d.drawRect(bx - 1, by - 1, barW + 1, barH + 1)");
-        appendLine(sb, "    for (int i = 0; i < tickCount; i++) {");
-        appendLine(sb, "        double t = (double) i / (tickCount - 1)");
-        appendLine(sb, "        int ty = by + barH - 1 - (int) Math.round(t * (barH - 1))");
-        appendLine(sb, "        g2d.setColor(Color.WHITE)");
-        appendLine(sb, "        g2d.drawLine(bx + barW, ty, bx + barW + tickLen, ty)");
-        appendLine(sb, "        int lx = bx + barW + tickLen + labelGap");
-        appendLine(sb, "        int ly = Math.max(by + th, Math.min(ty + th / 2 - 1, by + barH))");
-        appendLine(sb, "        def lbl = tickLabels[i]");
-        appendLine(sb, "        g2d.setColor(Color.BLACK)");
-        appendLine(sb, "        for (int dx = -1; dx <= 1; dx++) {");
-        appendLine(sb, "            for (int dy = -1; dy <= 1; dy++) {");
-        appendLine(sb, "                if (dx != 0 || dy != 0) g2d.drawString(lbl, lx + dx, ly + dy)");
-        appendLine(sb, "            }");
-        appendLine(sb, "        }");
-        appendLine(sb, "        g2d.setColor(Color.WHITE)");
-        appendLine(sb, "        g2d.drawString(lbl, lx, ly)");
-        appendLine(sb, "    }");
-        appendLine(sb, "    if (hasTitle) {");
-        appendLine(sb, "        g2d.setColor(Color.BLACK)");
-        appendLine(sb, "        for (int dx = -1; dx <= 1; dx++) {");
-        appendLine(sb, "            for (int dy = -1; dy <= 1; dy++) {");
-        appendLine(sb, "                if (dx != 0 || dy != 0) g2d.drawString(title, titleX + dx, titleY + dy)");
-        appendLine(sb, "            }");
-        appendLine(sb, "        }");
-        appendLine(sb, "        g2d.setColor(Color.WHITE)");
-        appendLine(sb, "        g2d.drawString(title, titleX, titleY)");
-        appendLine(sb, "    }");
-        appendLine(sb, "}");
-        appendLine(sb, "");
-    }
-
-    /**
-     * Emit per-image color scale bar drawing code.
-     */
-    private static void emitColorScaleBarDrawing(StringBuilder sb) {
-        appendLine(sb, "        if (showColorScaleBar && mapLayer?.classNames != null) {");
-        appendLine(sb, "            drawMapClassLegend(g2d, mapLayer, outW, outH, colorScaleBarPosition)");
-        appendLine(sb, "        } else if (showColorScaleBar) {");
-        appendLine(sb, "            g2d.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, 1.0f))");
-        appendLine(sb, "            drawColorScaleBar(g2d, outW, outH, colorMap, densityMin, densityMax, colorScaleBarPosition, colorScaleBarFontSize, colorScaleBarBoldText, colorScaleBarTitle)");
-        appendLine(sb, "        }");
     }
 
     /**
@@ -466,67 +264,6 @@ class RenderedScriptGenerator {
         appendLine(sb, "def panelLabelBold = " + config.panelLabel().bold());
     }
 
-    /**
-     * Emit a self-contained drawPanelLabel Groovy function.
-     * Uses the same 8-direction outlined text technique as the scale bar.
-     */
-    private static void emitPanelLabelFunction(StringBuilder sb) {
-        appendLine(sb, "// Panel label drawing function");
-        appendLine(sb, "def drawPanelLabel(Graphics2D g2d, int imgW, int imgH, String label, String pos, int fSize, boolean bold) {");
-        appendLine(sb, "    if (label == null || label.isEmpty()) return");
-        appendLine(sb, "    int minDim = Math.min(imgW, imgH)");
-        appendLine(sb, "    int fontSize = fSize > 0 ? Math.max(4, Math.min(fSize, 200)) : Math.max(14, minDim / 25)");
-        appendLine(sb, "    int margin = Math.max(10, minDim / 40)");
-        appendLine(sb, "    int fontStyle = bold ? Font.BOLD : Font.PLAIN");
-        appendLine(sb, "    g2d.setFont(new Font(Font.SANS_SERIF, fontStyle, fontSize))");
-        appendLine(sb, "    def fm = g2d.getFontMetrics()");
-        appendLine(sb, "    int tw = fm.stringWidth(label)");
-        appendLine(sb, "    int ta = fm.getAscent()");
-        appendLine(sb, "    int tx, ty");
-        appendLine(sb, "    switch (pos) {");
-        appendLine(sb, "        case 'LOWER_LEFT': tx = margin; ty = imgH - margin; break");
-        appendLine(sb, "        case 'UPPER_RIGHT': tx = imgW - margin - tw; ty = margin + ta; break");
-        appendLine(sb, "        case 'UPPER_LEFT': tx = margin; ty = margin + ta; break");
-        appendLine(sb, "        default: tx = imgW - margin - tw; ty = imgH - margin; break");
-        appendLine(sb, "    }");
-        appendLine(sb, "    def primary = Color.WHITE");
-        appendLine(sb, "    def outline = Color.BLACK");
-        appendLine(sb, "    for (int dx = -1; dx <= 1; dx++) {");
-        appendLine(sb, "        for (int dy = -1; dy <= 1; dy++) {");
-        appendLine(sb, "            if (dx != 0 || dy != 0) { g2d.setColor(outline); g2d.drawString(label, tx + dx, ty + dy) }");
-        appendLine(sb, "        }");
-        appendLine(sb, "    }");
-        appendLine(sb, "    g2d.setColor(primary)");
-        appendLine(sb, "    g2d.drawString(label, tx, ty)");
-        appendLine(sb, "}");
-        appendLine(sb, "");
-    }
-
-    /**
-     * Emit per-image panel label drawing code (whole-image path).
-     * Uses variable 'i' from the for loop as the auto-increment index.
-     */
-    private static void emitPanelLabelDrawing(StringBuilder sb) {
-        appendLine(sb, "        if (showPanelLabel) {");
-        appendLine(sb, "            def label = panelLabelText != null ? panelLabelText : String.valueOf((char)('A' + (i % 26)))");
-        appendLine(sb, "            g2d.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, 1.0f))");
-        appendLine(sb, "            drawPanelLabel(g2d, outW, outH, label, panelLabelPosition, panelLabelFontSize, panelLabelBold)");
-        appendLine(sb, "        }");
-    }
-
-    /**
-     * Emit per-annotation panel label drawing code.
-     * Uses a running 'annotationIndex' counter for auto-increment.
-     */
-    private static void emitAnnotationPanelLabelDrawing(StringBuilder sb) {
-        appendLine(sb, "            if (showPanelLabel) {");
-        appendLine(sb, "                def label = panelLabelText != null ? panelLabelText : String.valueOf((char)('A' + (annotationIndex % 26)))");
-        appendLine(sb, "                g2d.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, 1.0f))");
-        appendLine(sb, "                drawPanelLabel(g2d, outW, outH, label, panelLabelPosition, panelLabelFontSize, panelLabelBold)");
-        appendLine(sb, "                annotationIndex++");
-        appendLine(sb, "            }");
-    }
-
     // ------------------------------------------------------------------
     // Info label helpers
     // ------------------------------------------------------------------
@@ -543,101 +280,91 @@ class RenderedScriptGenerator {
         appendLine(sb, "def infoLabelBold = " + config.infoLabel().bold());
     }
 
+    // ------------------------------------------------------------------
+    // Text and legends
+    // ------------------------------------------------------------------
+
     /**
-     * Emit a self-contained drawInfoLabel Groovy function.
-     * Uses the same 8-direction outlined text technique but smaller default size.
+     * Emit the text style and legend variables.
      */
-    private static void emitInfoLabelFunction(StringBuilder sb) {
-        appendLine(sb, "// Info label drawing function");
-        appendLine(sb, "def drawInfoLabel(Graphics2D g2d, int imgW, int imgH, String label, String pos, int fSize, boolean bold) {");
-        appendLine(sb, "    if (label == null || label.isEmpty()) return");
-        appendLine(sb, "    int minDim = Math.min(imgW, imgH)");
-        appendLine(sb, "    int fontSize = fSize > 0 ? Math.max(4, Math.min(fSize, 200)) : Math.max(12, minDim / 40)");
-        appendLine(sb, "    int margin = Math.max(10, minDim / 40)");
-        appendLine(sb, "    int fontStyle = bold ? Font.BOLD : Font.PLAIN");
-        appendLine(sb, "    g2d.setFont(new Font(Font.SANS_SERIF, fontStyle, fontSize))");
-        appendLine(sb, "    def fm = g2d.getFontMetrics()");
-        appendLine(sb, "    int tw = fm.stringWidth(label)");
-        appendLine(sb, "    int ta = fm.getAscent()");
-        appendLine(sb, "    int tx, ty");
-        appendLine(sb, "    switch (pos) {");
-        appendLine(sb, "        case 'LOWER_LEFT': tx = margin; ty = imgH - margin; break");
-        appendLine(sb, "        case 'UPPER_RIGHT': tx = imgW - margin - tw; ty = margin + ta; break");
-        appendLine(sb, "        case 'UPPER_LEFT': tx = margin; ty = margin + ta; break");
-        appendLine(sb, "        default: tx = imgW - margin - tw; ty = imgH - margin; break");
-        appendLine(sb, "    }");
-        appendLine(sb, "    def primary = Color.WHITE");
-        appendLine(sb, "    def outline = Color.BLACK");
-        appendLine(sb, "    for (int dx = -1; dx <= 1; dx++) {");
-        appendLine(sb, "        for (int dy = -1; dy <= 1; dy++) {");
-        appendLine(sb, "            if (dx != 0 || dy != 0) { g2d.setColor(outline); g2d.drawString(label, tx + dx, ty + dy) }");
-        appendLine(sb, "        }");
-        appendLine(sb, "    }");
-        appendLine(sb, "    g2d.setColor(primary)");
-        appendLine(sb, "    g2d.drawString(label, tx, ty)");
-        appendLine(sb, "}");
+    private static void emitTextOverlayConfig(StringBuilder sb, RenderedExportConfig config) {
+        var style = config.textStyle();
+        appendLine(sb, "def textBackground = " + quote(style.background().name())
+                + "  // OUTLINE, BOX, or AUTO (a box only where the outline would not be readable)");
+        appendLine(sb, "def textColor = " + (style.isAutoColor() ? "null" : quote(style.colorHex().trim()))
+                + "  // '#RRGGBB', or null for Auto (black on light areas, white on dark ones)");
+        appendLine(sb, "def showChannelLegend = " + RenderedImageExporter.wantChannelLegend(config));
+        appendLine(sb, "def showObjectLegend = " + config.isShowObjectLegend());
+        var position = config.splitChannel().enabled()
+                ? config.splitChannel().colorLegendPosition() : config.getLegendPosition();
+        appendLine(sb, "def legendPosition = " + quote(position.name()));
+    }
+
+    /**
+     * Emit the map of text settings the drawing helper reads, built from the variables above.
+     */
+    private static void emitTextOverlayMap(StringBuilder sb, boolean density) {
+        appendLine(sb, "// The settings quietDrawTextOverlays reads");
+        appendLine(sb, "def textOverlay = [background: textBackground, textColor: textColor,");
+        appendLine(sb, "        showScaleBar: showScaleBar, scaleBarPosition: scaleBarPosition,");
+        appendLine(sb, "        scaleBarColor: new java.awt.Color(scaleBarColorR, scaleBarColorG, scaleBarColorB),");
+        appendLine(sb, "        scaleBarFontSize: scaleBarFontSize, scaleBarBold: scaleBarBoldText, scaleBarBox: scaleBarBackgroundBox,");
+        appendLine(sb, "        showPanelLabel: showPanelLabel, panelLabelPosition: panelLabelPosition,");
+        appendLine(sb, "        panelLabelFontSize: panelLabelFontSize, panelLabelBold: panelLabelBold,");
+        appendLine(sb, "        showInfoLabel: showInfoLabel, infoLabelPosition: infoLabelPosition,");
+        appendLine(sb, "        infoLabelFontSize: infoLabelFontSize, infoLabelBold: infoLabelBold,");
+        appendLine(sb, "        showChannelLegend: showChannelLegend, showObjectLegend: showObjectLegend, legendPosition: legendPosition,");
+        if (density) {
+            appendLine(sb, "        colorScaleBarPosition: colorScaleBarPosition, colorScaleBarFontSize: colorScaleBarFontSize,");
+            appendLine(sb, "        colorScaleBarBold: colorScaleBarBoldText,");
+        }
+        appendLine(sb, "        includeAnnotations: includeAnnotations, includeDetections: includeDetections,");
+        appendLine(sb, "        fillAnnotations: fillAnnotations]");
         appendLine(sb, "");
     }
 
     /**
-     * Emit per-image info label template resolution and drawing code.
-     * Resolves template placeholders ({imageName}, {pixelSize}, etc.) from imageData.
+     * Emit the call that draws the text on one image: scale bar, map scale, panel label,
+     * legend and info label, in QuIET's order.
+     *
+     * @param indent        line indent of the surrounding scope
+     * @param perAnnotation true inside the annotation loop (region ax, ay, aw, ah)
+     * @param hasClassifier true if a classifierName variable exists
+     * @param density       true if the script draws a map (densityMin, densityMax, mapLayer)
+     * @param objectsDrawn  Groovy expression, true when the objects were painted
      */
-    private static void emitInfoLabelDrawing(StringBuilder sb) {
-        appendLine(sb, "        if (showInfoLabel && infoLabelTemplate != null) {");
-        appendLine(sb, "            def infoText = infoLabelTemplate");
-        appendLine(sb, "            infoText = infoText.replace('{imageName}', imageName ?: '')");
-        appendLine(sb, "            def cal = imageData.getServer().getPixelCalibration()");
-        appendLine(sb, "            def pxStr = cal.hasPixelSizeMicrons() ? String.format('%.3f \\u00B5m/px', cal.getAveragedPixelSizeMicrons()) : 'uncalibrated'");
-        appendLine(sb, "            infoText = infoText.replace('{pixelSize}', pxStr)");
-        appendLine(sb, "            infoText = infoText.replace('{date}', java.time.LocalDate.now().toString())");
-        appendLine(sb, "            infoText = infoText.replace('{time}', java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern('HH:mm')))");
-        appendLine(sb, "            infoText = infoText.replace('{width}', String.valueOf(imageData.getServer().getWidth()))");
-        appendLine(sb, "            infoText = infoText.replace('{height}', String.valueOf(imageData.getServer().getHeight()))");
-        appendLine(sb, "            infoText = infoText.replace('{classifier}', classifierName ?: '')");
-        appendLine(sb, "            g2d.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, 1.0f))");
-        appendLine(sb, "            drawInfoLabel(g2d, outW, outH, infoText, infoLabelPosition, infoLabelFontSize, infoLabelBold)");
-        appendLine(sb, "        }");
-    }
-
-    /**
-     * Emit per-image info label drawing for object overlay scripts (no classifierName variable).
-     */
-    private static void emitInfoLabelDrawingNoClassifier(StringBuilder sb) {
-        appendLine(sb, "        if (showInfoLabel && infoLabelTemplate != null) {");
-        appendLine(sb, "            def infoText = infoLabelTemplate");
-        appendLine(sb, "            infoText = infoText.replace('{imageName}', imageName ?: '')");
-        appendLine(sb, "            def cal = imageData.getServer().getPixelCalibration()");
-        appendLine(sb, "            def pxStr = cal.hasPixelSizeMicrons() ? String.format('%.3f \\u00B5m/px', cal.getAveragedPixelSizeMicrons()) : 'uncalibrated'");
-        appendLine(sb, "            infoText = infoText.replace('{pixelSize}', pxStr)");
-        appendLine(sb, "            infoText = infoText.replace('{date}', java.time.LocalDate.now().toString())");
-        appendLine(sb, "            infoText = infoText.replace('{time}', java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern('HH:mm')))");
-        appendLine(sb, "            infoText = infoText.replace('{width}', String.valueOf(imageData.getServer().getWidth()))");
-        appendLine(sb, "            infoText = infoText.replace('{height}', String.valueOf(imageData.getServer().getHeight()))");
-        appendLine(sb, "            infoText = infoText.replace('{classifier}', '')");
-        appendLine(sb, "            g2d.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, 1.0f))");
-        appendLine(sb, "            drawInfoLabel(g2d, outW, outH, infoText, infoLabelPosition, infoLabelFontSize, infoLabelBold)");
-        appendLine(sb, "        }");
-    }
-
-    /**
-     * Emit per-annotation info label drawing code.
-     */
-    private static void emitAnnotationInfoLabelDrawing(StringBuilder sb, boolean hasClassifier) {
-        appendLine(sb, "            if (showInfoLabel && infoLabelTemplate != null) {");
-        appendLine(sb, "                def infoText = infoLabelTemplate");
-        appendLine(sb, "                infoText = infoText.replace('{imageName}', imageName ?: '')");
-        appendLine(sb, "                def cal = imageData.getServer().getPixelCalibration()");
-        appendLine(sb, "                def pxStr = cal.hasPixelSizeMicrons() ? String.format('%.3f \\u00B5m/px', cal.getAveragedPixelSizeMicrons()) : 'uncalibrated'");
-        appendLine(sb, "                infoText = infoText.replace('{pixelSize}', pxStr)");
-        appendLine(sb, "                infoText = infoText.replace('{date}', java.time.LocalDate.now().toString())");
-        appendLine(sb, "                infoText = infoText.replace('{time}', java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern('HH:mm')))");
-        appendLine(sb, "                infoText = infoText.replace('{width}', String.valueOf(imageData.getServer().getWidth()))");
-        appendLine(sb, "                infoText = infoText.replace('{height}', String.valueOf(imageData.getServer().getHeight()))");
-        appendLine(sb, "                infoText = infoText.replace('{classifier}', " + (hasClassifier ? "classifierName ?: ''" : "''") + ")");
-        appendLine(sb, "                g2d.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, 1.0f))");
-        appendLine(sb, "                drawInfoLabel(g2d, outW, outH, infoText, infoLabelPosition, infoLabelFontSize, infoLabelBold)");
-        appendLine(sb, "            }");
+    private static void emitTextOverlayDrawing(StringBuilder sb, String indent, boolean perAnnotation,
+                                               boolean hasClassifier, boolean density,
+                                               String objectsDrawn) {
+        String index = perAnnotation ? "annotationIndex" : "i";
+        appendLine(sb, indent + "def overlayPanelLabel = showPanelLabel ? (panelLabelText != null ? panelLabelText : String.valueOf((char) ('A' + (" + index + " % 26)))) : null");
+        if (perAnnotation) {
+            appendLine(sb, indent + "if (showPanelLabel) annotationIndex++");
+        }
+        appendLine(sb, indent + "def overlayInfoText = null");
+        appendLine(sb, indent + "if (showInfoLabel && infoLabelTemplate != null) {");
+        appendLine(sb, indent + "    def cal = imageData.getServer().getPixelCalibration()");
+        appendLine(sb, indent + "    overlayInfoText = infoLabelTemplate");
+        appendLine(sb, indent + "            .replace('{imageName}', imageName ?: '')");
+        appendLine(sb, indent + "            .replace('{pixelSize}', cal.hasPixelSizeMicrons() ? String.format('%.3f \\u00B5m/px', cal.getAveragedPixelSizeMicrons()) : 'uncalibrated')");
+        appendLine(sb, indent + "            .replace('{date}', java.time.LocalDate.now().toString())");
+        appendLine(sb, indent + "            .replace('{time}', java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern('HH:mm')))");
+        appendLine(sb, indent + "            .replace('{width}', String.valueOf(imageData.getServer().getWidth()))");
+        appendLine(sb, indent + "            .replace('{height}', String.valueOf(imageData.getServer().getHeight()))");
+        appendLine(sb, indent + "            .replace('{classifier}', " + (hasClassifier ? "classifierName ?: ''" : "''") + ")");
+        appendLine(sb, indent + "}");
+        if (density) {
+            appendLine(sb, indent + "def overlayMap = !showColorScaleBar ? null : (mapLayer.classNames != null");
+            appendLine(sb, indent + "        ? [classes: quietMapClassEntries(mapLayer)]");
+            appendLine(sb, indent + "        : [colorMap: colorMap, min: densityMin, max: densityMax, title: colorScaleBarTitle])");
+        } else {
+            appendLine(sb, indent + "def overlayMap = null");
+        }
+        String region = perAnnotation ? "ax, ay, aw, ah"
+                : "0, 0, baseServer.getWidth(), baseServer.getHeight()";
+        appendLine(sb, indent + "quietDrawTextOverlays(g2d, result, imageData, display, textOverlay, overlayMap,");
+        appendLine(sb, indent + "        " + region + ", outW, outH, downsample,");
+        appendLine(sb, indent + "        overlayPanelLabel, overlayInfoText, " + objectsDrawn + ")");
     }
 
     // ------------------------------------------------------------------
@@ -921,6 +648,13 @@ class RenderedScriptGenerator {
         appendLine(sb, indent + "def paintable = hierarchy.getObjectsForRegion(null, region, null).findAll { o ->");
         appendLine(sb, indent + "    o.hasROI() && ((o.isAnnotation() && includeAnnotations) || (o.isDetection() && includeDetections))");
         appendLine(sb, indent + "}");
+        appendLine(sb, indent + "// Paint in the viewer's order: detections by level and position, then annotations, largest first");
+        appendLine(sb, indent + "def paintComparator = qupath.lib.objects.DefaultPathObjectComparator.getInstance()");
+        appendLine(sb, indent + "paintable = paintable.findAll { it.isDetection() }.sort(false) { a, b ->");
+        appendLine(sb, indent + "    int l = Integer.compare(a.getLevel(), b.getLevel()); l != 0 ? l : paintComparator.compare(a, b)");
+        appendLine(sb, indent + "} + paintable.findAll { !it.isDetection() }.sort(false) { a, b ->");
+        appendLine(sb, indent + "    int l = Integer.compare(b.getLevel(), a.getLevel()); l != 0 ? l : Double.compare(-a.getROI().getArea(), -b.getROI().getArea())");
+        appendLine(sb, indent + "}");
         appendLine(sb, indent + "if (!paintable.isEmpty()) {");
         appendLine(sb, indent + "    def gCopy = (Graphics2D) g2d.create()");
         appendLine(sb, indent + "    gCopy.scale(1.0 / downsample, 1.0 / downsample)");
@@ -930,20 +664,6 @@ class RenderedScriptGenerator {
         appendLine(sb, indent + "    PathObjectPainter.paintSpecifiedObjects(gCopy, paintable, overlayOptions, null, downsample)");
         appendLine(sb, indent + "    gCopy.dispose()");
         appendLine(sb, indent + "}");
-    }
-
-    /**
-     * Emit per-annotation scale bar drawing (uses outW, outH).
-     */
-    private static void emitAnnotationScaleBarDrawing(StringBuilder sb) {
-        appendLine(sb, "            if (showScaleBar) {");
-        appendLine(sb, "                def cal = imageData.getServer().getPixelCalibration()");
-        appendLine(sb, "                if (cal.hasPixelSizeMicrons()) {");
-        appendLine(sb, "                    double pxSize = cal.getAveragedPixelSizeMicrons() * downsample");
-        appendLine(sb, "                    g2d.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, 1.0f))");
-        appendLine(sb, "                    drawScaleBar(g2d, outW, outH, pxSize, scaleBarPosition, scaleBarColorR, scaleBarColorG, scaleBarColorB, scaleBarFontSize, scaleBarBoldText)");
-        appendLine(sb, "                }");
-        appendLine(sb, "            }");
     }
 
     /**
@@ -979,6 +699,8 @@ class RenderedScriptGenerator {
         appendLine(sb, "def splitChannelColorBorder = " + config.splitChannel().colorBorder());
         appendLine(sb, "def channelColorLegend = "
                 + (config.splitChannel().colorLegend() || config.isShowChannelLegend()));
+        appendLine(sb, "def channelColorLegendPosition = "
+                + quote(config.splitChannel().colorLegendPosition().name()));
     }
 
     /**
@@ -1050,27 +772,19 @@ class RenderedScriptGenerator {
         appendLine(sb, "}");
         appendLine(sb, "");
 
-        appendLine(sb, "// Draw channel color legend (swatch + name) in upper-left");
-        appendLine(sb, "def drawChannelColorLegend(Graphics2D g2d, int imgW, int imgH, String chName, int chColor) {");
-        appendLine(sb, "    int minDim = Math.min(imgW, imgH)");
-        appendLine(sb, "    int fontSize = Math.max(12, minDim / 30)");
-        appendLine(sb, "    int margin = Math.max(8, minDim / 50)");
-        appendLine(sb, "    int swatchSize = fontSize");
-        appendLine(sb, "    g2d.setFont(new Font(Font.SANS_SERIF, Font.BOLD, fontSize))");
-        appendLine(sb, "    def fm = g2d.getFontMetrics()");
-        appendLine(sb, "    int textX = margin + swatchSize + 4");
-        appendLine(sb, "    int textY = margin + fm.getAscent()");
-        appendLine(sb, "    g2d.setColor(new Color(chColor))");
-        appendLine(sb, "    g2d.fillRect(margin, margin, swatchSize, swatchSize)");
-        appendLine(sb, "    g2d.setColor(Color.WHITE)");
-        appendLine(sb, "    g2d.drawRect(margin, margin, swatchSize, swatchSize)");
-        appendLine(sb, "    for (int dx = -1; dx <= 1; dx++) {");
-        appendLine(sb, "        for (int dy = -1; dy <= 1; dy++) {");
-        appendLine(sb, "            if (dx != 0 || dy != 0) { g2d.setColor(Color.BLACK); g2d.drawString(chName, textX + dx, textY + dy) }");
-        appendLine(sb, "        }");
+        appendLine(sb, "// The channel's swatch and name, and the scale bar, as QuIET draws them on a channel file");
+        appendLine(sb, "def drawChannelDecorations(Graphics2D g2d, BufferedImage img, String chName, int chColor, imageData, double downsample,");
+        appendLine(sb, "        Map t, boolean legend, String legendCorner) {");
+        appendLine(sb, "    if (legend) {");
+        appendLine(sb, "        quietDrawCornerLegend(g2d, [[name: chName ?: '', rgb: chColor, kind: 'FILL']], legendCorner,");
+        appendLine(sb, "                img.getWidth(), img.getHeight(), t.background, quietColor(t.textColor), img)");
         appendLine(sb, "    }");
-        appendLine(sb, "    g2d.setColor(Color.WHITE)");
-        appendLine(sb, "    g2d.drawString(chName, textX, textY)");
+        appendLine(sb, "    def cal = imageData.getServer().getPixelCalibration()");
+        appendLine(sb, "    if (t.showScaleBar && cal.hasPixelSizeMicrons()) {");
+        appendLine(sb, "        quietDrawScaleBar(g2d, img.getWidth(), img.getHeight(), cal.getAveragedPixelSizeMicrons() * downsample,");
+        appendLine(sb, "                t.scaleBarPosition, t.scaleBarColor, t.scaleBarFontSize, t.scaleBarBold,");
+        appendLine(sb, "                t.scaleBarBox ? 'BOX' : t.background, img)");
+        appendLine(sb, "    }");
         appendLine(sb, "}");
         appendLine(sb, "");
     }
@@ -1091,7 +805,7 @@ class RenderedScriptGenerator {
         appendLine(sb, "            def chG2d = chResult.createGraphics()");
         appendLine(sb, "            def chColor = channelColor(channel)");
         appendLine(sb, "            if (splitChannelColorBorder) { drawChannelColorBorder(chG2d, chResult.getWidth(), chResult.getHeight(), chColor) }");
-        appendLine(sb, "            if (channelColorLegend) { drawChannelColorLegend(chG2d, chResult.getWidth(), chResult.getHeight(), channelLegendName(channel, baseServer), chColor) }");
+        appendLine(sb, "            drawChannelDecorations(chG2d, chResult, channelLegendName(channel, baseServer), chColor, imageData, downsample, textOverlay, channelColorLegend, channelColorLegendPosition)");
         appendLine(sb, "            chG2d.dispose()");
         appendLine(sb, "            def chName = GeneralTools.stripInvalidFilenameChars(channel.getName())");
         appendLine(sb, "            if (chName == null || chName.isBlank()) chName = 'ch' + ch");
@@ -1118,7 +832,7 @@ class RenderedScriptGenerator {
         appendLine(sb, "                def chG2d = chResult.createGraphics()");
         appendLine(sb, "                def chColor = channelColor(channel)");
         appendLine(sb, "                if (splitChannelColorBorder) { drawChannelColorBorder(chG2d, chResult.getWidth(), chResult.getHeight(), chColor) }");
-        appendLine(sb, "                if (channelColorLegend) { drawChannelColorLegend(chG2d, chResult.getWidth(), chResult.getHeight(), channelLegendName(channel, baseServer), chColor) }");
+        appendLine(sb, "                drawChannelDecorations(chG2d, chResult, channelLegendName(channel, baseServer), chColor, imageData, downsample, textOverlay, channelColorLegend, channelColorLegendPosition)");
         appendLine(sb, "                chG2d.dispose()");
         appendLine(sb, "                def chName = GeneralTools.stripInvalidFilenameChars(channel.getName())");
         appendLine(sb, "                if (chName == null || chName.isBlank()) chName = 'ch' + ch");
@@ -1202,9 +916,11 @@ class RenderedScriptGenerator {
         emitColorScaleBarConfig(sb, config);
         emitPanelLabelConfig(sb, config);
         emitInfoLabelConfig(sb, config);
+        emitTextOverlayConfig(sb, config);
         emitInsetConfig(sb, config);
         appendLine(sb, "// =======================================================");
         appendLine(sb, "");
+        emitTextOverlayMap(sb, true);
 
         // Project and density map loading
         appendLine(sb, "def project = getProject()");
@@ -1248,18 +964,7 @@ class RenderedScriptGenerator {
 
         // Helper functions (before the main loop)
         emitMapOverlayHelpers(sb);
-        if (config.scaleBar().show()) {
-            emitScaleBarFunction(sb);
-        }
-        if (config.colorScaleBar().show()) {
-            emitColorScaleBarFunction(sb);
-        }
-        if (config.panelLabel().show()) {
-            emitPanelLabelFunction(sb);
-        }
-        if (config.infoLabel().show()) {
-            emitInfoLabelFunction(sb);
-        }
+        emitResource(sb, "text-overlay-helpers.groovy");
         if (config.inset().show()) {
             emitInsetFunction(sb);
         }
@@ -1343,28 +1048,8 @@ class RenderedScriptGenerator {
             appendLine(sb, "");
             emitAnnotationObjectOverlay(sb);
             appendLine(sb, "");
-            if (config.scaleBar().show()) {
-                emitAnnotationScaleBarDrawing(sb);
-                appendLine(sb, "");
-            }
-            if (config.colorScaleBar().show()) {
-                // Color scale bar at annotation level (uses outW, outH from annotation region read)
-                appendLine(sb, "            if (showColorScaleBar && mapLayer.classNames != null) {");
-                appendLine(sb, "                drawMapClassLegend(g2d, mapLayer, outW, outH, colorScaleBarPosition)");
-                appendLine(sb, "            } else if (showColorScaleBar) {");
-                appendLine(sb, "                g2d.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, 1.0f))");
-                appendLine(sb, "                drawColorScaleBar(g2d, outW, outH, colorMap, densityMin, densityMax, colorScaleBarPosition, colorScaleBarFontSize, colorScaleBarBoldText, colorScaleBarTitle)");
-                appendLine(sb, "            }");
-                appendLine(sb, "");
-            }
-            if (config.panelLabel().show()) {
-                emitAnnotationPanelLabelDrawing(sb);
-                appendLine(sb, "");
-            }
-            if (config.infoLabel().show()) {
-                emitAnnotationInfoLabelDrawing(sb, false);
-                appendLine(sb, "");
-            }
+            emitTextOverlayDrawing(sb, "            ", true, false, true, "true");
+            appendLine(sb, "");
             if (config.inset().show()) {
                 emitAnnotationInsetDrawing(sb);
                 appendLine(sb, "");
@@ -1417,22 +1102,8 @@ class RenderedScriptGenerator {
                     false);
             appendLine(sb, "        }");
             appendLine(sb, "");
-            if (config.scaleBar().show()) {
-                emitScaleBarDrawing(sb);
-                appendLine(sb, "");
-            }
-            if (config.colorScaleBar().show()) {
-                emitColorScaleBarDrawing(sb);
-                appendLine(sb, "");
-            }
-            if (config.panelLabel().show()) {
-                emitPanelLabelDrawing(sb);
-                appendLine(sb, "");
-            }
-            if (config.infoLabel().show()) {
-                emitInfoLabelDrawingNoClassifier(sb);
-                appendLine(sb, "");
-            }
+            emitTextOverlayDrawing(sb, "        ", false, false, true, "true");
+            appendLine(sb, "");
             if (config.inset().show()) {
                 emitInsetDrawing(sb);
                 appendLine(sb, "");
@@ -1533,9 +1204,11 @@ class RenderedScriptGenerator {
         emitScaleBarConfig(sb, config);
         emitPanelLabelConfig(sb, config);
         emitInfoLabelConfig(sb, config);
+        emitTextOverlayConfig(sb, config);
         emitInsetConfig(sb, config);
         appendLine(sb, "// =======================================================");
         appendLine(sb, "");
+        emitTextOverlayMap(sb, false);
 
         // Project and classifier loading
         appendLine(sb, "def project = getProject()");
@@ -1560,15 +1233,7 @@ class RenderedScriptGenerator {
         appendLine(sb, "");
 
         // Helper functions (before the main loop)
-        if (config.scaleBar().show()) {
-            emitScaleBarFunction(sb);
-        }
-        if (config.panelLabel().show()) {
-            emitPanelLabelFunction(sb);
-        }
-        if (config.infoLabel().show()) {
-            emitInfoLabelFunction(sb);
-        }
+        emitResource(sb, "text-overlay-helpers.groovy");
         if (config.inset().show()) {
             emitInsetFunction(sb);
         }
@@ -1631,18 +1296,8 @@ class RenderedScriptGenerator {
             appendLine(sb, "");
             emitAnnotationObjectOverlay(sb);
             appendLine(sb, "");
-            if (config.scaleBar().show()) {
-                emitAnnotationScaleBarDrawing(sb);
-                appendLine(sb, "");
-            }
-            if (config.panelLabel().show()) {
-                emitAnnotationPanelLabelDrawing(sb);
-                appendLine(sb, "");
-            }
-            if (config.infoLabel().show()) {
-                emitAnnotationInfoLabelDrawing(sb, true);
-                appendLine(sb, "");
-            }
+            emitTextOverlayDrawing(sb, "            ", true, true, false, "true");
+            appendLine(sb, "");
             if (config.inset().show()) {
                 emitAnnotationInsetDrawing(sb);
                 appendLine(sb, "");
@@ -1692,18 +1347,8 @@ class RenderedScriptGenerator {
                     false);
             appendLine(sb, "        }");
             appendLine(sb, "");
-            if (config.scaleBar().show()) {
-                emitScaleBarDrawing(sb);
-                appendLine(sb, "");
-            }
-            if (config.panelLabel().show()) {
-                emitPanelLabelDrawing(sb);
-                appendLine(sb, "");
-            }
-            if (config.infoLabel().show()) {
-                emitInfoLabelDrawing(sb);
-                appendLine(sb, "");
-            }
+            emitTextOverlayDrawing(sb, "        ", false, true, false, "true");
+            appendLine(sb, "");
             if (config.inset().show()) {
                 emitInsetDrawing(sb);
                 appendLine(sb, "");
@@ -1802,9 +1447,11 @@ class RenderedScriptGenerator {
         emitScaleBarConfig(sb, config);
         emitPanelLabelConfig(sb, config);
         emitInfoLabelConfig(sb, config);
+        emitTextOverlayConfig(sb, config);
         emitInsetConfig(sb, config);
         appendLine(sb, "// =======================================================");
         appendLine(sb, "");
+        emitTextOverlayMap(sb, false);
 
         // Project loading
         appendLine(sb, "def project = getProject()");
@@ -1823,15 +1470,7 @@ class RenderedScriptGenerator {
         appendLine(sb, "");
 
         // Helper functions (before the main loop)
-        if (config.scaleBar().show()) {
-            emitScaleBarFunction(sb);
-        }
-        if (config.panelLabel().show()) {
-            emitPanelLabelFunction(sb);
-        }
-        if (config.infoLabel().show()) {
-            emitInfoLabelFunction(sb);
-        }
+        emitResource(sb, "text-overlay-helpers.groovy");
         if (config.inset().show()) {
             emitInsetFunction(sb);
         }
@@ -1877,18 +1516,8 @@ class RenderedScriptGenerator {
             emitAnnotationObjectOverlay(sb);
             appendLine(sb, "            }");
             appendLine(sb, "");
-            if (config.scaleBar().show()) {
-                emitAnnotationScaleBarDrawing(sb);
-                appendLine(sb, "");
-            }
-            if (config.panelLabel().show()) {
-                emitAnnotationPanelLabelDrawing(sb);
-                appendLine(sb, "");
-            }
-            if (config.infoLabel().show()) {
-                emitAnnotationInfoLabelDrawing(sb, false);
-                appendLine(sb, "");
-            }
+            emitTextOverlayDrawing(sb, "            ", true, false, false, "true");
+            appendLine(sb, "");
             if (config.inset().show()) {
                 emitAnnotationInsetDrawing(sb);
                 appendLine(sb, "");
@@ -1926,18 +1555,8 @@ class RenderedScriptGenerator {
                     false);
             appendLine(sb, "        }");
             appendLine(sb, "");
-            if (config.scaleBar().show()) {
-                emitScaleBarDrawing(sb);
-                appendLine(sb, "");
-            }
-            if (config.panelLabel().show()) {
-                emitPanelLabelDrawing(sb);
-                appendLine(sb, "");
-            }
-            if (config.infoLabel().show()) {
-                emitInfoLabelDrawingNoClassifier(sb);
-                appendLine(sb, "");
-            }
+            emitTextOverlayDrawing(sb, "        ", false, false, false, "overlayOpacity > 0");
+            appendLine(sb, "");
             if (config.inset().show()) {
                 emitInsetDrawing(sb);
                 appendLine(sb, "");
