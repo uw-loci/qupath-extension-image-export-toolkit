@@ -536,6 +536,12 @@ public class QuietPreferences {
     public static String getRenderedFormat() { return renderedFormat.get(); }
     public static void setRenderedFormat(String value) { renderedFormat.set(value != null ? value : "PNG"); }
 
+    /** Whether the user has picked a rendered output format; QuIET then never changes it. */
+    private static final BooleanProperty renderedFormatChosen =
+            PathPrefs.createPersistentPreference(PREFIX + "rendered.formatChosen", false);
+    public static boolean isRenderedFormatChosen() { return renderedFormatChosen.get(); }
+    public static void setRenderedFormatChosen(boolean value) { renderedFormatChosen.set(value); }
+
     public static BooleanProperty renderedIncludeAnnotationsProperty() { return renderedIncludeAnnotations; }
     public static boolean isRenderedIncludeAnnotations() { return renderedIncludeAnnotations.get(); }
     public static void setRenderedIncludeAnnotations(boolean value) { renderedIncludeAnnotations.set(value); }

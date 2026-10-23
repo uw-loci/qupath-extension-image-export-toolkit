@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import qupath.lib.classifiers.pixel.PixelClassifier;
+import qupath.lib.display.settings.ImageDisplaySettings;
 import qupath.lib.images.ImageData;
 import qupath.lib.images.servers.ImageServer;
 import qupath.lib.images.servers.WrappedBufferedImageServer;
@@ -174,6 +176,29 @@ public final class PanelImageExporter {
             renderConfig = withRecipe(renderConfig, resolved);
         }
 
+        // Global Matched: one display range per kind of image, over the panel's images
+        Map<Integer, ImageDisplaySettings> matchedSettings = new HashMap<>();
+        if (renderConfig.getRecipeConfig() instanceof RenderedExportConfig rc
+                && rc.getDisplaySettingsMode()
+                    == RenderedExportConfig.DisplaySettingsMode.GLOBAL_MATCHED) {
+            var groups = GlobalDisplayRangeScanner.computeGroupedRanges(
+                    entries, rc.getMatchedDisplayPercentile(), 32.0,
+                    (i, t) -> {
+                        if (progress != null) {
+                            progress.onProgress(i + 1, t, String.format(
+                                    "Scanning %d of %d for display ranges", i + 1, t));
+                        }
+                    });
+            for (var group : groups) {
+                var settings = GlobalDisplayRangeScanner.buildDisplaySettings(
+                        group.ranges(), entries.get(group.indices().get(0)));
+                if (settings == null) continue;
+                for (int index : group.indices()) {
+                    matchedSettings.put(index, settings);
+                }
+            }
+        }
+
         // Phase 1 -- render each image to a BufferedImage via the recipe.
         for (int i = 0; i < total; i++) {
             if (cancel != null && cancel.isCancelled()) {
@@ -190,7 +215,14 @@ public final class PanelImageExporter {
             ImageData<BufferedImage> imageData = null;
             try {
                 imageData = entry.readImageData();
-                BufferedImage cellImage = renderCell(imageData, renderConfig,
+                PanelExportConfig cellConfig = renderConfig;
+                var matched = matchedSettings.get(i);
+                if (matched != null
+                        && renderConfig.getRecipeConfig() instanceof RenderedExportConfig rc) {
+                    cellConfig = withRecipe(renderConfig, RenderedExportConfig.Builder.from(rc)
+                            .capturedDisplaySettings(matched).build());
+                }
+                BufferedImage cellImage = renderCell(imageData, cellConfig,
                         classifier, mapSource, name);
                 Map<String, String> metadata = readMetadata(entry, imageData);
                 rendered.add(new RenderedCell(name, cellImage, metadata,

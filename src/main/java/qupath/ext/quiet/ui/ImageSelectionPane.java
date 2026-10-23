@@ -692,8 +692,8 @@ public class ImageSelectionPane extends VBox {
      * Enable or disable panel / montage mode for this image-selection pane.
      * <p>
      * In panel mode the prefix/suffix, filename preview, script buttons,
-     * workflow/GeoJSON checkboxes and advice button are hidden (they apply
-     * only to single-image exports); the panel banner, the type/metadata
+     * GeoJSON checkbox and advice button are hidden (they apply only to
+     * single-image exports), and Add to Workflow is always shown; the panel banner, the type/metadata
      * filter facets, a row-major order hint, and a 0-images gate message are
      * shown. The first time panel mode is entered the per-image type and
      * metadata caches are built so the facets can filter without re-opening
@@ -716,8 +716,9 @@ public class ImageSelectionPane extends VBox {
             previewRow.setManaged(false);
             scriptBox.setVisible(false);
             scriptBox.setManaged(false);
-            addToWorkflowCheck.setVisible(false);
-            addToWorkflowCheck.setManaged(false);
+            // Add to Workflow stays: recording the panel step saves every source image
+            addToWorkflowCheck.setVisible(true);
+            addToWorkflowCheck.setManaged(true);
             exportGeoJsonCheck.setVisible(false);
             exportGeoJsonCheck.setManaged(false);
             adviceButton.setVisible(false);
@@ -865,9 +866,8 @@ public class ImageSelectionPane extends VBox {
      * Show or hide advanced controls for simple mode.
      * Hides prefix/suffix, filename preview, workflow/GeoJSON checkboxes, and script buttons.
      * <p>
-     * In panel / montage mode these controls are single-image-only and stay
-     * hidden regardless of the simple/advanced toggle -- {@link #setPanelMode}
-     * owns their visibility there.
+     * In panel / montage mode {@link #setPanelMode} owns their visibility,
+     * whatever the simple/advanced toggle says.
      */
     public void setSimpleMode(boolean simple) {
         if (panelMode) {

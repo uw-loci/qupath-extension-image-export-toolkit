@@ -71,6 +71,12 @@ Every single-image export also generates a **Groovy script** that you can copy, 
 
 ## What's new
 
+**v1.4.2** -- Panel / Montage and wizard fixes from a real figure run:
+- A panel cell honors the recipe's annotation region: it shows the bounding box of the image's matching annotations instead of the whole image. Before, a Tissue-rectangle recipe gave whole slides shrunk to about 1/65 scale.
+- **Add to Workflow** is shown in panel mode and is respected. Unticked, a panel export leaves the source images untouched; before, it always recorded a workflow step and saved every source image.
+- **Global Matched** works in a panel recipe: ranges are matched over the panel's images, per kind of image. Before, each cell used its own default display.
+- The output format is no longer switched to SVG by a render-mode change once you have picked a format, and the **Annotation Classes** box keeps your ticks when the page is laid out again.
+
 **v1.4.1** -- Copied scripts work on the images you selected, and Global Matched keeps image types apart:
 - **Copy Script**, **Save Script...** and the workflow-history script now list the images you selected and work on those, in that order, instead of on every image in the project. A pre-scan in the script (Global Matched display ranges, a shared map range) therefore covers the same images as the wizard. Emptying the list in the script brings back the old whole-project behavior.
 - **Global Matched** matches each kind of image separately. Images with the same pixel type and channel names (for example 8-bit RGB brightfield, or 16-bit single-channel birefringence) share one range per channel, and each kind gets its own. Before, every image went into one histogram sized from the first image. A 16-bit image exported after an 8-bit one lost every value above 255.
@@ -591,7 +597,7 @@ The first time you open Panel / Montage Export, a short one-time introduction ex
 <details>
 <summary><strong>Getting started</strong> (read this first)</summary>
 
-**What panel export does** -- Panel / Montage produces *one* combined montage figure from *many* project images, instead of one file per image. It never modifies your QuPath project; it only reads images and metadata.
+**What panel export does** -- Panel / Montage produces *one* combined montage figure from *many* project images, instead of one file per image. It reads images and metadata. It changes the project only when **Add to Workflow** is ticked on Step 1: it then records a "Panel / Montage Export" step in every source image's workflow history, which saves each image's data file (its objects are written back unchanged).
 
 **Prerequisites** -- an open QuPath project with at least two images, and the images you want in the figure already present in that project.
 
@@ -621,6 +627,8 @@ QuIET's panel/montage layout follows conventions established by figure-assembly 
 
 **Recipe categories** -- The Step 2 recipe can be Rendered, Raw, or Mask -- the single-image categories that produce exactly one image per source image. Object Crops is not offered (it produces many crops per image), Tiled is not offered (it produces many tiles per image), and Panel is not offered (no panels-of-panels). The recipe category's own format restrictions still apply: a recipe that forbids JPEG (a Mask, or real fluorescence Raw data) forbids JPEG for the panel output too.
 
+**Annotation regions in a panel** -- When a Rendered recipe's **Export Region** is **One Image Per Annotation** (or a Raw recipe's is an annotation region), each cell shows the bounding box of that image's matching annotations, with the recipe's padding, drawn as a per-annotation export draws one region. An image with several matching annotations gets one cell around all of them. An image with none is skipped and named in the error list. **Global Matched** display settings are matched over the panel's images, each kind of image (pixel type and channel names) separately.
+
 **Layout preview** -- The **Open layout preview...** button on Step 3 opens a separate, resizable, always-on-top window showing the composed grid with image thumbnails, the real gutters and background color, and caption placeholders drawn as horizontal bars. It updates live as you change the grid, gutters, background, cell-fit mode or captions. **Drag any image cell onto another to swap them** -- the arrangement in the preview is the order the figure is composed in. The window stays open beside the wizard so you can adjust settings and watch the result; its always-on-top is lifted automatically while an export runs so progress and result dialogs stay visible.
 
 **Per-panel labels (A, B, C...)** -- Step 3 has a **Panel labels** section that prints a label inside each cell. Three styles are supported: **A, B, C** (uppercase, default for journal figures), **a, b, c** (lowercase, used by some journals), and **1, 2, 3** (numeric, intended for slides, posters, and other non-publication contexts). Pick the corner (upper / lower x left / right), font size (0 = auto-scale to cell size), bold, and label color; the renderer adds a luminance-based contrast outline automatically so the label stays legible on any background. Labels are drawn into the cell *image* area (not the caption band) and follow the same drag-reorder order the figure is composed in, so swapping cell positions also renumbers the labels.
@@ -645,7 +653,7 @@ The **Layout preview** window uses the same placement and scale-bar arithmetic a
 
 **Reading the size estimate** -- Step 3 shows the composed pixel dimensions (from grid x cell size x gutters) and a rough output file-size estimate. The file-size figure is an estimate and varies with image content.
 
-**The generated Groovy script** -- a Panel / Montage export records its settings as a Groovy configuration block in each source image's workflow history (`Automate > Show workflow command history`). It does not compose the figure: to make it again, re-run the export from the wizard, or save the recipe with **Save recipe...**. The wizard has no Copy Script or Save Script button in panel mode. The map overlay and color range a map recipe used are written to `panel_figure_info.txt`.
+**The generated Groovy script** -- with **Add to Workflow** ticked, a Panel / Montage export records its settings as a Groovy configuration block in each source image's workflow history (`Automate > Show workflow command history`). It does not compose the figure: to make it again, re-run the export from the wizard, or save the recipe with **Save recipe...**. The wizard has no Copy Script or Save Script button in panel mode. The map overlay and color range a map recipe used are written to `panel_figure_info.txt`.
 
 </details>
 

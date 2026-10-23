@@ -828,8 +828,8 @@ public class ExportWizard {
                 return false;
             }
 
-            String workflowScript = generateScript(
-                    ExportCategory.PANEL, panelConfig);
+            String workflowScript = imageSelectionPane.isAddToWorkflow()
+                    ? generateScript(ExportCategory.PANEL, panelConfig) : null;
 
             QuietPreferences.setLastCategory(ExportCategory.PANEL.name());
 

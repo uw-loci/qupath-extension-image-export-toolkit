@@ -73,9 +73,19 @@ public class RawImageExporter {
         try {
             exportServer = maybeExtractChannels(server, config);
             double downsample = config.getDownsample();
+            int[] region = {0, 0, exportServer.getWidth(), exportServer.getHeight()};
+            if (config.getRegionType() != RawExportConfig.RegionType.WHOLE_IMAGE) {
+                Collection<PathObject> annotations =
+                        config.getRegionType() == RawExportConfig.RegionType.SELECTED_ANNOTATIONS
+                                ? imageData.getHierarchy().getSelectionModel().getSelectedObjects()
+                                        .stream().filter(p -> p instanceof PathAnnotationObject).toList()
+                                : imageData.getHierarchy().getAnnotationObjects().stream()
+                                        .map(p -> (PathObject) p).toList();
+                region = CellRegion.bounds(annotations, config.getPaddingPixels(),
+                        server.getWidth(), server.getHeight(), entryName);
+            }
             RegionRequest request = RegionRequest.createInstance(
-                    exportServer.getPath(), downsample,
-                    0, 0, exportServer.getWidth(), exportServer.getHeight());
+                    exportServer.getPath(), downsample, region[0], region[1], region[2], region[3]);
             BufferedImage image = exportServer.readRegion(request);
             if (image == null) {
                 throw new IOException("Raw read returned no image for: " + entryName);

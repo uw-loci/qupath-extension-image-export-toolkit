@@ -384,14 +384,16 @@ public class RenderedImageExporter {
     }
 
     /**
-     * Render the whole image with overlays to an in-memory {@link BufferedImage},
+     * Render the image with overlays to an in-memory {@link BufferedImage},
      * without writing any file. Used by the Panel / Montage export to obtain a
      * single composed cell image for a recipe.
      * <p>
      * Dispatches to the same composite methods as {@code exportWith*} and so
-     * inherits all render-mode behaviour. Split-channel and per-annotation
-     * region modes are not single-image and are flattened here to a whole-image
-     * object-overlay render so the panel cell is always one image.
+     * inherits all render-mode behaviour. With region ALL_ANNOTATIONS the cell
+     * is the bounding box of the matching annotations ({@link CellRegion}),
+     * rendered as a per-annotation export renders one region; an image with no
+     * matching annotation throws. Split-channel mode is not single-image and is
+     * flattened to one render.
      *
      * @param imageData      the image data (caller is responsible for closing)
      * @param classifier     the pixel classifier (null for non-CLASSIFIER modes)
@@ -411,8 +413,33 @@ public class RenderedImageExporter {
         PixelClassificationImageServer classificationServer = null;
         MapLayer mapLayer = null;
         try {
+            int[] region = null;
+            if (config.getRegionType() == RenderedExportConfig.RegionType.ALL_ANNOTATIONS) {
+                Collection<PathObject> annotations = imageData.getHierarchy()
+                        .getAnnotationObjects().stream().map(p -> (PathObject) p).toList();
+                var selectedClasses = config.getSelectedClassifications();
+                if (selectedClasses != null) {
+                    annotations = annotations.stream()
+                            .filter(ClassNames.predicate(selectedClasses)).toList();
+                }
+                region = CellRegion.bounds(annotations, config.getPaddingPixels(),
+                        baseServer.getWidth(), baseServer.getHeight(), entryName);
+            }
             displayServer = resolveDisplayServer(imageData, baseServer, config);
             String panelLabel = resolvePanelLabel(config, 0);
+
+            if (region != null) {
+                if (config.getRenderMode() == RenderedExportConfig.RenderMode.CLASSIFIER_OVERLAY
+                        && classifier != null && classifier.supportsImage(imageData)) {
+                    classificationServer = new PixelClassificationImageServer(imageData, classifier);
+                } else if (config.getRenderMode() == RenderedExportConfig.RenderMode.DENSITY_MAP_OVERLAY
+                        && mapSource != null) {
+                    mapLayer = mapSource.open(imageData);
+                }
+                return renderRegion(imageData, baseServer, classificationServer, mapLayer,
+                        displayServer, config, region[0], region[1], region[2], region[3],
+                        panelLabel, entryName);
+            }
 
             switch (config.getRenderMode()) {
                 case CLASSIFIER_OVERLAY -> {

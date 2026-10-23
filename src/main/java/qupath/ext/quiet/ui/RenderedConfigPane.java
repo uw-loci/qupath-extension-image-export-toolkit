@@ -265,6 +265,9 @@ public class RenderedConfigPane extends VBox {
     /** True while saved settings are being applied to the controls. */
     private boolean restoringPreferences;
 
+    /** True while {@link #maybeSwitchToSvg} sets the format, so it is not taken as the user's pick. */
+    private boolean switchingToSvg;
+
     // Live preview: one window, re-rendered when a setting changes while it is open
     private Stage previewStage;
     private ImageView previewView;
@@ -722,6 +725,9 @@ public class RenderedConfigPane extends VBox {
         formatCombo.valueProperty().addListener((obs, old, val) -> {
             updateFormatInfo(val);
             updateSvgVectorCapVisibility(val == OutputFormat.SVG);
+            if (!restoringPreferences && !switchingToSvg && val != null) {
+                QuietPreferences.setRenderedFormatChosen(true);
+            }
         });
         updateFormatInfo(OutputFormat.PNG);
         updateSvgVectorCapVisibility(false);
@@ -1888,13 +1894,19 @@ public class RenderedConfigPane extends VBox {
 
     /**
      * When an overlay is enabled and format is the default PNG,
-     * auto-switch to SVG for vector-sharp overlays.
+     * auto-switch to SVG for vector-sharp overlays -- only until the user has
+     * picked a format (a render-mode change ticks overlay boxes in code).
      */
     private void maybeSwitchToSvg() {
-        // Restoring saved settings must not override the saved format
-        if (restoringPreferences) return;
+        // Never override a saved format, or one the user picked
+        if (restoringPreferences || QuietPreferences.isRenderedFormatChosen()) return;
         if (formatCombo.getValue() == OutputFormat.PNG) {
-            formatCombo.setValue(OutputFormat.SVG);
+            switchingToSvg = true;
+            try {
+                formatCombo.setValue(OutputFormat.SVG);
+            } finally {
+                switchingToSvg = false;
+            }
         }
     }
 
@@ -2085,6 +2097,10 @@ public class RenderedConfigPane extends VBox {
     }
 
     private void populateAnnotationClassifications() {
+        // Keep the user's ticks across a rebuild (it runs whenever the layout is re-applied)
+        var previousItems = new java.util.HashSet<>(classificationCombo.getItems());
+        var previousChecked = new java.util.HashSet<>(classificationCombo.getCheckModel().getCheckedItems());
+        boolean narrowed = !previousItems.isEmpty() && !previousChecked.containsAll(previousItems);
         // Clear checks BEFORE clearing items to avoid ControlsFX
         // IndexOutOfBoundsException when clearChecks fires change events
         // that reference items by index
@@ -2130,9 +2146,14 @@ public class RenderedConfigPane extends VBox {
         }
         classificationCombo.getItems().addAll(classNames);
 
-        // Check all items by default
+        // Everything is checked by default; after the user narrowed the list, only what they
+        // left checked stays checked (a class that appears since then is not added)
         for (int i = 0; i < classificationCombo.getItems().size(); i++) {
-            classificationCombo.getCheckModel().check(i);
+            String item = classificationCombo.getItems().get(i);
+            boolean wasThere = previousItems.contains(item);
+            if (!narrowed || (wasThere && previousChecked.contains(item))) {
+                classificationCombo.getCheckModel().check(i);
+            }
         }
         updateClassificationTitle();
     }
@@ -2596,7 +2617,11 @@ public class RenderedConfigPane extends VBox {
         Double ds = downsampleCombo.getValue();
         if (ds != null) QuietPreferences.setRenderedDownsample(ds);
         var fmt = formatCombo.getValue();
-        if (fmt != null) QuietPreferences.setRenderedFormat(fmt.name());
+        if (fmt != null) {
+            QuietPreferences.setRenderedFormat(fmt.name());
+            // A format an export ran with is the user's choice from now on
+            QuietPreferences.setRenderedFormatChosen(true);
+        }
         QuietPreferences.setRenderedIncludeAnnotations(includeAnnotationsCheck.isSelected());
         QuietPreferences.setRenderedIncludeDetections(includeDetectionsCheck.isSelected());
         QuietPreferences.setRenderedFillAnnotations(fillAnnotationsCheck.isSelected());
