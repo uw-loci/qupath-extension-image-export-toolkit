@@ -3,8 +3,11 @@ package qupath.ext.quiet.export;
 import java.awt.image.BufferedImage;
 import java.awt.image.Raster;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.BiConsumer;
+import java.util.function.IntFunction;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,8 +16,11 @@ import qupath.lib.display.ImageDisplay;
 import qupath.lib.display.settings.DisplaySettingUtils;
 import qupath.lib.display.settings.ImageDisplaySettings;
 import qupath.lib.images.ImageData;
+import qupath.lib.images.servers.ImageChannel;
 import qupath.lib.images.servers.ImageServer;
+import qupath.lib.images.servers.ImageServerMetadata;
 import qupath.lib.images.servers.PixelCalibration;
+import qupath.lib.images.servers.PixelType;
 import qupath.lib.projects.ProjectImageEntry;
 import qupath.lib.regions.RegionRequest;
 
@@ -33,7 +39,10 @@ public class GlobalDisplayRangeScanner {
     private static final double DEFAULT_SCAN_DOWNSAMPLE = 32.0;
 
     /** Number of histogram bins for float-type images. */
-    private static final int FLOAT_HISTOGRAM_BINS = 10000;
+    static final int FLOAT_HISTOGRAM_BINS = 10000;
+
+    /** Exact bins for unsigned images of up to 16 bits. */
+    private static final int INTEGER_HISTOGRAM_BINS = 65536;
 
     /**
      * Per-channel computed display range.
@@ -45,269 +54,243 @@ public class GlobalDisplayRangeScanner {
     }
 
     /**
-     * Scan all entries and compute global per-channel percentile-based ranges.
+     * One image read for the scan: its pixels at the scan downsample and its pixel type.
+     *
+     * @param raster the pixels
+     * @param type   the image's pixel type
+     */
+    record ScanImage(Raster raster, PixelType type) {}
+
+    /**
+     * Images of one kind (same pixel type and channel names) and their shared ranges.
+     *
+     * @param kind    the pixel type and channel names, e.g. {@code UINT16 [Channel 1]}
+     * @param indices positions of the group's images in the scanned list
+     * @param ranges  per-channel ranges, ordered by channel index
+     */
+    public record MatchedGroup(String kind, List<Integer> indices, List<ChannelRange> ranges) {}
+
+    /**
+     * Group the entries by kind (pixel type and channel names) and compute per-channel
+     * percentile-based ranges within each group, so an 8-bit RGB image and a 16-bit
+     * single-channel image never share a histogram. Entries that cannot be opened are left out.
      *
      * @param entries          project images to scan
      * @param percentile       saturation percentile (e.g., 0.1 for 0.1% clip at each end)
      * @param scanDownsample   downsample for fast scanning (e.g., 32.0)
      * @param progressCallback optional (index, total) callback for UI progress
-     * @return per-channel ranges ordered by channel index
+     * @return one group per kind, in order of first appearance
      */
-    public static List<ChannelRange> computeGlobalRanges(
+    public static List<MatchedGroup> computeGroupedRanges(
             List<ProjectImageEntry<BufferedImage>> entries,
             double percentile, double scanDownsample,
             BiConsumer<Integer, Integer> progressCallback) {
-
         if (entries == null || entries.isEmpty()) {
             return List.of();
         }
-
-        // Get channel info from the first entry
-        int nChannels;
-        String[] channelNames;
-        int[] channelColors;
-        boolean isFloatingPoint;
-
-        try {
-            var firstData = entries.get(0).readImageData();
-            var firstServer = firstData.getServer();
-            var metadata = firstServer.getMetadata();
-            nChannels = metadata.getChannels().size();
-            channelNames = new String[nChannels];
-            channelColors = new int[nChannels];
-            for (int c = 0; c < nChannels; c++) {
-                channelNames[c] = metadata.getChannels().get(c).getName();
-                channelColors[c] = metadata.getChannels().get(c).getColor();
-            }
-            isFloatingPoint = firstServer.getPixelType().isFloatingPoint();
-            firstServer.close();
-        } catch (Exception e) {
-            logger.error("Failed to read first image for channel info: {}", e.getMessage());
-            return List.of();
-        }
-
-        if (isFloatingPoint) {
-            return computeFloatRanges(entries, nChannels, channelNames, channelColors,
-                    percentile, scanDownsample, progressCallback);
-        } else {
-            return computeIntegerRanges(entries, nChannels, channelNames, channelColors,
-                    percentile, scanDownsample, progressCallback);
-        }
-    }
-
-    /**
-     * Compute ranges for integer-type images using exact histograms.
-     * Works well for 8-bit (256 bins) and 16-bit (65536 bins).
-     */
-    private static List<ChannelRange> computeIntegerRanges(
-            List<ProjectImageEntry<BufferedImage>> entries,
-            int nChannels, String[] channelNames, int[] channelColors,
-            double percentile, double scanDownsample,
-            BiConsumer<Integer, Integer> progressCallback) {
-
-        // Determine bit depth from first image to size histograms
-        int histogramSize = 65536; // default for 16-bit
-        try {
-            var firstData = entries.get(0).readImageData();
-            var server = firstData.getServer();
-            int bitsPerPixel = server.getPixelType().getBitsPerPixel();
-            if (bitsPerPixel <= 8) {
-                histogramSize = 256;
-            }
-            server.close();
-        } catch (Exception e) {
-            // Fall back to 65536
-        }
-
-        // Per-channel histograms
-        long[][] histograms = new long[nChannels][histogramSize];
-
-        int total = entries.size();
-        for (int i = 0; i < total; i++) {
-            if (progressCallback != null) {
-                progressCallback.accept(i, total);
-            }
-
-            try {
-                var imageData = entries.get(i).readImageData();
-                var server = imageData.getServer();
-                double ds = Math.max(scanDownsample, 1.0);
-                RegionRequest request = RegionRequest.createInstance(
-                        server.getPath(), ds, 0, 0, server.getWidth(), server.getHeight());
-                BufferedImage img = server.readRegion(request);
-                Raster raster = img.getRaster();
-
-                int w = raster.getWidth();
-                int h = raster.getHeight();
-                int bands = Math.min(raster.getNumBands(), nChannels);
-
-                for (int y = 0; y < h; y++) {
-                    for (int x = 0; x < w; x++) {
-                        for (int c = 0; c < bands; c++) {
-                            int val = raster.getSample(x, y, c);
-                            if (val >= 0 && val < histogramSize) {
-                                histograms[c][val]++;
-                            }
-                        }
-                    }
-                }
-
-                server.close();
+        Map<String, List<Integer>> byKind = new LinkedHashMap<>();
+        Map<String, ImageServerMetadata> metadataByKind = new LinkedHashMap<>();
+        for (int i = 0; i < entries.size(); i++) {
+            try (var server = entries.get(i).getServerBuilder().build()) {
+                var metadata = server.getMetadata();
+                String kind = kindOf(metadata);
+                byKind.computeIfAbsent(kind, k -> new ArrayList<>()).add(i);
+                metadataByKind.putIfAbsent(kind, metadata);
             } catch (Exception e) {
-                logger.warn("Failed to scan image {} for display ranges: {}",
+                logger.warn("Failed to open {} for display ranges: {}",
                         entries.get(i).getImageName(), e.getMessage());
             }
         }
 
-        // Compute percentile-based min/max from histograms
-        List<ChannelRange> ranges = new ArrayList<>();
-        for (int c = 0; c < nChannels; c++) {
-            long totalPixels = 0;
-            for (long count : histograms[c]) totalPixels += count;
-
-            if (totalPixels == 0) {
-                ranges.add(new ChannelRange(channelNames[c], channelColors[c], 0, histogramSize - 1));
-                continue;
+        double ds = Math.max(scanDownsample, 1.0);
+        int total = entries.size();
+        int[] done = {0};
+        List<MatchedGroup> groups = new ArrayList<>();
+        for (var e : byKind.entrySet()) {
+            List<Integer> indices = e.getValue();
+            var channels = metadataByKind.get(e.getKey()).getChannels();
+            int base = done[0];
+            double[][] minMax = rangesFromImages(indices.size(),
+                    j -> readScanImage(entries.get(indices.get(j)), ds), channels.size(), percentile,
+                    progressCallback == null ? null : (j, n) -> progressCallback.accept(
+                            Math.min(total - 1, base + j * indices.size() / Math.max(n, 1)), total));
+            done[0] += indices.size();
+            List<ChannelRange> ranges = new ArrayList<>();
+            for (int c = 0; c < channels.size(); c++) {
+                ranges.add(new ChannelRange(channels.get(c).getName(), channels.get(c).getColor(),
+                        minMax[c][0], minMax[c][1]));
             }
-
-            double clipCount = totalPixels * percentile / 100.0;
-            double minVal = findPercentileFromHistogram(histograms[c], clipCount, true);
-            double maxVal = findPercentileFromHistogram(histograms[c], clipCount, false);
-
-            if (minVal >= maxVal) {
-                maxVal = minVal + 1;
-            }
-
-            ranges.add(new ChannelRange(channelNames[c], channelColors[c], minVal, maxVal));
+            groups.add(new MatchedGroup(e.getKey(), List.copyOf(indices), ranges));
+            logger.info("Matched display ranges for {} image(s) of kind {}", indices.size(), e.getKey());
         }
-
-        return ranges;
+        return groups;
     }
 
     /**
-     * Compute ranges for float-type images using a two-pass approach:
-     * pass 1 finds global min/max, pass 2 builds a binned histogram.
+     * The kind an image is matched within: pixel type and channel names in order.
+     *
+     * @param metadata the image's metadata
+     * @return e.g. {@code UINT8 [Red, Green, Blue]}
      */
-    private static List<ChannelRange> computeFloatRanges(
-            List<ProjectImageEntry<BufferedImage>> entries,
-            int nChannels, String[] channelNames, int[] channelColors,
-            double percentile, double scanDownsample,
-            BiConsumer<Integer, Integer> progressCallback) {
+    static String kindOf(ImageServerMetadata metadata) {
+        return metadata.getPixelType() + " "
+                + metadata.getChannels().stream().map(ImageChannel::getName).toList();
+    }
 
-        // Pass 1: find global min/max per channel
+    private static ScanImage readScanImage(ProjectImageEntry<BufferedImage> entry, double ds) {
+        try (var server = entry.getServerBuilder().build()) {
+            RegionRequest request = RegionRequest.createInstance(
+                    server.getPath(), ds, 0, 0, server.getWidth(), server.getHeight());
+            Raster raster = server.readRegion(request).getRaster();
+            return new ScanImage(raster, server.getPixelType());
+        } catch (Exception e) {
+            logger.warn("Failed to scan image {} for display ranges: {}",
+                    entry.getImageName(), e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Per-channel display ranges over a set of images. Unsigned images of up to 16 bits are
+     * counted in an exact 65536-bin histogram whatever the first image's depth, so a mix of
+     * 8-bit and 16-bit images keeps the 16-bit values. If any image is signed, floating point
+     * or deeper than 16 bits, every image is read again in two passes (minimum and maximum,
+     * then a {@value #FLOAT_HISTOGRAM_BINS}-bin histogram). The generated script's
+     * {@code quietRangesFromImages} is the same procedure.
+     *
+     * @param n          number of images
+     * @param reader     reads image i; null when it cannot be read (it is left out)
+     * @param nChannels  channels to compute
+     * @param percentile saturation percentile clipped at each end
+     * @param progress   optional (index, total) callback
+     * @return {min, max} per channel
+     */
+    static double[][] rangesFromImages(int n, IntFunction<ScanImage> reader, int nChannels,
+            double percentile, BiConsumer<Integer, Integer> progress) {
+        long[][] histograms = new long[nChannels][INTEGER_HISTOGRAM_BINS];
+        int maxBits = 0;
+        boolean integer = true;
+        for (int i = 0; i < n && integer; i++) {
+            if (progress != null) progress.accept(i, n);
+            ScanImage img = reader.apply(i);
+            if (img == null) continue;
+            if (!fitsIntegerHistogram(img.type())) {
+                integer = false;
+                break;
+            }
+            maxBits = Math.max(maxBits, img.type().getBitsPerPixel());
+            Raster raster = img.raster();
+            int bands = Math.min(raster.getNumBands(), nChannels);
+            for (int y = 0; y < raster.getHeight(); y++) {
+                for (int x = 0; x < raster.getWidth(); x++) {
+                    for (int c = 0; c < bands; c++) {
+                        int val = raster.getSample(x, y, c);
+                        if (val >= 0 && val < INTEGER_HISTOGRAM_BINS) {
+                            histograms[c][val]++;
+                        }
+                    }
+                }
+            }
+        }
+        if (integer) {
+            double fullScale = maxBits > 8 ? 65535 : 255;
+            double[][] result = new double[nChannels][];
+            for (int c = 0; c < nChannels; c++) {
+                long totalPixels = 0;
+                for (long count : histograms[c]) totalPixels += count;
+                if (totalPixels == 0) {
+                    result[c] = new double[]{0, fullScale};
+                    continue;
+                }
+                double clipCount = totalPixels * percentile / 100.0;
+                double minVal = findPercentileFromHistogram(histograms[c], clipCount, true);
+                double maxVal = findPercentileFromHistogram(histograms[c], clipCount, false);
+                if (minVal >= maxVal) maxVal = minVal + 1;
+                result[c] = new double[]{minVal, maxVal};
+            }
+            return result;
+        }
+        return binnedRanges(n, reader, nChannels, percentile, progress);
+    }
+
+    /** Whether an image's values all fit the exact integer histogram. */
+    static boolean fitsIntegerHistogram(PixelType type) {
+        return type.isUnsignedInteger() && type.getBitsPerPixel() <= 16;
+    }
+
+    /**
+     * Two passes: global minimum and maximum, then a binned histogram.
+     */
+    private static double[][] binnedRanges(int n, IntFunction<ScanImage> reader, int nChannels,
+            double percentile, BiConsumer<Integer, Integer> progress) {
         double[] globalMin = new double[nChannels];
         double[] globalMax = new double[nChannels];
         for (int c = 0; c < nChannels; c++) {
             globalMin[c] = Double.MAX_VALUE;
             globalMax[c] = -Double.MAX_VALUE;
         }
-
-        int total = entries.size();
-        for (int i = 0; i < total; i++) {
-            if (progressCallback != null) {
-                progressCallback.accept(i, total * 2); // Two passes
-            }
-            try {
-                var imageData = entries.get(i).readImageData();
-                var server = imageData.getServer();
-                double ds = Math.max(scanDownsample, 1.0);
-                RegionRequest request = RegionRequest.createInstance(
-                        server.getPath(), ds, 0, 0, server.getWidth(), server.getHeight());
-                BufferedImage img = server.readRegion(request);
-                Raster raster = img.getRaster();
-                int w = raster.getWidth();
-                int h = raster.getHeight();
-                int bands = Math.min(raster.getNumBands(), nChannels);
-
-                for (int y = 0; y < h; y++) {
-                    for (int x = 0; x < w; x++) {
-                        for (int c = 0; c < bands; c++) {
-                            double val = raster.getSampleDouble(x, y, c);
-                            if (Double.isFinite(val)) {
-                                if (val < globalMin[c]) globalMin[c] = val;
-                                if (val > globalMax[c]) globalMax[c] = val;
-                            }
+        for (int i = 0; i < n; i++) {
+            if (progress != null) progress.accept(i, n * 2);
+            ScanImage img = reader.apply(i);
+            if (img == null) continue;
+            Raster raster = img.raster();
+            int bands = Math.min(raster.getNumBands(), nChannels);
+            for (int y = 0; y < raster.getHeight(); y++) {
+                for (int x = 0; x < raster.getWidth(); x++) {
+                    for (int c = 0; c < bands; c++) {
+                        double val = raster.getSampleDouble(x, y, c);
+                        if (Double.isFinite(val)) {
+                            if (val < globalMin[c]) globalMin[c] = val;
+                            if (val > globalMax[c]) globalMax[c] = val;
                         }
                     }
                 }
-                server.close();
-            } catch (Exception e) {
-                logger.warn("Pass 1 failed for {}: {}",
-                        entries.get(i).getImageName(), e.getMessage());
             }
         }
 
-        // Pass 2: binned histograms
         long[][] histograms = new long[nChannels][FLOAT_HISTOGRAM_BINS];
         double[] binWidth = new double[nChannels];
         for (int c = 0; c < nChannels; c++) {
             double range = globalMax[c] - globalMin[c];
             binWidth[c] = range > 0 ? range / FLOAT_HISTOGRAM_BINS : 1.0;
         }
-
-        for (int i = 0; i < total; i++) {
-            if (progressCallback != null) {
-                progressCallback.accept(total + i, total * 2);
-            }
-            try {
-                var imageData = entries.get(i).readImageData();
-                var server = imageData.getServer();
-                double ds = Math.max(scanDownsample, 1.0);
-                RegionRequest request = RegionRequest.createInstance(
-                        server.getPath(), ds, 0, 0, server.getWidth(), server.getHeight());
-                BufferedImage img = server.readRegion(request);
-                Raster raster = img.getRaster();
-                int w = raster.getWidth();
-                int h = raster.getHeight();
-                int bands = Math.min(raster.getNumBands(), nChannels);
-
-                for (int y = 0; y < h; y++) {
-                    for (int x = 0; x < w; x++) {
-                        for (int c = 0; c < bands; c++) {
-                            double val = raster.getSampleDouble(x, y, c);
-                            if (Double.isFinite(val)) {
-                                int bin = (int) ((val - globalMin[c]) / binWidth[c]);
-                                bin = Math.max(0, Math.min(bin, FLOAT_HISTOGRAM_BINS - 1));
-                                histograms[c][bin]++;
-                            }
+        for (int i = 0; i < n; i++) {
+            if (progress != null) progress.accept(n + i, n * 2);
+            ScanImage img = reader.apply(i);
+            if (img == null) continue;
+            Raster raster = img.raster();
+            int bands = Math.min(raster.getNumBands(), nChannels);
+            for (int y = 0; y < raster.getHeight(); y++) {
+                for (int x = 0; x < raster.getWidth(); x++) {
+                    for (int c = 0; c < bands; c++) {
+                        double val = raster.getSampleDouble(x, y, c);
+                        if (Double.isFinite(val)) {
+                            int bin = (int) ((val - globalMin[c]) / binWidth[c]);
+                            bin = Math.max(0, Math.min(bin, FLOAT_HISTOGRAM_BINS - 1));
+                            histograms[c][bin]++;
                         }
                     }
                 }
-                server.close();
-            } catch (Exception e) {
-                logger.warn("Pass 2 failed for {}: {}",
-                        entries.get(i).getImageName(), e.getMessage());
             }
         }
 
-        // Compute percentile-based min/max
-        List<ChannelRange> ranges = new ArrayList<>();
+        double[][] result = new double[nChannels][];
         for (int c = 0; c < nChannels; c++) {
             long totalPixels = 0;
             for (long count : histograms[c]) totalPixels += count;
-
             if (totalPixels == 0) {
-                ranges.add(new ChannelRange(channelNames[c], channelColors[c],
-                        globalMin[c], globalMax[c]));
+                result[c] = new double[]{globalMin[c], globalMax[c]};
                 continue;
             }
-
             double clipCount = totalPixels * percentile / 100.0;
             double minBin = findPercentileFromHistogram(histograms[c], clipCount, true);
             double maxBin = findPercentileFromHistogram(histograms[c], clipCount, false);
-
-            // Convert bin indices back to actual values
             double minVal = globalMin[c] + minBin * binWidth[c];
             double maxVal = globalMin[c] + maxBin * binWidth[c];
-
-            if (minVal >= maxVal) {
-                maxVal = minVal + binWidth[c];
-            }
-
-            ranges.add(new ChannelRange(channelNames[c], channelColors[c], minVal, maxVal));
+            if (minVal >= maxVal) maxVal = minVal + binWidth[c];
+            result[c] = new double[]{minVal, maxVal};
         }
-
-        return ranges;
+        return result;
     }
 
     /**

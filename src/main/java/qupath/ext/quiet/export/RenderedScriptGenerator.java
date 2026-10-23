@@ -72,9 +72,6 @@ class RenderedScriptGenerator {
         if (mode == DisplaySettingsMode.CURRENT_VIEWER) {
             appendLine(sb, "import com.google.gson.JsonParser");
         }
-        if (mode == DisplaySettingsMode.GLOBAL_MATCHED) {
-            appendLine(sb, "import java.awt.image.Raster");
-        }
     }
 
     /**
@@ -125,74 +122,12 @@ class RenderedScriptGenerator {
      */
     private static void emitGlobalMatchedScanPass(StringBuilder sb) {
         appendLine(sb, "// --- Global matched display range scan ---");
-        appendLine(sb, "println 'Scanning images for global display range matching...'");
-        appendLine(sb, "def allEntries = project.getImageList()");
-        appendLine(sb, "// Determine histogram size from first image");
-        appendLine(sb, "def firstData = allEntries[0].readImageData()");
-        appendLine(sb, "def firstServer = firstData.getServer()");
-        appendLine(sb, "int nChannels = firstServer.getMetadata().getChannels().size()");
-        appendLine(sb, "int bpp = firstServer.getPixelType().getBitsPerPixel()");
-        appendLine(sb, "int histSize = bpp <= 8 ? 256 : 65536");
-        appendLine(sb, "long[][] histograms = new long[nChannels][histSize]");
-        appendLine(sb, "firstServer.close()");
-        appendLine(sb, "");
-        appendLine(sb, "for (int si = 0; si < allEntries.size(); si++) {");
-        appendLine(sb, "    println \"  Scanning ${si + 1} of ${allEntries.size()}...\"");
-        appendLine(sb, "    try {");
-        appendLine(sb, "        def scanData = allEntries[si].readImageData()");
-        appendLine(sb, "        def scanServer = scanData.getServer()");
-        appendLine(sb, "        def scanRequest = qupath.lib.regions.RegionRequest.createInstance(");
-        appendLine(sb, "                scanServer.getPath(), 32.0, 0, 0, scanServer.getWidth(), scanServer.getHeight())");
-        appendLine(sb, "        def scanImg = scanServer.readRegion(scanRequest)");
-        appendLine(sb, "        Raster raster = scanImg.getRaster()");
-        appendLine(sb, "        int w = raster.getWidth()");
-        appendLine(sb, "        int h = raster.getHeight()");
-        appendLine(sb, "        int bands = Math.min(raster.getNumBands(), nChannels)");
-        appendLine(sb, "        for (int y = 0; y < h; y++) {");
-        appendLine(sb, "            for (int x = 0; x < w; x++) {");
-        appendLine(sb, "                for (int c = 0; c < bands; c++) {");
-        appendLine(sb, "                    int val = raster.getSample(x, y, c)");
-        appendLine(sb, "                    if (val >= 0 && val < histSize) histograms[c][val]++");
-        appendLine(sb, "                }");
-        appendLine(sb, "            }");
-        appendLine(sb, "        }");
-        appendLine(sb, "        scanServer.close()");
-        appendLine(sb, "    } catch (Exception e) {");
-        appendLine(sb, "        println \"  WARNING: Scan failed for ${allEntries[si].getImageName()}: ${e.getMessage()}\"");
-        appendLine(sb, "    }");
-        appendLine(sb, "}");
-        appendLine(sb, "");
-        appendLine(sb, "// Compute percentile-based ranges");
-        appendLine(sb, "def computedRanges = []");
-        appendLine(sb, "for (int c = 0; c < nChannels; c++) {");
-        appendLine(sb, "    long total = 0");
-        appendLine(sb, "    for (long count : histograms[c]) total += count");
-        appendLine(sb, "    if (total == 0) { computedRanges.add([0, histSize - 1]); continue }");
-        appendLine(sb, "    double clipCount = total * matchedPercentile / 100.0");
-        appendLine(sb, "    long cumLow = 0; int minVal = 0");
-        appendLine(sb, "    for (int i = 0; i < histSize; i++) {");
-        appendLine(sb, "        cumLow += histograms[c][i]");
-        appendLine(sb, "        if (cumLow > clipCount) { minVal = i; break }");
-        appendLine(sb, "    }");
-        appendLine(sb, "    long cumHigh = 0; int maxVal = histSize - 1");
-        appendLine(sb, "    for (int i = histSize - 1; i >= 0; i--) {");
-        appendLine(sb, "        cumHigh += histograms[c][i]");
-        appendLine(sb, "        if (cumHigh > clipCount) { maxVal = i; break }");
-        appendLine(sb, "    }");
-        appendLine(sb, "    if (minVal >= maxVal) maxVal = minVal + 1");
-        appendLine(sb, "    computedRanges.add([minVal, maxVal])");
-        appendLine(sb, "}");
-        appendLine(sb, "println \"Global ranges computed for ${nChannels} channels\"");
-        appendLine(sb, "");
-        appendLine(sb, "// Build display settings from computed ranges");
-        appendLine(sb, "def matchedData = allEntries[0].readImageData()");
-        appendLine(sb, "def matchedDisplay = ImageDisplay.create(matchedData)");
-        appendLine(sb, "def matchedChannels = matchedDisplay.selectedChannels()");
-        appendLine(sb, "for (int c = 0; c < Math.min(matchedChannels.size(), computedRanges.size()); c++) {");
-        appendLine(sb, "    matchedDisplay.setMinMaxDisplay(matchedChannels[c], (float) computedRanges[c][0], (float) computedRanges[c][1])");
-        appendLine(sb, "}");
-        appendLine(sb, "displaySettings = DisplaySettingUtils.displayToSettings(matchedDisplay, 'global_matched')");
-        appendLine(sb, "matchedData.getServer().close()");
+        appendLine(sb, "// Images are matched within their kind (pixel type and channel names), so an");
+        appendLine(sb, "// 8-bit RGB image and a 16-bit single-channel image each get their own range.");
+        appendLine(sb, "def scanEntries = project.getImageList()");
+        appendLine(sb, "println \"Scanning ${scanEntries.size()} images for global display range matching...\"");
+        appendLine(sb, "def matchedSettingsByKind = quietMatchedSettingsByKind(scanEntries, matchedPercentile, 32.0d)");
+        emitResource(sb, "display-range-helpers.groovy");
     }
 
     // ------------------------------------------------------------------
@@ -338,7 +273,12 @@ class RenderedScriptGenerator {
         appendLine(sb, "        // multi-channel input, which Java grayscales when drawn onto a TYPE_INT_RGB");
         appendLine(sb, "        // target. applyTransforms is the viewer's own RGB compositor.");
         appendLine(sb, "        def display = ImageDisplay.create(imageData)");
-        if (mode != DisplaySettingsMode.PER_IMAGE_SAVED) {
+        if (mode == DisplaySettingsMode.GLOBAL_MATCHED) {
+            appendLine(sb, "        def kindSettings = matchedSettingsByKind[quietImageKind(imageData.getServer().getMetadata())]");
+            appendLine(sb, "        if (kindSettings != null) {");
+            appendLine(sb, "            DisplaySettingUtils.applySettingsToDisplay(display, kindSettings)");
+            appendLine(sb, "        }");
+        } else if (mode != DisplaySettingsMode.PER_IMAGE_SAVED) {
             appendLine(sb, "        if (displaySettings != null) {");
             appendLine(sb, "            DisplaySettingUtils.applySettingsToDisplay(display, displaySettings)");
             appendLine(sb, "        }");
@@ -495,13 +435,18 @@ class RenderedScriptGenerator {
      * strip reading of one channel, color range, coloring, shared range scan).
      */
     private static void emitMapOverlayHelpers(StringBuilder sb) {
-        try (var in = RenderedScriptGenerator.class.getResourceAsStream("map-overlay-helpers.groovy")) {
+        emitResource(sb, "map-overlay-helpers.groovy");
+    }
+
+    /** Append a Groovy helper file shipped next to this class. */
+    private static void emitResource(StringBuilder sb, String name) {
+        try (var in = RenderedScriptGenerator.class.getResourceAsStream(name)) {
             if (in == null) {
-                throw new IllegalStateException("map-overlay-helpers.groovy is missing from the jar");
+                throw new IllegalStateException(name + " is missing from the jar");
             }
             sb.append(new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
         } catch (java.io.IOException e) {
-            throw new IllegalStateException("Cannot read map-overlay-helpers.groovy", e);
+            throw new IllegalStateException("Cannot read " + name, e);
         }
     }
 

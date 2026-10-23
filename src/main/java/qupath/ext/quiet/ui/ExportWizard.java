@@ -43,6 +43,7 @@ import qupath.ext.quiet.export.ObjectCropConfig;
 import qupath.ext.quiet.export.OutputFormat;
 import qupath.ext.quiet.export.RawExportConfig;
 import qupath.ext.quiet.export.RenderedExportConfig;
+import qupath.ext.quiet.export.ScriptImageSelection;
 import qupath.ext.quiet.export.TiledExportConfig;
 import qupath.ext.quiet.export.TiffDescription;
 import qupath.ext.quiet.preferences.QuietPreferences;
@@ -1088,9 +1089,14 @@ public class ExportWizard {
         return imageSelectionPane.getStatusLabel();
     }
 
-    /** Generate a script that names its outputs the way this wizard run does. */
+    /** Generate a script that works on this run's images and names its outputs the same way. */
     private String generateScript(ExportCategory category, Object config) {
         String script = ScriptGenerator.generate(category, config);
+        var project = qupath.getProject();
+        script = ScriptImageSelection.applyToScript(script,
+                imageSelectionPane.getSelectedEntries().stream().map(e -> e.getImageName()).toList(),
+                project == null ? null
+                        : project.getImageList().stream().map(e -> e.getImageName()).toList());
         return ImageNames.applyToScript(script,
                 imageSelectionPane.getFilenamePrefix(),
                 imageSelectionPane.getFilenameSuffix(),

@@ -4,6 +4,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,6 +16,7 @@ import org.slf4j.LoggerFactory;
 
 import javafx.concurrent.Task;
 import qupath.lib.classifiers.pixel.PixelClassifier;
+import qupath.lib.display.settings.ImageDisplaySettings;
 import qupath.lib.images.ImageData;
 import qupath.lib.images.servers.ImageServer;
 import qupath.lib.images.servers.PixelCalibration;
@@ -54,6 +56,10 @@ public class BatchExportTask extends Task<ExportResult> {
 
     /** Effective config after optional GLOBAL_MATCHED pre-scan. */
     private RenderedExportConfig effectiveConfig;
+
+    /** GLOBAL_MATCHED: one group per image kind, and each image's group settings by batch index. */
+    private List<GlobalDisplayRangeScanner.MatchedGroup> matchedGroups = List.of();
+    private final Map<Integer, ImageDisplaySettings> matchedSettings = new HashMap<>();
 
     /**
      * Create a batch export task for rendered exports.
@@ -220,22 +226,25 @@ public class BatchExportTask extends Task<ExportResult> {
                 && renderedConfig.getDisplaySettingsMode()
                     == RenderedExportConfig.DisplaySettingsMode.GLOBAL_MATCHED) {
             updateMessage("Scanning images for display range matching...");
-            var ranges = GlobalDisplayRangeScanner.computeGlobalRanges(
+            matchedGroups = GlobalDisplayRangeScanner.computeGroupedRanges(
                     entries, renderedConfig.getMatchedDisplayPercentile(), 32.0,
                     (i, t) -> {
                         updateMessage(String.format(
                                 "Scanning %d of %d for display ranges...", i + 1, t));
                         updateProgress(i, t + total);
                     });
-            if (ranges != null && !ranges.isEmpty()) {
+            for (var group : matchedGroups) {
                 var settings = GlobalDisplayRangeScanner.buildDisplaySettings(
-                        ranges, entries.get(0));
-                if (settings != null) {
+                        group.ranges(), entries.get(group.indices().get(0)));
+                if (settings == null) continue;
+                for (int index : group.indices()) {
+                    matchedSettings.put(index, settings);
+                }
+                if (effectiveConfig == renderedConfig) {
+                    // The first kind's settings stand in wherever one setting is needed
                     effectiveConfig = RenderedExportConfig.Builder.from(renderedConfig)
                             .capturedDisplaySettings(settings)
                             .build();
-                    logger.info("Global matched display ranges computed for {} channels",
-                            ranges.size());
                 }
             }
         }
@@ -312,7 +321,7 @@ public class BatchExportTask extends Task<ExportResult> {
                 succeeded++;
 
                 // Track channel info for metadata sidecar
-                trackChannelGroup(channelGroups, imageData, entryName);
+                trackChannelGroup(channelGroups, imageData, entryName, matchedSettings.get(i));
                 if (firstCalibration == null) {
                     firstCalibration = imageData.getServer().getPixelCalibration();
                 }
@@ -427,6 +436,10 @@ public class BatchExportTask extends Task<ExportResult> {
     private void exportRendered(ImageData<BufferedImage> imageData, String entryName,
                                 int panelIndex) throws Exception {
         var config = effectiveConfig != null ? effectiveConfig : renderedConfig;
+        var matched = matchedSettings.get(panelIndex);
+        if (matched != null && matched != config.getCapturedDisplaySettings()) {
+            config = RenderedExportConfig.Builder.from(config).capturedDisplaySettings(matched).build();
+        }
 
         // Split-channel dispatch
         if (config.splitChannel().enabled()) {
@@ -486,10 +499,13 @@ public class BatchExportTask extends Task<ExportResult> {
      */
     private void trackChannelGroup(Map<String, ExportMetadataWriter.ChannelGroup> groups,
                                     ImageData<BufferedImage> imageData,
-                                    String entryName) {
+                                    String entryName,
+                                    ImageDisplaySettings displaySettings) {
         try {
             var server = imageData.getServer();
-            String sig = channelSignature(server);
+            // Images matched separately are reported separately
+            String sig = channelSignature(server)
+                    + (displaySettings == null ? "" : "#" + System.identityHashCode(displaySettings));
             var group = groups.get(sig);
             if (group == null) {
                 var channels = List.copyOf(server.getMetadata().getChannels());
@@ -507,7 +523,7 @@ public class BatchExportTask extends Task<ExportResult> {
                 };
                 filenames.add(exportedName);
                 groups.put(sig, new ExportMetadataWriter.ChannelGroup(
-                        channels, imageData.getImageType(), stains, cal, filenames));
+                        channels, imageData.getImageType(), stains, cal, filenames, displaySettings));
             } else {
                 String exportedName = switch (category) {
                     case RENDERED -> renderedConfig.buildOutputFilename(entryName);

@@ -71,6 +71,11 @@ Every single-image export also generates a **Groovy script** that you can copy, 
 
 ## What's new
 
+**v1.4.1** -- Copied scripts work on the images you selected, and Global Matched keeps image types apart:
+- **Copy Script**, **Save Script...** and the workflow-history script now list the images you selected and work on those, in that order, instead of on every image in the project. A pre-scan in the script (Global Matched display ranges, a shared map range) therefore covers the same images as the wizard. Emptying the list in the script brings back the old whole-project behavior.
+- **Global Matched** matches each kind of image separately. Images with the same pixel type and channel names (for example 8-bit RGB brightfield, or 16-bit single-channel birefringence) share one range per channel, and each kind gets its own. Before, every image went into one histogram sized from the first image. A 16-bit image exported after an 8-bit one lost every value above 255.
+- `export_info.txt` lists the matched range of each kind of image.
+
 **v1.4.0** -- Map files placed where their grid belongs:
 - A map file whose description has a `Placement:` line, as Fiber Analysis now writes, is placed on the image where that line says its grid sits, instead of being stretched over the whole image. Its edges no longer drift by up to one analysis window. Image pixels outside the grid stay uncovered. A map made for an image of a different size is skipped and named.
 - Every map is drawn at the export's resolution. A map marked `nearest` keeps its blocky cells, and a `bilinear` one blends values between cell centers by the same rule as Fiber Analysis's own overlay.
@@ -297,7 +302,7 @@ Values outside the range take the end colors; pixels with no value are transpare
 
 **Maps cut at different thresholds.** A map file can record the threshold its values were cut at, in a line such as `Threshold: Otsu 0.07800 | Otsu pooled over 1 image(s), ... | settings 7a3ec246 at 0.1732 um/px` (Fiber Analysis writes one). When the selected images' maps record different cuts, different settings, or pixel sizes more than 2% apart, their values do not measure the same thing. **QuIET - Maps Not Comparable** then lists each group of images and asks whether to go on. How each cut was obtained does not matter; maps without the line are left out of the comparison.
 
-**Generated script.** The Groovy script finds the files with the same pattern and reads the same channel. For a shared range it scans every image in the project, not only the ones you selected, before exporting. It prints `Map range for all images: <min> to <max>`, then `SKIP: <reason>` for each image without a map, and ends with a line such as `Export complete: 3 succeeded, 0 failed, 1 skipped (no usable map)`. It places, blends and colors each map as QuIET does, so its images match QuIET's pixel for pixel. A script run on a different set of images computes its own shared range. To repeat an earlier export exactly, set the range by hand, with the numbers from that export's `export_info.txt`:
+**Generated script.** The Groovy script finds the files with the same pattern and reads the same channel. For a shared range it scans the images you selected before exporting. It prints `Map range for all images: <min> to <max>`, then `SKIP: <reason>` for each image without a map, and ends with a line such as `Export complete: 3 succeeded, 0 failed, 1 skipped (no usable map)`. It places, blends and colors each map as QuIET does, so its images match QuIET's pixel for pixel. If you edit the script's image list, it computes its own shared range from the images it then lists. To repeat an earlier export exactly, set the range by hand, with the numbers from that export's `export_info.txt`:
 
 ```groovy
 def mapRangeMode = "FIXED"
@@ -331,7 +336,7 @@ By default, rendered exports apply per-image brightness/contrast and channel vis
 | **Per-Image Saved Settings** (default) | Each image uses its own saved display settings from the QuPath project. If you used "Apply to similar images" in the B&C dialog, all images will already share the same settings. Changes made in Brightness & Contrast reach the export only after the image is saved (**File > Save**); to export exactly what is on screen without saving, use **Current Viewer Settings**. |
 | **Current Viewer Settings** | Captures the display settings from the currently open image and applies them uniformly to all exported images. Requires an image to be open. |
 | **Saved Preset** | Loads a named B&C preset saved in the project (via the Brightness & Contrast dialog's save button) and applies it to all images. |
-| **Global Matched (batch)** | Before exporting, reads every image being exported at 1/32 size and sets one display minimum and maximum per channel for all of them, leaving out **Saturation (%)** of the values at each end (default 0.1, up to 5). The same pixel value then looks the same in every image, so use it for images readers will compare. Channel names and colors come from the first image, so the images should share a channel order. The generated script scans every image in the project, so it gives the same ranges only for the same set of images. |
+| **Global Matched (batch)** | Before exporting, reads every image being exported at 1/32 size and sets one display minimum and maximum per channel for each kind of image, leaving out **Saturation (%)** of the values at each end (default 0.1, up to 5). A kind is a pixel type plus channel names, so 8-bit RGB images and 16-bit single-channel images in one export each get their own ranges. Within a kind, the same pixel value then looks the same in every image, so use it for images readers will compare. Channel colors come from the first image of each kind. The generated script lists the selected images and matches them the same way. |
 | **Raw (No Adjustments)** | Exports raw pixel data with no display transforms. This was the only behavior prior to v0.2.1. |
 
 `export_info.txt` records the minimum and maximum used for each channel with **Current Viewer Settings**, **Saved Preset** and **Global Matched**. With **Per-Image Saved Settings** it records only that each image used its own, and a generated script reads them again when it runs, so prefer Global Matched or Current Viewer Settings for a figure you will publish.
@@ -741,7 +746,7 @@ Every single-image export (Rendered, Mask, Raw, Tiled, Object Crops) produces a 
 - Runs standalone in QuPath's script editor (no extension dependencies)
 - Names the QuIET and QuPath versions that wrote it in its header
 - Contains all configuration as editable variables at the top
-- Rendered, Mask, Raw and Tiled scripts process every project image in a batch loop (not only the ones you selected); the Object Crops script works on the open image, so use the script editor's **Run for project** to run it on several
+- Rendered, Mask, Raw and Tiled scripts process the images you selected, in a batch loop. The list is the `exportImageNames` block at the end of the script, and images are matched by name. Empty the list to process every image in the project; a selection of the whole project writes no list. The Object Crops script works on the open image, so use the script editor's **Run for project** to run it on several
 - Reports progress and error counts
 - Can be saved, version-controlled, and shared
 

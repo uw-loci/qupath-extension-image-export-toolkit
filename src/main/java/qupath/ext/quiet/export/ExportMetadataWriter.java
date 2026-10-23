@@ -95,13 +95,16 @@ public class ExportMetadataWriter {
      * @param stains     stain vectors (brightfield only, may be null)
      * @param calibration pixel calibration (may be null)
      * @param filenames  exported filenames in this group
+     * @param displaySettings the display settings this group was rendered with, when they
+     *                   differ between groups (Global Matched); null to use the config's
      */
     public record ChannelGroup(
             List<ImageChannel> channels,
             ImageData.ImageType imageType,
             qupath.lib.color.ColorDeconvolutionStains stains,
             PixelCalibration calibration,
-            List<String> filenames
+            List<String> filenames,
+            ImageDisplaySettings displaySettings
     ) {}
 
     /**
@@ -469,7 +472,7 @@ public class ExportMetadataWriter {
 
         // Display settings for rendered exports
         if (renderedConfig != null) {
-            writeDisplaySettingsInfo(pw, renderedConfig);
+            writeDisplaySettingsInfo(pw, renderedConfig, group.displaySettings());
         }
 
         pw.println();
@@ -508,21 +511,24 @@ public class ExportMetadataWriter {
     }
 
     private static void writeDisplaySettingsInfo(PrintWriter pw,
-                                                  RenderedExportConfig config) {
+                                                  RenderedExportConfig config,
+                                                  ImageDisplaySettings groupSettings) {
         var mode = config.getDisplaySettingsMode();
         switch (mode) {
             case RAW -> pw.println("  Display Settings: None (raw pixel values)");
             case PER_IMAGE_SAVED -> pw.println("  Display Settings: Per-image (varies -- see QuPath project)");
             case CURRENT_VIEWER, SAVED_PRESET, GLOBAL_MATCHED -> {
-                ImageDisplaySettings settings = config.getCapturedDisplaySettings();
+                ImageDisplaySettings settings = groupSettings != null
+                        ? groupSettings : config.getCapturedDisplaySettings();
                 if (settings == null) {
                     pw.println("  Display Settings: " + mode.name() + " (not captured)");
                     return;
                 }
                 pw.println(mode == RenderedExportConfig.DisplaySettingsMode.GLOBAL_MATCHED
-                        ? "  Display Settings (Global Matched over the exported images, "
+                        ? "  Display Settings (Global Matched over the exported images of this"
+                                + " pixel type and channels, "
                                 + formatDouble(config.getMatchedDisplayPercentile())
-                                + "% saturation at each end; applied uniformly):"
+                                + "% saturation at each end):"
                         : "  Display Settings (applied uniformly):");
                 var channels = settings.getChannels();
                 if (channels != null) {
