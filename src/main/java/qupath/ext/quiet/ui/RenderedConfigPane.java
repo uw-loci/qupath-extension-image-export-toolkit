@@ -170,8 +170,8 @@ public class RenderedConfigPane extends VBox {
     private static final List<String> MAP_PATTERN_EXAMPLES = List.of(
             "{imageDir}/{imageBase}_map.ome.tif",
             "{project}/maps/{imageSafe}.ome.tif",
-            "{project}/fiber-analysis/density-maps/{imageSafe:60}_density.ome.tif",
-            "{project}/fiber-analysis/classifier-maps/{imageSafe:60}_*.ome.tif");
+            "{project}/fiber-analysis/density-maps/{imageSafe}_density.ome.tif",
+            "{project}/fiber-analysis/classifier-maps/{imageSafe}_*.ome.tif");
 
     // Color scale bar controls
     private CheckBox showColorScaleBarCheck;

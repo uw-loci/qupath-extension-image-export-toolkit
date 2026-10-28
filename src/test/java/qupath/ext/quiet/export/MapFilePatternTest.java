@@ -113,10 +113,11 @@ class MapFilePatternTest {
 
     @Test
     void fiberAnalysisDensityPattern() throws IOException {
-        String longName = "a".repeat(70) + ".ome.tif";
-        File f = touch("project/fiber-analysis/density-maps/" + "a".repeat(60) + "_density.ome.tif");
+        // Fiber Analysis keeps the whole safe name, so a copied entry's " (1)" survives.
+        String name = "a".repeat(58) + ".ome.tif (1)";
+        File f = touch("project/fiber-analysis/density-maps/" + "a".repeat(58) + ".ome.tif_(1)_density.ome.tif");
         assertEquals(f.getCanonicalFile(), MapFilePattern.resolve(
-                "{project}/fiber-analysis/density-maps/{imageSafe:60}_density.ome.tif",
-                ctx(longName)).getCanonicalFile());
+                "{project}/fiber-analysis/density-maps/{imageSafe}_density.ome.tif",
+                ctx(name)).getCanonicalFile());
     }
 }

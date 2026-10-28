@@ -266,8 +266,8 @@ The **Map File** box offers four examples:
 |---------|-------------|
 | `{imageDir}/{imageBase}_map.ome.tif` | The maps sit next to the images: `slide1.svs` has `slide1_map.ome.tif` |
 | `{project}/maps/{imageSafe}.ome.tif` | The maps are in a `maps` folder inside the project |
-| `{project}/fiber-analysis/density-maps/{imageSafe:60}_density.ome.tif` | Fiber Analysis density maps (development version): `slide_1.ome.tif_density.ome.tif`. Fiber Analysis cuts the name to 60 characters before adding `_density`, which `:60` matches |
-| `{project}/fiber-analysis/classifier-maps/{imageSafe:60}_*.ome.tif` | Fiber Analysis window-classifier maps, while one classifier has been applied to each image. With two, `*` matches both files: replace it with the model's part of the file name |
+| `{project}/fiber-analysis/density-maps/{imageSafe}_density.ome.tif` | Fiber Analysis density maps (development version): `slide_1.ome.tif_density.ome.tif`. Maps made before 2026-10-26 had the name cut to 60 characters; for those, use `{imageSafe:60}` |
+| `{project}/fiber-analysis/classifier-maps/{imageSafe}_*.ome.tif` | Fiber Analysis window-classifier maps, while one classifier has been applied to each image. With two, `*` matches both files: replace it with the model's part of the file name |
 
 **Check** finds the open image's map file and reports it under the box, for example `Open image: slide_1.ome.tif_density.ome.tif (574 x 429, 11 channels, float32)`, then fills **Map Channel** with the file's channel names. The same channel name is used for every image. Two kinds of channel are drawn differently, and a note under **Map Channel** says when one is picked:
 
