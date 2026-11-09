@@ -147,6 +147,9 @@ class DisplayRangeMatchingTest {
             String selected = ScriptImageSelection.applyToScript(script, List.of("x"), List.of("x", "y"));
             assertTrue(selected.contains("quietMatchedSettingsByKind(scanEntries"), mode.name());
             assertTrue(selected.contains("def scanEntries = exportImageList(project)"), mode.name());
+            assertFalse(selected.contains("Exports all project images"), mode.name());
+            assertTrue(script.contains("Exports all project images") == selected.contains(
+                    "Exports the images listed at the end of this script"), mode.name());
             assertDoesNotThrow(() -> new GroovyShell().parse(selected), mode.name());
             compiled++;
         }

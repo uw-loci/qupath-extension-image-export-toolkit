@@ -12,6 +12,10 @@ public final class ScriptImageSelection {
 
     /** What the generators emit for "the images to work on". */
     static final String SCRIPT_MARKER = "project.getImageList()";
+    /** Header phrase of a generated script that exports every image. */
+    static final String ALL_IMAGES_HEADER = " * Exports all project images";
+    /** The same phrase once the script exports only the wizard's images. */
+    static final String SELECTED_IMAGES_HEADER = " * Exports the images listed at the end of this script";
 
     private ScriptImageSelection() {}
 
@@ -31,7 +35,9 @@ public final class ScriptImageSelection {
                 && selected.size() == projectNames.size()) {
             return script;
         }
-        return script.replace(SCRIPT_MARKER, "exportImageList(project)") + groovyBlock(selected);
+        return script.replace(SCRIPT_MARKER, "exportImageList(project)")
+                .replace(ALL_IMAGES_HEADER, SELECTED_IMAGES_HEADER)
+                + groovyBlock(selected);
     }
 
     private static String groovyBlock(List<String> selected) {
