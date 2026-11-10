@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -598,9 +599,9 @@ public class ExportMetadataWriter {
             if (stain != null && !stain.isResidual()) {
                 pw.println("  Stain " + i + ": " + stain.getName());
                 pw.println("    Vector: ("
-                        + String.format("%.4f", stain.getRed()) + ", "
-                        + String.format("%.4f", stain.getGreen()) + ", "
-                        + String.format("%.4f", stain.getBlue()) + ")");
+                        + String.format(Locale.ROOT, "%.4f", stain.getRed()) + ", "
+                        + String.format(Locale.ROOT, "%.4f", stain.getGreen()) + ", "
+                        + String.format(Locale.ROOT, "%.4f", stain.getBlue()) + ")");
             }
         }
     }

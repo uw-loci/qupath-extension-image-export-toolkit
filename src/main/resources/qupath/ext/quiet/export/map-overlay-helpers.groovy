@@ -134,8 +134,8 @@ def parseMapPlacement(String description) {
     def m = (line.substring('Placement:'.length()) =~ /(\w+)=([^;\s]+)/)
     while (m.find()) kv[m.group(1)] = m.group(2)
     try {
-        String[] grid = kv['grid'].toLowerCase().split('x')
-        String render = (kv['render'] ?: 'nearest').toLowerCase()
+        String[] grid = kv['grid'].toLowerCase(Locale.ROOT).split('x')
+        String render = (kv['render'] ?: 'nearest').toLowerCase(Locale.ROOT)
         if (render != 'nearest' && render != 'bilinear') throw new IllegalArgumentException("unknown render '" + render + "'")
         def p = [sourceWidth: Integer.parseInt(kv['source_width']), sourceHeight: Integer.parseInt(kv['source_height']),
                  cellPx: Double.parseDouble(kv['cell_px']),
@@ -167,7 +167,7 @@ def mapAxialPeriod(String description, int c) {
 // Class names for a '... class index' channel: the map's P(<class>) channels in order; null otherwise
 def mapClassNames(server, int c) {
     String name = server.getChannel(c).getName()
-    if (name == null || !name.trim().toLowerCase().endsWith('class index')) return null
+    if (name == null || !name.trim().toLowerCase(Locale.ROOT).endsWith('class index')) return null
     def names = []
     for (def ch : server.getMetadata().getChannels()) {
         String n = ch.getName() == null ? '' : ch.getName().trim()

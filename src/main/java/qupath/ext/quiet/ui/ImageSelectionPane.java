@@ -4,6 +4,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.ResourceBundle;
 
 import java.util.LinkedHashMap;
@@ -389,12 +390,12 @@ public class ImageSelectionPane extends VBox {
                 applyCompoundFilter();
                 return;
             }
-            String filterText = (newVal != null) ? newVal.toLowerCase() : "";
+            String filterText = (newVal != null) ? newVal.toLowerCase(Locale.ROOT) : "";
             if (filterText.isEmpty()) {
                 filteredItems.setPredicate(item -> true);
             } else {
                 filteredItems.setPredicate(item ->
-                        item.toString().toLowerCase().contains(filterText));
+                        item.toString().toLowerCase(Locale.ROOT).contains(filterText));
             }
             updateImageCount();
         });
@@ -807,13 +808,13 @@ public class ImageSelectionPane extends VBox {
         String typeSel = imageTypeCombo != null ? imageTypeCombo.getValue() : null;
         String keySel = metadataKeyCombo != null ? metadataKeyCombo.getValue() : null;
         String valueText = metadataValueField != null && metadataValueField.getText() != null
-                ? metadataValueField.getText().toLowerCase().trim() : "";
+                ? metadataValueField.getText().toLowerCase(Locale.ROOT).trim() : "";
         String nameText = filterField.getText() != null
-                ? filterField.getText().toLowerCase().trim() : "";
+                ? filterField.getText().toLowerCase(Locale.ROOT).trim() : "";
 
         filteredItems.setPredicate(item -> {
             if (!nameText.isEmpty()
-                    && !item.toString().toLowerCase().contains(nameText)) {
+                    && !item.toString().toLowerCase(Locale.ROOT).contains(nameText)) {
                 return false;
             }
             if (typeSel != null && !typeSel.equals(anyType)
@@ -826,7 +827,7 @@ public class ImageSelectionPane extends VBox {
                     return false;
                 }
                 if (!valueText.isEmpty()
-                        && !value.toLowerCase().contains(valueText)) {
+                        && !value.toLowerCase(Locale.ROOT).contains(valueText)) {
                     return false;
                 }
             }

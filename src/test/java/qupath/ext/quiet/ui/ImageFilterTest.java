@@ -2,6 +2,7 @@ package qupath.ext.quiet.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.Locale;
 import java.util.function.Predicate;
 
 import org.junit.jupiter.api.Test;
@@ -21,8 +22,8 @@ class ImageFilterTest {
         if (filterText == null || filterText.isEmpty()) {
             return name -> true;
         }
-        String lower = filterText.toLowerCase();
-        return name -> name.toLowerCase().contains(lower);
+        String lower = filterText.toLowerCase(Locale.ROOT);
+        return name -> name.toLowerCase(Locale.ROOT).contains(lower);
     }
 
     @Test

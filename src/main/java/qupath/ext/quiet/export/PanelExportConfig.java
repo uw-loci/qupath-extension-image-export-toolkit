@@ -4,6 +4,7 @@ import java.awt.Color;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import qupath.lib.common.GeneralTools;
 
@@ -353,7 +354,7 @@ public class PanelExportConfig {
         if (dot >= 0) {
             stem = stem.substring(0, dot);
         }
-        stem = stem.trim().toUpperCase();
+        stem = stem.trim().toUpperCase(Locale.ROOT);
         if (stem.equals("CON") || stem.equals("PRN") || stem.equals("AUX")
                 || stem.equals("NUL")) {
             return true;

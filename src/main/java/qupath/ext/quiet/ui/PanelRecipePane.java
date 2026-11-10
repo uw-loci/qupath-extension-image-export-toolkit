@@ -1,6 +1,7 @@
 package qupath.ext.quiet.ui;
 
 import java.io.File;
+import java.util.Locale;
 import java.util.ResourceBundle;
 
 import javafx.geometry.Insets;
@@ -271,12 +272,12 @@ public class PanelRecipePane extends VBox {
         chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(
                 resources.getString("panel.recipe.fileDescription"), "*.json"));
         chooser.setInitialFileName(
-                "quiet_" + recipeCategory.name().toLowerCase() + "_recipe.json");
+                "quiet_" + recipeCategory.name().toLowerCase(Locale.ROOT) + "_recipe.json");
         File file = chooser.showSaveDialog(ownerStage);
         if (file == null) {
             return;
         }
-        if (!file.getName().toLowerCase().endsWith(".json")) {
+        if (!file.getName().toLowerCase(Locale.ROOT).endsWith(".json")) {
             file = new File(file.getParentFile(), file.getName() + ".json");
         }
         try {

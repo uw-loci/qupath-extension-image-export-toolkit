@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import org.jfree.svg.SVGGraphics2D;
@@ -389,7 +390,7 @@ public final class PanelImageExporter {
         var pooledObjects = LegendContent.poolObjects(objects);
         var sharedMap = LegendContent.shared(maps);
         boolean anyMap = maps.stream().anyMatch(m -> m != null);
-        String where = mode.getDisplayName().toLowerCase();
+        String where = mode.getDisplayName().toLowerCase(Locale.ROOT);
         if (RenderedImageExporter.wantChannelLegend(legendConfig)) {
             lines.add(sharedChannels != null
                     ? "Channel legend: " + where + ", the same for every cell"
