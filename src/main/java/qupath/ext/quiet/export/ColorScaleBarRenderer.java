@@ -255,8 +255,7 @@ public class ColorScaleBarRenderer {
      */
     public static int[] drawInBand(Graphics2D g2d, int x, int y, ColorMaps.ColorMap colorMap,
                                    double minValue, double maxValue, String title, Font font,
-                                   int barHeight, Color text, Color background,
-                                   boolean measureOnly) {
+                                   int barHeight, Color text, boolean measureOnly) {
         g2d.setFont(font);
         FontMetrics fm = g2d.getFontMetrics();
         String[] labels = tickLabels(minValue, maxValue);
@@ -280,7 +279,6 @@ public class ColorScaleBarRenderer {
             g2d.setColor(text);
             g2d.drawString(title, x, y + ascent);
         }
-        var ink = new TextRenderUtils.Ink(text, background, null);
         int barY = y + titleH + ascent / 2;
         double range = maxValue - minValue;
         for (int row = 0; row < barHeight; row++) {

@@ -427,8 +427,7 @@ public final class PanelComposer {
         if (map != null && map.classes().isEmpty()) {
             int[] size = ColorScaleBarRenderer.drawInBand(g, cx, cy,
                     measureOnly ? null : RenderedImageExporter.resolveColorMap(map.colormapName()),
-                    map.min(), map.max(), map.title(), font, 8 * fontSize, text, background,
-                    measureOnly);
+                    map.min(), map.max(), map.title(), font, 8 * fontSize, text, measureOnly);
             if (items > 0) {
                 if (below) {
                     width += gap;

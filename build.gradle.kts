@@ -50,6 +50,16 @@ tasks.test {
     useJUnitPlatform()
 }
 
+// codeReadMe.md code maps are local, gitignored navigation files. One sits in the
+// resources tree, so it rode into every jar, and the java and resources copies at the
+// same package path made sourcesJar fail on a duplicate entry.
+tasks.named<ProcessResources>("processResources") {
+    exclude("**/codeReadMe.md")
+}
+tasks.withType<Jar>().configureEach {
+    exclude("**/codeReadMe.md")
+}
+
 // ---------------------------------------------------------------------------
 // SpotBugs -- static bug detection (gates the build)
 // ---------------------------------------------------------------------------

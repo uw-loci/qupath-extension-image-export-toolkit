@@ -41,9 +41,13 @@ class DisplayRangeMatchingTest {
     }
 
     private static Raster raster(int dataType, int bands, int w, int h, long seed, double scale) {
+        return raster(dataType, bands, w, h, new Random(seed), scale);
+    }
+
+    /** A Gaussian test raster centered on {@code scale / 2}, drawn from {@code rnd}. */
+    private static Raster raster(int dataType, int bands, int w, int h, Random rnd, double scale) {
         WritableRaster r = Raster.createWritableRaster(
                 new java.awt.image.BandedSampleModel(dataType, w, h, bands), null);
-        var rnd = new Random(seed);
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
                 for (int b = 0; b < bands; b++) {
